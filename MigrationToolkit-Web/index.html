@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Migration Toolkit</title>
+  <link rel="stylesheet" href="src/styles/main.css?v=2">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <img src="public/icon.ico" alt="Logo" class="header-logo">
+      <h1 class="header-title">Migration Toolkit</h1>
+    </header>
+
+    <!-- Update Banner (hidden by default) -->
+    <div class="update-banner hidden" id="updateBanner">
+      <span class="update-banner-text" id="updateText">Update available</span>
+      <button type="button" class="update-banner-btn" id="installUpdateBtn">Install Update</button>
+    </div>
+
+    <!-- Main Layout with Sidebar -->
+    <div class="main-layout">
+      <!-- Sidebar Navigation -->
+      <aside class="sidebar">
+        <nav class="sidebar-nav">
+          <button type="button" class="sidebar-item sidebar-item-home active" data-view="dashboard">
+            <span class="sidebar-icon">🏠</span>
+            <span class="sidebar-label">Home</span>
+          </button>
+
+          <h3 class="sidebar-header">Tools</h3>
+
+          <!-- Discovery -->
+          <button type="button" class="sidebar-item" data-view="discovery">
+            <span class="sidebar-icon">🔍</span>
+            <span class="sidebar-label">Discovery</span>
+          </button>
+
+          <!-- AvePoint Fly - Expandable -->
+          <button type="button" class="sidebar-item sidebar-item-expandable" data-menu="avepoint">
+            <span class="sidebar-icon">🚀</span>
+            <span class="sidebar-label">AvePoint Fly</span>
+            <span class="sidebar-arrow">›</span>
+          </button>
+          <div class="sidebar-submenu" id="submenu-avepoint">
+            <button type="button" class="sidebar-subitem" data-view="avepoint-appreg">
+              <span class="sidebar-sublabel">App Registration</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="avepoint-aos">
+              <span class="sidebar-sublabel">AOS Setup</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="avepoint-connections">
+              <span class="sidebar-sublabel">Connections</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="avepoint-reports">
+              <span class="sidebar-sublabel">Reports</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="avepoint-monitor">
+              <span class="sidebar-sublabel">Monitor</span>
+            </button>
+          </div>
+
+          <!-- Misc Scripts - Expandable -->
+          <button type="button" class="sidebar-item sidebar-item-expandable" data-menu="misc">
+            <span class="sidebar-icon">🛠️</span>
+            <span class="sidebar-label">Misc Scripts</span>
+            <span class="sidebar-arrow">›</span>
+          </button>
+          <div class="sidebar-submenu" id="submenu-misc">
+            <button type="button" class="sidebar-subitem" data-view="misc-onedrive">
+              <span class="sidebar-sublabel">Provision OneDrives</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-teams">
+              <span class="sidebar-sublabel">Set Teams Owners</span>
+            </button>
+          </div>
+
+          <!-- Domain Removal - Expandable -->
+          <button type="button" class="sidebar-item sidebar-item-expandable" data-menu="domain">
+            <span class="sidebar-icon">🔧</span>
+            <span class="sidebar-label">Domain Removal</span>
+            <span class="sidebar-arrow">›</span>
+          </button>
+          <div class="sidebar-submenu" id="submenu-domain">
+            <button type="button" class="sidebar-subitem" data-view="domain-workflow">
+              <span class="sidebar-sublabel">Removal Workflow</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-remove">
+              <span class="sidebar-sublabel">Remove Domain</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-onprem">
+              <span class="sidebar-sublabel">Update On-Prem UPNs</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-cloud">
+              <span class="sidebar-sublabel">Update Cloud UPNs</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-hide">
+              <span class="sidebar-sublabel">Hide from Address Book</span>
+            </button>
+          </div>
+        </nav>
+
+        <!-- Settings at bottom of sidebar -->
+        <div class="sidebar-footer">
+          <button type="button" class="sidebar-item sidebar-item-utility" id="logsBtn">
+            <span class="sidebar-icon">📋</span>
+            <span class="sidebar-label">Logs</span>
+          </button>
+          <button type="button" class="sidebar-item sidebar-item-settings" id="settingsBtn">
+            <span class="sidebar-icon">⚙️</span>
+            <span class="sidebar-label">Settings</span>
+          </button>
+          <button type="button" class="sidebar-item sidebar-item-close" id="closeBtn">
+            <span class="sidebar-icon">✕</span>
+            <span class="sidebar-label">Close</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="content">
+
+      <!-- Dashboard View -->
+      <div id="dashboardView" class="view-container">
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+          <div class="dashboard-title-group">
+            <h1 class="dashboard-main-title">Migration overview</h1>
+            <p class="dashboard-subtitle" id="dashboardSubtitle">
+              <select class="domain-inline-select" id="dashboardDomainSelect" title="Select domain to view">
+                <option value="">Select migration...</option>
+              </select>
+            </p>
+          </div>
+          <div class="dashboard-actions">
+            <button type="button" class="btn btn-secondary" id="dashboardRefreshBtn">
+              🔄 Refresh
+            </button>
+            <button type="button" class="btn btn-primary" id="openAvepointBtn">
+              ↗ Open AvePoint Fly
+            </button>
+          </div>
+        </div>
+
+        <!-- Dashboard Stats -->
+        <div class="dashboard-stats-row">
+          <div class="dashboard-stat-box">
+            <div class="stat-box-label">ITEMS IN SCOPE</div>
+            <div class="stat-box-value" id="statItemsInScope">-</div>
+            <div class="stat-box-detail" id="statItemsDetail">across 6 workloads</div>
+          </div>
+          <div class="dashboard-stat-box">
+            <div class="stat-box-label">COMPLETED</div>
+            <div class="stat-box-value" id="statCompleted">-</div>
+            <div class="stat-box-detail" id="statCompletedPercent">-% of scope</div>
+          </div>
+          <div class="dashboard-stat-box">
+            <div class="stat-box-label">IN PROGRESS</div>
+            <div class="stat-box-value" id="statInProgress">-</div>
+            <div class="stat-box-detail">actively migrating</div>
+          </div>
+          <div class="dashboard-stat-box dashboard-stat-attention">
+            <div class="stat-box-label">NEEDS ATTENTION</div>
+            <div class="stat-box-value" id="statNeedsAttention">-</div>
+            <div class="stat-box-detail" id="statAttentionDetail">- failed · - warnings</div>
+          </div>
+        </div>
+
+        <!-- Progress by Workload -->
+        <div class="workload-progress-section">
+          <div class="workload-section-header">
+            <h2>Progress by workload</h2>
+            <button type="button" class="btn btn-secondary btn-sm" id="openMonitorBtn">
+              📊 Open monitor
+            </button>
+          </div>
+          <div class="workload-bars" id="workloadBars">
+            <!-- Workload bars will be dynamically generated here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Section Header - Reserved for future Quick Actions -->
+      <!-- <h2 class="section-header">Quick Actions</h2> -->
+
+      <!-- Action Tiles - Reserved for future development -->
+      <!-- <div class="tile-container"> -->
+        <!-- Discovery Tile -->
+        <!-- <button type="button" class="tile" data-script="discovery-menu.ps1">
+          <div class="tile-content">
+            <h2 class="tile-title">📊 Discovery</h2>
+            <p class="tile-subtitle">M365 tenant assessment — mailboxes, sites, OneDrive, groups</p>
+          </div>
+        </button> -->
+
+        <!-- AvePoint Fly Tile -->
+        <!-- <button type="button" class="tile" data-script="menu.ps1">
+          <div class="tile-content">
+            <h2 class="tile-title">🚀 AvePoint Fly</h2>
+            <p class="tile-subtitle">Migration toolkit — connections, mappings, monitoring</p>
+          </div>
+        </button> -->
+
+        <!-- Misc Scripts Tile -->
+        <!-- <button type="button" class="tile" data-script="misc-menu.ps1">
+          <div class="tile-content">
+            <h2 class="tile-title">🛠️ Misc Scripts</h2>
+            <p class="tile-subtitle">Utility and helper scripts</p>
+          </div>
+        </button> -->
+
+        <!-- Domain Removal Tile -->
+        <!-- <button type="button" class="tile" data-script="Domain-Removal-Workflow.ps1">
+          <div class="tile-content">
+            <h2 class="tile-title">🔧 Domain Removal</h2>
+            <p class="tile-subtitle">Guided workflow for domain cleanup and UPN updates</p>
+          </div>
+        </button> -->
+      <!-- </div> -->
+
+      <!-- Discovery View -->
+      <div id="discoveryView" class="view-container hidden">
+        <h2 class="view-title">📊 M365 Discovery</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Domain Selection</h3>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">
+                <input type="radio" name="domainMode" value="single" checked> Single domain
+              </label>
+            </div>
+            <div class="form-group">
+              <label class="form-label">
+                <input type="radio" name="domainMode" value="multiple"> Multiple domains
+              </label>
+            </div>
+          </div>
+
+          <div id="singleDomainSection">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label">Domain</label>
+                <input type="text" class="form-input form-input-compact" id="discoveryDomain" placeholder="e.g., contoso.com">
+              </div>
+              <div class="form-group flex-1">
+                <label class="form-label">VBU ID</label>
+                <input type="text" class="form-input form-input-compact" id="discoveryVbuId" placeholder="Optional">
+              </div>
+            </div>
+          </div>
+
+          <div id="multipleDomainSection" class="hidden">
+            <div class="form-group">
+              <label class="form-label">Domains (one per line)</label>
+              <textarea class="form-input form-input-compact" id="discoveryDomains" rows="3" placeholder="domain1.com&#10;domain2.com&#10;domain3.com"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Options</h3>
+
+          <div class="options-grid">
+            <div class="form-group">
+              <label class="form-checkbox">
+                <input type="checkbox" id="skipPowerPlatform" checked>
+                <span>Skip Power Platform</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label class="form-checkbox">
+                <input type="checkbox" id="hybrid">
+                <span>Hybrid Mode</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label class="form-checkbox">
+                <input type="checkbox" id="includeMembers">
+                <span>Include Members</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label class="form-checkbox">
+                <input type="checkbox" id="continueOnError">
+                <span>Continue on Error</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Output</h3>
+
+          <div class="form-group">
+            <label class="form-label">Output Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="outputFolder" value="C:\M365Discovery" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" id="startDiscoveryBtn">
+              Start Discovery
+            </button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="discoveryLog">
+          <h3 class="form-card-title">Discovery Log</h3>
+          <div class="log-output" id="discoveryLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- AvePoint Fly - App Registration -->
+      <div id="avepointAppRegView" class="view-container hidden">
+        <h2 class="view-title">App Registration</h2>
+
+        <p class="form-help" style="margin-bottom: 20px;">
+          Register an Azure AD application in the <strong>DESTINATION (target) tenant</strong> to grant AvePoint Fly permissions to write data.
+          For source-only access, you may also need to register an app in the source tenant.
+        </p>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Destination Tenant App Registration</h3>
+
+          <div class="form-group">
+            <label class="form-label">Destination Tenant ID</label>
+            <input type="text" class="form-input form-input-compact" id="appRegTenantId" placeholder="Enter destination tenant ID (target tenant)">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Application Name</label>
+            <input type="text" class="form-input form-input-compact" id="appRegName" value="AvePoint Fly Migration" placeholder="Application name">
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" checked id="appRegGraphPerms">
+              <span>Grant Microsoft Graph API permissions (Required)</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" checked id="appRegSpoPerms">
+              <span>Grant SharePoint API permissions (Required)</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" id="createAppRegBtn">
+              🚀 Create App Registration
+            </button>
+            <button type="button" class="btn btn-secondary" id="viewAppRegDocsBtn">
+              📖 View Instructions
+            </button>
+          </div>
+
+          <div id="appRegStatus" class="form-help" style="margin-top: 16px; display: none;">
+            <!-- Status messages will appear here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- AvePoint Fly - AOS Setup -->
+      <div id="avepointAosView" class="view-container hidden">
+        <h2 class="view-title">AOS Setup</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">AvePoint Online Services Configuration</h3>
+
+          <div class="form-group">
+            <label class="form-label">AOS Tenant URL</label>
+            <input type="text" class="form-input form-input-compact" placeholder="https://your-tenant.avepointonlineservices.com">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Client ID</label>
+            <input type="text" class="form-input form-input-compact" placeholder="Enter Client ID from App Registration">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Client Secret</label>
+            <input type="password" class="form-input form-input-compact" placeholder="Enter Client Secret">
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" data-script="menu.ps1">
+              Configure AOS Tenant
+            </button>
+            <button type="button" class="btn btn-secondary">
+              Test Connection
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AvePoint Fly - Connections -->
+      <div id="avepointConnectionsView" class="view-container hidden">
+        <h2 class="view-title">Connections & Mappings</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Migration Connections</h3>
+
+          <div class="form-row">
+            <div class="form-group-tight flex-1">
+              <label class="form-label">Source Tenant</label>
+              <input type="text" class="form-input form-input-compact" placeholder="source.onmicrosoft.com">
+            </div>
+            <div class="form-group-tight flex-1">
+              <label class="form-label">Destination Tenant</label>
+              <input type="text" class="form-input form-input-compact" placeholder="destination.onmicrosoft.com">
+            </div>
+          </div>
+
+          <h3 class="form-card-subtitle">Mapping Files</h3>
+
+          <div class="form-group-tight">
+            <label class="form-label">Exchange Mapping</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\exchange.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-label">OneDrive Mapping</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\onedrive.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-label">SharePoint Mapping</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\sharepoint.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-label">Teams Mapping</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\teams.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-label">Teams Chats Mapping</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\teams-chats.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-label">M365 Groups Mapping</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\m365-groups.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+          </div>
+
+          <h3 class="form-card-subtitle" style="margin-top: 24px;">PowerShell Automation</h3>
+          <p class="form-help">Use PowerShell scripts instead of browser automation for faster, more reliable operations.</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">Customer Prefix</label>
+            <input type="text" class="form-input form-input-compact" id="psCustomerPrefix" placeholder="e.g., Contoso">
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-label">Workload</label>
+            <select class="form-input form-input-compact" id="psWorkload">
+              <option value="">Select workload...</option>
+              <option value="SharePoint">SharePoint</option>
+              <option value="Exchange">Exchange</option>
+              <option value="OneDrive">OneDrive</option>
+              <option value="Teams">Teams</option>
+              <option value="TeamChat">Teams Chat</option>
+              <option value="Groups">M365 Groups</option>
+            </select>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-label">Mapping File (CSV)</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="psMappingFile" placeholder="C:\Mappings\mappings.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact" id="psBrowseMappingBtn">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-actions" style="gap: 12px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" id="psCreateProjectBtn">
+              📁 Create Project
+            </button>
+            <button type="button" class="btn btn-primary" id="psImportMappingsBtn">
+              📥 Import Mappings
+            </button>
+            <button type="button" class="btn btn-success btn-large" id="psStartWorkflowBtn">
+              🚀 Run Full Workflow
+            </button>
+            <button type="button" class="btn btn-secondary" id="psViewDocsBtn">
+              📖 View Documentation
+            </button>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" data-script="menu.ps1">
+              Create Connections (Legacy)
+            </button>
+            <button type="button" class="btn btn-secondary">
+              View Existing
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AvePoint Fly - Reports -->
+      <div id="avepointReportsView" class="view-container hidden">
+        <h2 class="view-title">Migration Reports</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Report Options</h3>
+
+          <div class="form-group">
+            <label class="form-label">Report Type</label>
+            <select class="form-input form-input-compact">
+              <option>Migration Summary</option>
+              <option>User Status Report</option>
+              <option>Error Report</option>
+              <option>Complete Status Export</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Date Range</label>
+            <div class="form-row">
+              <input type="date" class="form-input form-input-compact">
+              <input type="date" class="form-input form-input-compact">
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" data-script="menu.ps1">
+              Generate Report
+            </button>
+            <button type="button" class="btn btn-secondary">
+              Export to CSV
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AvePoint Fly - Monitor -->
+      <div id="avepointMonitorView" class="view-container hidden">
+        <h2 class="view-title">Project Monitor</h2>
+
+        <div class="monitor-controls">
+          <div class="monitor-control-group">
+            <label class="form-label">Project:</label>
+            <select class="form-input form-input-compact monitor-project-input" id="monitorProject">
+              <option value="">Select project...</option>
+            </select>
+          </div>
+
+          <div class="monitor-control-group">
+            <label class="form-checkbox">
+              <input type="checkbox" id="monitorAutoRefresh">
+              <span>Auto-refresh:</span>
+            </label>
+            <select class="form-input form-input-compact monitor-interval-select" id="monitorInterval" title="Refresh interval">
+              <option>1 min</option>
+              <option>2 min</option>
+              <option>5 min</option>
+              <option>10 min</option>
+            </select>
+          </div>
+
+          <button type="button" class="btn btn-primary" id="monitorRefreshBtn">
+            Refresh Now
+          </button>
+
+          <div class="monitor-status" id="monitorStatus">
+            Select a project and press Refresh
+          </div>
+        </div>
+
+        <div class="monitor-grid">
+          <table class="monitor-table">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Total</th>
+                <th>Not Started</th>
+                <th>In Progress</th>
+                <th>Complete</th>
+                <th>Failed</th>
+                <th>Warnings</th>
+                <th>Last Refresh</th>
+              </tr>
+            </thead>
+            <tbody id="monitorTableBody">
+              <tr class="monitor-empty-row">
+                <td colspan="8">No data - select a project and click Refresh</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="monitor-footer">
+          <div class="monitor-connection" id="monitorConnection">
+            <span class="connection-dot connection-checking"></span>
+            <span>Checking connection...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Provision OneDrives -->
+      <div id="miscOneDriveView" class="view-container hidden">
+        <h2 class="view-title">Provision OneDrives</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">OneDrive Provisioning</h3>
+
+          <div class="form-group">
+            <label class="form-label">Tenant URL</label>
+            <select class="form-input form-input-compact" id="onedriveTenantUrl">
+              <option value="">Select tenant...</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Mapping File (CSV)</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\OneDrive\mapping.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+            <small class="form-help">CSV should contain: UserPrincipalName, OneDriveUrl</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" checked>
+              <span>Skip already provisioned sites</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" data-script="provision-onedrives.ps1">
+              Start Provisioning
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Set Teams Owners -->
+      <div id="miscTeamsView" class="view-container hidden">
+        <h2 class="view-title">Set Teams Owners</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Teams Ownership Management</h3>
+
+          <div class="form-group">
+            <label class="form-label">New Owner UPN</label>
+            <input type="text" class="form-input form-input-compact" placeholder="owner@domain.com">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Teams/Groups CSV File</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\Teams\groups.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+            <small class="form-help">CSV should contain: TeamName or GroupId</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox">
+              <span>Also add to M365 Groups</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" data-script="Set-TeamsOwners.ps1">
+              Add Owner
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Workflow -->
+      <div id="domainWorkflowView" class="view-container hidden">
+        <h2 class="view-title">Domain Removal Workflow</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Complete Domain Removal Process</h3>
+
+          <div class="form-group">
+            <label class="form-label">Domain to Remove</label>
+            <input type="text" class="form-input form-input-compact" placeholder="old-domain.com">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Replacement Domain</label>
+            <input type="text" class="form-input form-input-compact" placeholder="new-domain.com">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">User Mapping CSV</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\Users\mapping.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+            <small class="form-help">CSV format: OldUPN, NewUPN</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Workflow Steps</label>
+            <div class="workflow-steps">
+              <div class="workflow-step">
+                <span class="step-number">1</span>
+                <span class="step-text">Update On-Premises UPNs</span>
+              </div>
+              <div class="workflow-step">
+                <span class="step-number">2</span>
+                <span class="step-text">Sync to Cloud (Entra Connect)</span>
+              </div>
+              <div class="workflow-step">
+                <span class="step-number">3</span>
+                <span class="step-text">Update Cloud UPNs</span>
+              </div>
+              <div class="workflow-step">
+                <span class="step-number">4</span>
+                <span class="step-text">Remove Domain from M365</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" data-script="domain-removal.ps1">
+              Start Workflow
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Remove Domain -->
+      <div id="domainRemoveView" class="view-container hidden">
+        <h2 class="view-title">Remove Domain</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Remove Verified Domain</h3>
+
+          <div class="form-group">
+            <label class="form-label">Domain Name</label>
+            <input type="text" class="form-input form-input-compact" placeholder="domain-to-remove.com">
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox">
+              <span>Force removal (skip dependency checks)</span>
+            </label>
+          </div>
+
+          <div class="alert alert-warning">
+            <strong>Warning:</strong> Ensure no users, groups, or resources are using this domain before removal.
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-danger btn-large" data-script="remove-domain.ps1">
+              Remove Domain
+            </button>
+            <button type="button" class="btn btn-secondary">
+              Check Dependencies
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Update On-Prem UPNs -->
+      <div id="domainOnPremView" class="view-container hidden">
+        <h2 class="view-title">Update On-Prem UPNs</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Active Directory UPN Update</h3>
+
+          <div class="form-group">
+            <label class="form-label">Domain Controller</label>
+            <input type="text" class="form-input form-input-compact" placeholder="dc01.domain.local">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">User Mapping CSV</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\AD\users.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+            <small class="form-help">CSV format: SamAccountName, NewUPN</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" checked>
+              <span>Generate log file</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" data-script="Update-OnPremUPN.ps1">
+              Update On-Prem UPNs
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Update Cloud UPNs -->
+      <div id="domainCloudView" class="view-container hidden">
+        <h2 class="view-title">Update Cloud UPNs</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Microsoft 365 UPN Update</h3>
+
+          <div class="form-group">
+            <label class="form-label">Tenant</label>
+            <input type="text" class="form-input form-input-compact" placeholder="tenant.onmicrosoft.com">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">User Mapping CSV</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\M365\users.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+            <small class="form-help">CSV format: CurrentUPN, NewUPN</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox">
+              <span>Skip immutable ID users</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" data-script="Update-UPN.ps1">
+              Update Cloud UPNs
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Hide from Address Book -->
+      <div id="domainHideView" class="view-container hidden">
+        <h2 class="view-title">Hide from Address Book</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Exchange Global Address List</h3>
+
+          <div class="form-group">
+            <label class="form-label">Input Method</label>
+            <div class="radio-group">
+              <label class="form-radio">
+                <input type="radio" name="hideMethod" value="csv" checked>
+                <span>CSV File</span>
+              </label>
+              <label class="form-radio">
+                <input type="radio" name="hideMethod" value="domain">
+                <span>All Users in Domain</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">User List CSV</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" placeholder="C:\Users\hide-users.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+            <small class="form-help">CSV format: UserPrincipalName</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox">
+              <span>Include shared mailboxes</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" data-script="Hide-AddressBook.ps1">
+              Hide from Address Book
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+    </div>
+  </div>
+
+  <!-- Stat Detail Dialog -->
+  <div class="dialog-overlay hidden" id="statDetailDialog">
+    <div class="dialog dialog-large">
+      <div class="dialog-header">
+        <span id="statDetailTitle">Details</span>
+      </div>
+      <div class="dialog-content">
+        <div id="statDetailContent">
+          <!-- Content will be dynamically populated -->
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-primary" id="closeStatDetailBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Dialog (hidden by default) -->
+  <div class="dialog-overlay hidden" id="settingsDialog">
+    <div class="dialog dialog-large">
+      <div class="dialog-header">
+        <span>⚙ Settings</span>
+      </div>
+      <div class="dialog-content">
+        <div class="settings-tabs">
+          <button type="button" class="settings-tab settings-tab-active" data-tab="config">Config</button>
+          <button type="button" class="settings-tab" data-tab="customer">Customer</button>
+          <button type="button" class="settings-tab" data-tab="workloads">Workloads</button>
+          <button type="button" class="settings-tab" data-tab="discovery">Discovery</button>
+        </div>
+
+        <!-- Config Tab -->
+        <div class="settings-tab-content settings-tab-content-active" id="configTab">
+          <div class="form-group">
+            <label class="form-label">FLY API URL</label>
+            <input type="text" class="form-input" id="apiUrl" placeholder="https://graph.avepointonlineservices.com/fly">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">AOS CLIENT ID</label>
+              <input type="text" class="form-input" id="clientId" placeholder="Enter Client ID">
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">CLIENT SECRET</label>
+              <input type="password" class="form-input" id="clientSecret" placeholder="Enter Client Secret">
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">SECRET EXPIRY</label>
+              <input type="date" class="form-input" id="secretExpiry">
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="testConnectionBtn">Test Connection</button>
+            <span id="connectionStatus"></span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">FLY PORTAL URL</label>
+            <input type="text" class="form-input" id="portalUrl" placeholder="https://portal.avepointonlineservices.com">
+            <small class="form-help">Web portal base URL — used to open projects when double-clicking in the Project Monitor</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">SHAREPOINT ADMIN URL</label>
+            <input type="text" class="form-input" id="sharePointAdminUrl" placeholder="https://tenant-admin.sharepoint.com">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">SOFTWARE UPDATES</label>
+            <button type="button" class="btn btn-secondary" id="checkUpdatesBtn">Check for Updates</button>
+            <span id="updateStatus"></span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">VERSION</label>
+            <div id="versionDisplay" class="version-display">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Customer Tab -->
+        <div class="settings-tab-content hidden" id="customerTab">
+          <p class="form-help">Customer Prefix is the project name prefix. Account Name auto-fills the connection details in Migration Mappings.</p>
+
+          <div class="form-actions" style="margin-bottom: 16px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="addCustomerBtn">+ Add Row</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="removeCustomerBtn">- Remove Row</button>
+          </div>
+
+          <div class="customer-grid">
+            <table class="settings-table">
+              <thead>
+                <tr>
+                  <th>Customer Prefix</th>
+                  <th>Account Name</th>
+                  <th>SharePoint Admin URL</th>
+                </tr>
+              </thead>
+              <tbody id="customerTableBody">
+                <tr>
+                  <td><input type="text" class="form-input form-input-compact customer-prefix" placeholder="Project prefix"></td>
+                  <td><input type="text" class="form-input form-input-compact customer-account" placeholder="account@domain.onmicrosoft.com"></td>
+                  <td><input type="text" class="form-input form-input-compact customer-spo" placeholder="https://tenant-admin.sharepoint.com"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Workloads Tab -->
+        <div class="settings-tab-content hidden" id="workloadsTab">
+          <p class="form-help">These are pre-filled into the Migration Runner for each workload.</p>
+
+          <div class="workload-settings">
+            <div class="workload-setting-row">
+              <label class="workload-label">SharePoint</label>
+              <input type="text" class="form-input" placeholder="SharePoint">
+            </div>
+            <div class="workload-setting-row">
+              <label class="workload-label">Exchange</label>
+              <input type="text" class="form-input" placeholder="Exchange">
+            </div>
+            <div class="workload-setting-row">
+              <label class="workload-label">OneDrive</label>
+              <input type="text" class="form-input" placeholder="OneDrive">
+            </div>
+            <div class="workload-setting-row">
+              <label class="workload-label">Teams</label>
+              <input type="text" class="form-input" placeholder="Teams">
+            </div>
+            <div class="workload-setting-row">
+              <label class="workload-label">Teams Chat</label>
+              <input type="text" class="form-input" placeholder="Teams Chat">
+            </div>
+            <div class="workload-setting-row">
+              <label class="workload-label">Groups</label>
+              <input type="text" class="form-input" placeholder="Groups">
+            </div>
+          </div>
+        </div>
+
+        <!-- Discovery Tab -->
+        <div class="settings-tab-content hidden" id="discoveryTab">
+          <div class="form-group">
+            <label class="form-label">DISCOVERY OUTPUT FOLDER</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input" id="discoveryOutputPath" placeholder="C:\Discovery">
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+            <small class="form-help">Base folder where discovery CSVs and Excel files are saved. Each domain gets its own subfolder inside.</small>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary" id="cancelSettingsBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveSettingsBtn">Save All</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+
+  <!-- Inline test to verify clicks work -->
+  <script>
+    console.log('Inline script loaded');
+    setTimeout(() => {
+      const tiles = document.querySelectorAll('.tile');
+      console.log('Found tiles:', tiles.length);
+      tiles.forEach((tile, index) => {
+        console.log(`Tile ${index}:`, tile.getAttribute('data-script'));
+      });
+    }, 1000);
+  </script>
+</body>
+</html>

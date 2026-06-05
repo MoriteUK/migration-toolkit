@@ -1,0 +1,141 @@
+/* ============================================================================
+   Fly Migration Toolkit — Color & Type Foundations
+   Extracted verbatim from lib.ps1 ($clr* / $Font* definitions) of
+   MoriteUK/AvepointFlyUtility, then organised into base + semantic tokens.
+   The toolkit is a Windows (WinForms) desktop app; these tokens recreate its
+   Microsoft-Fluent-adjacent look in the browser.
+   ============================================================================ */
+
+:root {
+  /* ---- BASE PALETTE (raw values from $clr* in lib.ps1) ------------------- */
+  --fly-accent:        #0064b4;  /* $clrAccent  rgb(0,100,180)  — AvePoint blue */
+  --fly-accent-hover:  #004e98;  /* banner button MouseOver rgb(0,78,152)      */
+  --fly-accent-tint:   #dce6f8;  /* selector bar rgb(220,230,248)              */
+
+  --fly-bg:            #f0f2f7;  /* $clrBg     rgb(240,242,247) window bg       */
+  --fly-panel:         #ffffff;  /* $clrPanel  white card/surface               */
+  --fly-text:          #1c1c20;  /* $clrText   rgb(28,28,32)  near-black ink     */
+  --fly-muted:         #646c78;  /* $clrMuted  rgb(100,108,120) secondary text   */
+  --fly-border:        #d2d7e4;  /* $clrBorder rgb(210,215,228) hairline border  */
+  --fly-grey:          #afb6c3;  /* $clrGrey   rgb(175,182,195) idle status dot  */
+
+  --fly-log-bg:        #1a1b26;  /* $clrLogBg  rgb(26,27,38) console / grid bg   */
+  --fly-footer:        #141826;  /* footer rgb(20,24,38)                         */
+  --fly-footer-alt:    #1c2030;  /* monitor footer rgb(28,32,48)                 */
+
+  /* ---- STATUS PALETTE ---------------------------------------------------- */
+  --fly-green:         #129b3c;  /* $clrGreen rgb(18,155,60)   success           */
+  --fly-amber:         #c38700;  /* $clrAmber rgb(195,135,0)   warning           */
+  --fly-red:           #c31e1e;  /* $clrRed   rgb(195,30,30)   error / danger     */
+  --fly-close-red:     #c83737;  /* footer Close button rgb(200,55,55)           */
+  --fly-banner-warn:   #fff3cd;  /* update banner rgb(255,243,205)               */
+
+  /* ---- LOG CONSOLE TEXT COLORS (Write-Log in lib.ps1) -------------------- */
+  --fly-log-ts:        #505f78;  /* timestamp rgb(80,95,120)    */
+  --fly-log-info:      #789bdc;  /* [INFO]    rgb(120,155,220)   */
+  --fly-log-ok:        #41c36e;  /* [OK]      rgb(65,195,110)    */
+  --fly-log-warn:      #dca52d;  /* [WARN]    rgb(220,165,45)    */
+  --fly-log-error:     #e15050;  /* [ERROR]   rgb(225,80,80)     */
+  --fly-log-body:      #cdd4e6;  /* message   rgb(205,212,230)   */
+  --fly-grid-text:     #bed2ff;  /* DataGridView text rgb(190,210,255) */
+  --fly-grid-line:     #2d374b;  /* grid lines rgb(45,55,75)     */
+
+  /* dark-grid row tints */
+  --fly-row-fail-bg:   #461919;  /* rgb(70,25,25)  */
+  --fly-row-fail-fg:   #f07d7d;  /* rgb(240,125,125) */
+  --fly-row-warn-bg:   #41300c;  /* rgb(65,48,12)  */
+  --fly-row-warn-fg:   #ebc350;  /* rgb(235,195,80) */
+
+  /* ---- SEMANTIC COLOR TOKENS --------------------------------------------- */
+  --color-primary:        var(--fly-accent);
+  --color-primary-hover:  var(--fly-accent-hover);
+  --color-surface:        var(--fly-panel);
+  --color-canvas:         var(--fly-bg);
+  --color-ink:            var(--fly-text);
+  --color-ink-muted:      var(--fly-muted);
+  --color-hairline:       var(--fly-border);
+  --color-success:        var(--fly-green);
+  --color-warning:        var(--fly-amber);
+  --color-danger:         var(--fly-red);
+
+  /* ============================================================================
+     TYPOGRAPHY
+     The app uses the Windows system stack: Segoe UI (UI), Consolas (code).
+     Sizes below mirror the WinForms point sizes (1pt ≈ 1.333px @96dpi).
+     ============================================================================ */
+  --font-ui:    "Segoe UI", "Segoe UI Web (West European)", -apple-system,
+                "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-mono:  "Cascadia Code", "Consolas", "SF Mono", "Menlo", monospace;
+
+  /* weights — Segoe UI Semibold is weight 600 */
+  --weight-regular:  400;
+  --weight-semibold: 600;
+
+  /* base type scale (px equivalents of WinForms pt sizes) */
+  --text-cap:    10px;   /* $FontCap   7.5pt — uppercase labels on cards    */
+  --text-mono:   12px;   /* $FontMono  8.5pt — console / code               */
+  --text-sub:    12px;   /* tile subtitle 8.5pt muted                       */
+  --text-body:   13px;   /* $FontBody  9pt   — default UI text              */
+  --text-bold:   13px;   /* $FontBold  9pt semibold                         */
+  --text-tile:   19px;   /* tile button 14pt semibold                       */
+  --text-title:  19px;   /* $FontTitle 14pt semibold — header               */
+  --text-h1:     28px;   /* large headings in web contexts                  */
+
+  --leading-tight: 1.25;
+  --leading-body:  1.5;
+}
+
+/* ============================================================================
+   SEMANTIC TYPE CLASSES
+   ============================================================================ */
+.fly-h1 {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-h1);
+  line-height: var(--leading-tight);
+  color: var(--color-ink);
+  letter-spacing: -0.01em;
+}
+.fly-title {            /* header banner title */
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-title);
+  line-height: var(--leading-tight);
+}
+.fly-tile {             /* large navigation tile label */
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-tile);
+}
+.fly-body {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--color-ink);
+}
+.fly-bold {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-bold);
+  color: var(--color-ink);
+}
+.fly-sub {              /* tile subtitle / helper text */
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-sub);
+  color: var(--color-ink-muted);
+}
+.fly-cap {              /* uppercase caption on cards */
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-cap);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+.fly-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  line-height: 1.45;
+}
