@@ -1703,9 +1703,30 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // AOS Setup handlers
+  const aosLaunchSetupBtn = document.getElementById('aosLaunchSetupBtn');
   const aosOpenSettingsBtn = document.getElementById('aosOpenSettingsBtn');
   const aosTestConnectionBtn = document.getElementById('aosTestConnectionBtn');
   const aosConnectionStatus = document.getElementById('aosConnectionStatus');
+
+  if (aosLaunchSetupBtn) {
+    aosLaunchSetupBtn.addEventListener('click', async () => {
+      aosLaunchSetupBtn.disabled = true;
+      aosLaunchSetupBtn.textContent = 'Launching...';
+
+      try {
+        await window.electronAPI.launchScript('aossetup.ps1');
+        // Reload config after setup completes
+        setTimeout(() => {
+          loadAosConfig();
+        }, 1000);
+      } catch (error) {
+        alert(`Error launching AOS Setup:\n${error.message}`);
+      } finally {
+        aosLaunchSetupBtn.disabled = false;
+        aosLaunchSetupBtn.textContent = '🚀 Launch AOS Setup Wizard';
+      }
+    });
+  }
 
   if (aosOpenSettingsBtn) {
     aosOpenSettingsBtn.addEventListener('click', () => {

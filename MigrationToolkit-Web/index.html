@@ -375,20 +375,40 @@
         <h2 class="view-title">AOS Setup</h2>
 
         <p class="form-help" style="margin-bottom: 20px;">
-          These settings are automatically loaded from your configuration. Edit them in Settings → Config tab.
+          Configure your AvePoint Online Services (AOS) tenant and app credentials. This sets up the connection
+          between your migration toolkit and AvePoint Fly.
         </p>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">AvePoint Online Services Configuration</h3>
+          <h3 class="form-card-title">Setup Wizard</h3>
+          <p class="form-help">
+            The AOS Setup wizard will guide you through:
+          </p>
+          <ul class="form-help" style="margin-left: 20px; margin-top: 8px;">
+            <li>Signing in to AvePoint Online Services</li>
+            <li>Creating/configuring your AOS tenant</li>
+            <li>Registering your Azure AD app credentials</li>
+            <li>Testing the connection</li>
+          </ul>
+
+          <div class="form-actions" style="margin-top: 20px;">
+            <button type="button" class="btn btn-primary btn-large" id="aosLaunchSetupBtn">
+              🚀 Launch AOS Setup Wizard
+            </button>
+          </div>
+        </div>
+
+        <div class="form-card form-card-compact" style="margin-top: 16px;">
+          <h3 class="form-card-title">Current Configuration</h3>
 
           <div class="form-group">
             <label class="form-label">AOS Tenant URL</label>
-            <input type="text" id="aosUrl" class="form-input form-input-compact" placeholder="https://your-tenant.avepointonlineservices.com" readonly>
+            <input type="text" id="aosUrl" class="form-input form-input-compact" placeholder="Not configured" readonly>
           </div>
 
           <div class="form-group">
             <label class="form-label">Client ID</label>
-            <input type="text" id="aosClientId" class="form-input form-input-compact" placeholder="Enter Client ID from App Registration" readonly>
+            <input type="text" id="aosClientId" class="form-input form-input-compact" placeholder="Not configured" readonly>
           </div>
 
           <div class="form-group">
@@ -400,7 +420,7 @@
             <button type="button" class="btn btn-secondary" id="aosOpenSettingsBtn">
               ⚙️ Edit in Settings
             </button>
-            <button type="button" class="btn btn-primary btn-large" id="aosTestConnectionBtn">
+            <button type="button" class="btn btn-primary" id="aosTestConnectionBtn">
               🔌 Test Connection
             </button>
           </div>
@@ -485,8 +505,7 @@
             </div>
           </div>
 
-          <h3 class="form-card-subtitle" style="margin-top: 24px;">PowerShell Automation</h3>
-          <p class="form-help">Use PowerShell scripts instead of browser automation for faster, more reliable operations.</p>
+          <h3 class="form-card-subtitle" style="margin-top: 16px;">PowerShell Automation</h3>
 
           <div class="form-group-tight">
             <label class="form-label">Customer Prefix</label>
