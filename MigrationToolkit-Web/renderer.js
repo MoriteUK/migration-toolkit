@@ -1020,6 +1020,36 @@ async function loadMonitorProjects() {
   }
 }
 
+// Load AOS configuration into the AOS Setup view
+async function loadAosConfig() {
+  try {
+    const aosUrl = document.getElementById('aosUrl');
+    const aosClientId = document.getElementById('aosClientId');
+    const aosClientSecret = document.getElementById('aosClientSecret');
+
+    if (!aosUrl || !aosClientId || !aosClientSecret) {
+      console.log('AOS elements not found');
+      return;
+    }
+
+    const config = await window.electronAPI.getConfig();
+
+    if (config.success && config.config) {
+      aosUrl.value = config.config.Url || '';
+      aosClientId.value = config.config.ClientId || '';
+
+      // Show placeholder for secret if it exists
+      if (config.config.EncSecret) {
+        aosClientSecret.placeholder = '••••••••••••••••';
+      } else {
+        aosClientSecret.placeholder = 'No secret configured';
+      }
+    }
+  } catch (error) {
+    console.error('Error loading AOS config:', error);
+  }
+}
+
 // Switch between views
 function switchView(viewName) {
   console.log('Switching to view:', viewName);
@@ -1060,6 +1090,8 @@ function switchView(viewName) {
         loadOneDriveTenants();
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
+      } else if (viewName === 'avepoint-aos') {
+        loadAosConfig();
       } else if (viewName === 'dashboard') {
         // Restart dashboard auto-refresh when returning to dashboard
         const domain = dashboardDomainSelect?.value;
@@ -1666,6 +1698,45 @@ document.addEventListener('DOMContentLoaded', () => {
         await window.electronAPI.openExternal('https://docs.avepoint.com/fly/user_guide/migration/get_started_with_fly_migration/create_an_azure_ad_application.htm');
       } catch (error) {
         alert(`Error opening documentation: ${error.message}`);
+      }
+    });
+  }
+
+  // AOS Setup handlers
+  const aosOpenSettingsBtn = document.getElementById('aosOpenSettingsBtn');
+  const aosTestConnectionBtn = document.getElementById('aosTestConnectionBtn');
+  const aosConnectionStatus = document.getElementById('aosConnectionStatus');
+
+  if (aosOpenSettingsBtn) {
+    aosOpenSettingsBtn.addEventListener('click', () => {
+      openSettings();
+    });
+  }
+
+  if (aosTestConnectionBtn) {
+    aosTestConnectionBtn.addEventListener('click', async () => {
+      aosTestConnectionBtn.disabled = true;
+      aosTestConnectionBtn.textContent = 'Testing...';
+      aosConnectionStatus.style.display = 'block';
+      aosConnectionStatus.style.color = '#6c757d';
+      aosConnectionStatus.textContent = '⏳ Testing connection...';
+
+      try {
+        const result = await window.electronAPI.testConnection();
+
+        if (result.success) {
+          aosConnectionStatus.style.color = '#28a745';
+          aosConnectionStatus.textContent = '✓ Connection successful';
+        } else {
+          aosConnectionStatus.style.color = '#dc3545';
+          aosConnectionStatus.textContent = `❌ ${result.error || 'Connection failed'}`;
+        }
+      } catch (error) {
+        aosConnectionStatus.style.color = '#dc3545';
+        aosConnectionStatus.textContent = `❌ Error: ${error.message}`;
+      } finally {
+        aosTestConnectionBtn.disabled = false;
+        aosTestConnectionBtn.textContent = '🔌 Test Connection';
       }
     });
   }

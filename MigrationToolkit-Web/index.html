@@ -374,31 +374,39 @@
       <div id="avepointAosView" class="view-container hidden">
         <h2 class="view-title">AOS Setup</h2>
 
+        <p class="form-help" style="margin-bottom: 20px;">
+          These settings are automatically loaded from your configuration. Edit them in Settings → Config tab.
+        </p>
+
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">AvePoint Online Services Configuration</h3>
 
           <div class="form-group">
             <label class="form-label">AOS Tenant URL</label>
-            <input type="text" class="form-input form-input-compact" placeholder="https://your-tenant.avepointonlineservices.com">
+            <input type="text" id="aosUrl" class="form-input form-input-compact" placeholder="https://your-tenant.avepointonlineservices.com" readonly>
           </div>
 
           <div class="form-group">
             <label class="form-label">Client ID</label>
-            <input type="text" class="form-input form-input-compact" placeholder="Enter Client ID from App Registration">
+            <input type="text" id="aosClientId" class="form-input form-input-compact" placeholder="Enter Client ID from App Registration" readonly>
           </div>
 
           <div class="form-group">
             <label class="form-label">Client Secret</label>
-            <input type="password" class="form-input form-input-compact" placeholder="Enter Client Secret">
+            <input type="password" id="aosClientSecret" class="form-input form-input-compact" placeholder="••••••••" readonly>
           </div>
 
           <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" data-script="menu.ps1">
-              Configure AOS Tenant
+            <button type="button" class="btn btn-secondary" id="aosOpenSettingsBtn">
+              ⚙️ Edit in Settings
             </button>
-            <button type="button" class="btn btn-secondary">
-              Test Connection
+            <button type="button" class="btn btn-primary btn-large" id="aosTestConnectionBtn">
+              🔌 Test Connection
             </button>
+          </div>
+
+          <div id="aosConnectionStatus" class="form-help" style="margin-top: 16px; display: none;">
+            <!-- Status will appear here -->
           </div>
         </div>
       </div>
