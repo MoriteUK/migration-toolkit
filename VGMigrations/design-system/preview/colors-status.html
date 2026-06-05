@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{background:#fff;font-family:var(--font-ui);padding:18px}
+  .row{display:flex;gap:0}
+  .sw{flex:1;height:88px;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;box-sizing:border-box}
+  .sw .hex{font-size:12px;font-weight:600;font-family:var(--font-mono)}
+  .sw .nm{font-size:11px;margin-top:2px;opacity:.9}
+  .meta{display:flex;margin-top:8px}
+  .meta div{flex:1;font-size:11px;color:var(--fly-muted);padding:0 10px}
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw" style="background:#129b3c;color:#fff"><span class="hex">#129B3C</span><span class="nm">Success</span></div>
+    <div class="sw" style="background:#c38700;color:#fff"><span class="hex">#C38700</span><span class="nm">Warning</span></div>
+    <div class="sw" style="background:#c31e1e;color:#fff"><span class="hex">#C31E1E</span><span class="nm">Error / Danger</span></div>
+    <div class="sw" style="background:#fff3cd;color:#1c1c20"><span class="hex">#FFF3CD</span><span class="nm">Update banner</span></div>
+  </div>
+  <div class="meta">
+    <div>OK · connected · complete</div>
+    <div>WARN · exceptions · checking</div>
+    <div>ERROR · failed · destructive</div>
+    <div>"Update available" strip</div>
+  </div>
+</body>
+</html>

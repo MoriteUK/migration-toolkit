@@ -1,0 +1,44 @@
+# Logs
+logs/
+*.log
+
+# Reports
+reports/
+
+# Authentication
+auth/storageState.json
+.env
+.env.local
+
+# Build outputs
+*.exe
+!MigrationTools.exe
+
+# Configuration (user-specific)
+domains.json
+workloads.json
+tenant-sites.json
+tenant-sites.meta.json
+shared-config.json
+
+# User data
+*.xlsx
+VBUIDs.xlsx
+
+# Node modules (if any)
+node_modules/
+
+# PowerShell module cache
+*.dll
+
+# Claude AI
+.claude/settings.local.json
+
+# Temporary files
+*.tmp
+*.temp
+~$*
+
+# Old/backup files
+*-old.*
+*.bak

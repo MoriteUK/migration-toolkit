@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{background:#fff;font-family:var(--font-ui);padding:18px}
+  table{border-collapse:collapse;width:100%;font-size:12px;background:#1a1b26;border-radius:3px;overflow:hidden}
+  th{background:#0064b4;color:#fff;font-weight:700;text-align:left;padding:7px 10px}
+  td{padding:6px 10px;color:#bed2ff;border-top:1px solid #2d374b}
+  tr.fail td{background:#461919;color:#f07d7d}
+  tr.warn td{background:#41300c;color:#ebc350}
+  tr.sel td{background:#004e98;color:#fff}
+</style>
+</head>
+<body>
+  <table>
+    <tr><th>Project</th><th>Total</th><th>Not&nbsp;Started</th><th>In&nbsp;Progress</th><th>Complete</th><th>Failed</th><th>Warn</th></tr>
+    <tr class="sel"><td>Contoso - SharePoint</td><td>412</td><td>0</td><td>38</td><td>374</td><td>0</td><td>0</td></tr>
+    <tr class="warn"><td>Contoso - Exchange</td><td>206</td><td>4</td><td>12</td><td>187</td><td>0</td><td>3</td></tr>
+    <tr class="fail"><td>Contoso - Teams</td><td>58</td><td>10</td><td>2</td><td>44</td><td>2</td><td>0</td></tr>
+  </table>
+</body>
+</html>

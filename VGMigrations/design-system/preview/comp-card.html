@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{background:#f0f2f7;font-family:var(--font-ui);padding:22px;color:#1c1c20}
+  .card{display:flex;background:#d2d7e4;border-radius:3px;overflow:hidden;max-width:560px}
+  .card .inner{background:#fff;flex:1;margin:1px;border-radius:0 3px 3px 0;display:flex}
+  .stripe{width:4px;background:#0064b4;flex:none}
+  .pad{padding:14px 18px}
+  .cap{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#646c78}
+  .ttl{font-size:13px;font-weight:600;margin-top:6px}
+  .txt{font-size:12.5px;color:#646c78;margin-top:3px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="inner">
+      <div class="stripe"></div>
+      <div class="pad">
+        <div class="cap">Source Connection</div>
+        <div class="ttl">Contoso → Fabrikam</div>
+        <div class="txt">SharePoint · Exchange · OneDrive · Teams · Groups</div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:11.5px;color:#646c78;max-width:560px">Signature card: white panel inside a 1px border with a <b style="color:#0064b4">4px accent stripe</b> down the left edge. No drop shadow — elevation is the border.</p>
+</body>
+</html>

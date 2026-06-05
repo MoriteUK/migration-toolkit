@@ -1,0 +1,20 @@
+{
+  "name": "fly-migration-web",
+  "version": "2.0.0",
+  "description": "AvePoint Fly Migration Toolkit — web UI",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "login": "node fly-connector.js --mode=login",
+    "create": "node fly-connector.js --mode=create"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "multer": "^1.4.5-lts.1",
+    "playwright": "^1.47.0",
+    "ws": "^8.18.0"
+  }
+}

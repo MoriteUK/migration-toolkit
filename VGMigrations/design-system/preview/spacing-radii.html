@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{background:#fff;font-family:var(--font-ui);padding:20px;color:#1c1c20}
+  .row{display:flex;gap:26px;align-items:center}
+  .demo{display:flex;flex-direction:column;gap:7px;align-items:center}
+  .demo span{font-size:11px;color:#646c78;font-family:var(--font-mono)}
+  .sq{width:78px;height:54px;background:#fff;border:1px solid #d2d7e4}
+  .r2{border-radius:2px}.r4{border-radius:4px}
+  .field{width:120px;height:26px;border:1px solid #d2d7e4;background:#fff}
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="demo"><div class="sq"></div><span>0px — native</span></div>
+    <div class="demo"><div class="sq r2"></div><span>2px — soft</span></div>
+    <div class="demo"><div class="sq r4"></div><span>4px — web polish</span></div>
+    <div class="demo"><div class="field"></div><span>FixedSingle 1px</span></div>
+  </div>
+  <p style="margin:16px 0 0;font-size:11.5px;color:#646c78">Native WinForms is <b style="color:#1c1c20">square (0px)</b> with 1px hairline borders and <b style="color:#1c1c20">no drop shadows</b>. On the web, an optional 2–4px radius is allowed for polish — keep it minimal to preserve the hard‑edged desktop feel.</p>
+</body>
+</html>

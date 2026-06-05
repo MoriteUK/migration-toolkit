@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{background:#fff;font-family:var(--font-ui);padding:18px}
+  .row{display:flex;gap:0}
+  .sw{flex:1;height:88px;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;box-sizing:border-box}
+  .sw .hex{font-size:12px;font-weight:600;font-family:var(--font-mono)}
+  .sw .nm{font-size:11px;margin-top:2px;opacity:.85}
+  .meta{display:flex;gap:0;margin-top:8px}
+  .meta div{flex:1;font-size:11px;color:var(--fly-muted);padding:0 10px}
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw" style="background:#0064b4;color:#fff"><span class="hex">#0064B4</span><span class="nm">Accent / Primary</span></div>
+    <div class="sw" style="background:#004e98;color:#fff"><span class="hex">#004E98</span><span class="nm">Accent · hover</span></div>
+    <div class="sw" style="background:#dce6f8;color:#1c1c20"><span class="hex">#DCE6F8</span><span class="nm">Accent · tint</span></div>
+  </div>
+  <div class="meta">
+    <div>$clrAccent — banner, primary buttons, grid header, card stripe</div>
+    <div>MouseOver state on every accent control</div>
+    <div>Project‑selector bar fill</div>
+  </div>
+</body>
+</html>
