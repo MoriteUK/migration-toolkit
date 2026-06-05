@@ -61,20 +61,20 @@ try {
 
 # Connect to Microsoft Graph
 Write-Host "`n📡 Connecting to Microsoft Graph..." -ForegroundColor Cyan
-Write-Host "A browser window will open for authentication..." -ForegroundColor Yellow
+Write-Host "`n⚠️  DEVICE CODE AUTHENTICATION" -ForegroundColor Yellow
+Write-Host "A code will appear below. Copy it and visit https://microsoft.com/devicelogin" -ForegroundColor Yellow
+Write-Host "to complete authentication.`n" -ForegroundColor Yellow
 
 try {
-    if ($Interactive) {
-        Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -ErrorAction Stop
-    } else {
-        Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -UseDeviceAuthentication -ErrorAction Stop
-    }
-    Write-Host "✓ Connected to tenant: $TenantId" -ForegroundColor Green
+    # Always use device code authentication - it's more reliable when called from Electron
+    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -UseDeviceAuthentication -ErrorAction Stop
+    Write-Host "`n✓ Connected to tenant: $TenantId" -ForegroundColor Green
 } catch {
     Write-Error "Failed to connect to Microsoft Graph: $_"
     Write-Host "`nTroubleshooting:" -ForegroundColor Yellow
     Write-Host "- Ensure you have 'Application Administrator' or 'Global Administrator' role" -ForegroundColor Gray
     Write-Host "- Check that the Tenant ID is correct" -ForegroundColor Gray
+    Write-Host "- Make sure you completed the device code authentication" -ForegroundColor Gray
     exit 1
 }
 

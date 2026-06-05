@@ -1608,10 +1608,12 @@ document.addEventListener('DOMContentLoaded', () => {
         `Tenant ID: ${tenantId}\n` +
         `App Name: ${appName}\n\n` +
         `This will:\n` +
-        `1. Open a browser for authentication\n` +
-        `2. Create app in Azure AD\n` +
-        `3. Configure Graph & SharePoint permissions\n` +
-        `4. Generate Client ID & Secret\n\n` +
+        `1. Show a device code in PowerShell window\n` +
+        `2. You visit https://microsoft.com/devicelogin\n` +
+        `3. Enter the code to authenticate\n` +
+        `4. Create app in Azure AD\n` +
+        `5. Configure Graph & SharePoint permissions\n` +
+        `6. Generate Client ID & Secret\n\n` +
         `You must be Global Admin or Application Admin.\n\n` +
         `Continue?`
       );
@@ -1621,13 +1623,12 @@ document.addEventListener('DOMContentLoaded', () => {
       createAppRegBtn.textContent = 'Creating...';
       appRegStatus.style.display = 'block';
       appRegStatus.style.color = '#6c757d';
-      appRegStatus.textContent = '⏳ Launching PowerShell script... Check the PowerShell window for authentication prompts.';
+      appRegStatus.textContent = '⏳ PowerShell window will show a device code. Copy it and visit https://microsoft.com/devicelogin';
 
       try {
         const result = await window.electronAPI.executePowerShell('New-AzureAppRegistration.ps1', [
           '-TenantId', tenantId,
-          '-AppName', appName,
-          '-Interactive'
+          '-AppName', appName
         ]);
 
         if (result.success) {
