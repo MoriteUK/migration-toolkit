@@ -436,20 +436,44 @@
         <h2 class="view-title">Connections & Mappings</h2>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Migration Connections</h3>
+          <h3 class="form-card-title">PowerShell Automation (Recommended)</h3>
+          <p class="form-help">Fast, reliable migrations using PowerShell cmdlets instead of browser automation.</p>
 
           <div class="form-row">
             <div class="form-group-tight flex-1">
-              <label class="form-label">Source Tenant</label>
-              <input type="text" class="form-input form-input-compact" placeholder="source.onmicrosoft.com">
+              <label class="form-label">Customer Prefix</label>
+              <input type="text" class="form-input form-input-compact" id="psCustomerPrefix" placeholder="e.g., Contoso">
             </div>
             <div class="form-group-tight flex-1">
-              <label class="form-label">Destination Tenant</label>
-              <input type="text" class="form-input form-input-compact" placeholder="destination.onmicrosoft.com">
+              <label class="form-label">Workload</label>
+              <select class="form-input form-input-compact" id="psWorkload">
+                <option value="">Select workload...</option>
+                <option value="Exchange">Exchange</option>
+                <option value="OneDrive">OneDrive</option>
+                <option value="SharePoint">SharePoint</option>
+                <option value="Teams">Teams</option>
+                <option value="TeamChat">Teams Chat</option>
+                <option value="Groups">M365 Groups</option>
+              </select>
             </div>
           </div>
 
-          <h3 class="form-card-subtitle">Mapping Files</h3>
+          <div class="form-actions" style="gap: 12px; margin-top: 12px;">
+            <button type="button" class="btn btn-primary" id="psCreateProjectBtn">
+              📁 Create Project
+            </button>
+            <button type="button" class="btn btn-primary" id="psImportMappingsBtn">
+              📥 Import Mappings
+            </button>
+            <button type="button" class="btn btn-success btn-large" id="psStartWorkflowBtn">
+              🚀 Run Full Workflow
+            </button>
+          </div>
+        </div>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Mapping Files</h3>
+          <p class="form-help">Select mapping CSV files for each workload. Used by both PowerShell and legacy automation.</p>
 
           <div class="form-row">
             <div class="form-group-tight flex-1">
@@ -504,56 +528,25 @@
               </div>
             </div>
           </div>
+        </div>
 
-          <h3 class="form-card-subtitle" style="margin-top: 16px;">PowerShell Automation</h3>
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Legacy Browser Automation</h3>
 
-          <div class="form-group-tight">
-            <label class="form-label">Customer Prefix</label>
-            <input type="text" class="form-input form-input-compact" id="psCustomerPrefix" placeholder="e.g., Contoso">
-          </div>
-
-          <div class="form-group-tight">
-            <label class="form-label">Workload</label>
-            <select class="form-input form-input-compact" id="psWorkload">
-              <option value="">Select workload...</option>
-              <option value="SharePoint">SharePoint</option>
-              <option value="Exchange">Exchange</option>
-              <option value="OneDrive">OneDrive</option>
-              <option value="Teams">Teams</option>
-              <option value="TeamChat">Teams Chat</option>
-              <option value="Groups">M365 Groups</option>
-            </select>
-          </div>
-
-          <div class="form-group-tight">
-            <label class="form-label">Mapping File (CSV)</label>
-            <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" id="psMappingFile" placeholder="C:\Mappings\mappings.csv" readonly>
-              <button type="button" class="btn btn-secondary btn-compact" id="psBrowseMappingBtn">Browse</button>
+          <div class="form-row">
+            <div class="form-group-tight flex-1">
+              <label class="form-label">Source Tenant</label>
+              <input type="text" class="form-input form-input-compact" placeholder="source.onmicrosoft.com">
+            </div>
+            <div class="form-group-tight flex-1">
+              <label class="form-label">Destination Tenant</label>
+              <input type="text" class="form-input form-input-compact" placeholder="destination.onmicrosoft.com">
             </div>
           </div>
 
-          <div class="form-actions" style="gap: 12px; flex-wrap: wrap;">
-            <button type="button" class="btn btn-primary" id="psCreateProjectBtn">
-              📁 Create Project
-            </button>
-            <button type="button" class="btn btn-primary" id="psImportMappingsBtn">
-              📥 Import Mappings
-            </button>
-            <button type="button" class="btn btn-success btn-large" id="psStartWorkflowBtn">
-              🚀 Run Full Workflow
-            </button>
-            <button type="button" class="btn btn-secondary" id="psViewDocsBtn">
-              📖 View Documentation
-            </button>
-          </div>
-
           <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" data-script="menu.ps1">
-              Create Connections (Legacy)
-            </button>
-            <button type="button" class="btn btn-secondary">
-              View Existing
+            <button type="button" class="btn btn-secondary btn-large" data-script="menu.ps1">
+              📋 Create Connections (Legacy)
             </button>
           </div>
         </div>

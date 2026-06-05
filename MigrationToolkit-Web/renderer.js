@@ -1714,7 +1714,7 @@ document.addEventListener('DOMContentLoaded', () => {
       aosLaunchSetupBtn.textContent = 'Launching...';
 
       try {
-        await window.electronAPI.launchScript('aossetup.ps1');
+        await window.electronAPI.launchScript('Launch-AosSetup.ps1');
         // Reload config after setup completes
         setTimeout(() => {
           loadAosConfig();
