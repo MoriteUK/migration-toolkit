@@ -1050,6 +1050,39 @@ async function loadAosConfig() {
   }
 }
 
+// Populate customer dropdown in Connections view
+async function loadConnectionsCustomers() {
+  try {
+    const psCustomerPrefix = document.getElementById('psCustomerPrefix');
+    if (!psCustomerPrefix) {
+      console.log('psCustomerPrefix element not found');
+      return;
+    }
+
+    const config = await window.electronAPI.getConfig();
+
+    if (config.success && config.config && config.config.Customers) {
+      const customers = config.config.Customers;
+      console.log('Loading customers into dropdown:', customers.length);
+
+      psCustomerPrefix.innerHTML = '<option value="">Select customer...</option>';
+
+      customers.forEach(customer => {
+        if (customer.Prefix) {
+          const option = document.createElement('option');
+          option.value = customer.Prefix;
+          option.textContent = customer.Prefix;
+          psCustomerPrefix.appendChild(option);
+        }
+      });
+
+      console.log('Customer dropdown populated with', psCustomerPrefix.options.length, 'options');
+    }
+  } catch (error) {
+    console.error('Error loading connections customers:', error);
+  }
+}
+
 // Switch between views
 function switchView(viewName) {
   console.log('Switching to view:', viewName);
@@ -1092,6 +1125,8 @@ function switchView(viewName) {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
         loadAosConfig();
+      } else if (viewName === 'avepoint-connections') {
+        loadConnectionsCustomers();
       } else if (viewName === 'dashboard') {
         // Restart dashboard auto-refresh when returning to dashboard
         const domain = dashboardDomainSelect?.value;

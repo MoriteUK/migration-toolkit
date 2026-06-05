@@ -436,29 +436,73 @@
         <h2 class="view-title">Connections & Mappings</h2>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">PowerShell Automation (Recommended)</h3>
-          <p class="form-help">Fast, reliable migrations using PowerShell cmdlets instead of browser automation.</p>
+          <h3 class="form-card-title">PowerShell Migration (Recommended)</h3>
+          <p class="form-help">Fast, reliable migrations using PowerShell cmdlets. Select customer and mapping files below.</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">Customer</label>
+            <select class="form-input form-input-compact" id="psCustomerPrefix">
+              <option value="">Select customer...</option>
+            </select>
+          </div>
+
+          <h3 class="form-card-subtitle" style="margin-top: 12px;">Mapping Files</h3>
 
           <div class="form-row">
             <div class="form-group-tight flex-1">
-              <label class="form-label">Customer Prefix</label>
-              <input type="text" class="form-input form-input-compact" id="psCustomerPrefix" placeholder="e.g., Contoso">
+              <label class="form-label">Exchange Mapping</label>
+              <div class="input-with-button">
+                <input type="text" id="exchangeMapping" class="form-input form-input-compact" placeholder="C:\Mappings\exchange.csv" readonly>
+                <button type="button" class="btn btn-secondary btn-compact" data-mapping="exchange">Browse</button>
+              </div>
             </div>
+
             <div class="form-group-tight flex-1">
-              <label class="form-label">Workload</label>
-              <select class="form-input form-input-compact" id="psWorkload">
-                <option value="">Select workload...</option>
-                <option value="Exchange">Exchange</option>
-                <option value="OneDrive">OneDrive</option>
-                <option value="SharePoint">SharePoint</option>
-                <option value="Teams">Teams</option>
-                <option value="TeamChat">Teams Chat</option>
-                <option value="Groups">M365 Groups</option>
-              </select>
+              <label class="form-label">OneDrive Mapping</label>
+              <div class="input-with-button">
+                <input type="text" id="onedriveMapping" class="form-input form-input-compact" placeholder="C:\Mappings\onedrive.csv" readonly>
+                <button type="button" class="btn btn-secondary btn-compact" data-mapping="onedrive">Browse</button>
+              </div>
             </div>
           </div>
 
-          <div class="form-actions" style="gap: 12px; margin-top: 12px;">
+          <div class="form-row">
+            <div class="form-group-tight flex-1">
+              <label class="form-label">SharePoint Mapping</label>
+              <div class="input-with-button">
+                <input type="text" id="sharepointMapping" class="form-input form-input-compact" placeholder="C:\Mappings\sharepoint.csv" readonly>
+                <button type="button" class="btn btn-secondary btn-compact" data-mapping="sharepoint">Browse</button>
+              </div>
+            </div>
+
+            <div class="form-group-tight flex-1">
+              <label class="form-label">Teams Mapping</label>
+              <div class="input-with-button">
+                <input type="text" id="teamsMapping" class="form-input form-input-compact" placeholder="C:\Mappings\teams.csv" readonly>
+                <button type="button" class="btn btn-secondary btn-compact" data-mapping="teams">Browse</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group-tight flex-1">
+              <label class="form-label">Teams Chats Mapping</label>
+              <div class="input-with-button">
+                <input type="text" id="teamschatsMapping" class="form-input form-input-compact" placeholder="C:\Mappings\teams-chats.csv" readonly>
+                <button type="button" class="btn btn-secondary btn-compact" data-mapping="teamschats">Browse</button>
+              </div>
+            </div>
+
+            <div class="form-group-tight flex-1">
+              <label class="form-label">M365 Groups Mapping</label>
+              <div class="input-with-button">
+                <input type="text" id="groupsMapping" class="form-input form-input-compact" placeholder="C:\Mappings\m365-groups.csv" readonly>
+                <button type="button" class="btn btn-secondary btn-compact" data-mapping="groups">Browse</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions" style="gap: 12px; margin-top: 16px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
             <button type="button" class="btn btn-primary" id="psCreateProjectBtn">
               📁 Create Project
             </button>
@@ -468,65 +512,6 @@
             <button type="button" class="btn btn-success btn-large" id="psStartWorkflowBtn">
               🚀 Run Full Workflow
             </button>
-          </div>
-        </div>
-
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Mapping Files</h3>
-          <p class="form-help">Select mapping CSV files for each workload. Used by both PowerShell and legacy automation.</p>
-
-          <div class="form-row">
-            <div class="form-group-tight flex-1">
-              <label class="form-label">Exchange Mapping</label>
-              <div class="input-with-button">
-                <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\exchange.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-              </div>
-            </div>
-
-            <div class="form-group-tight flex-1">
-              <label class="form-label">OneDrive Mapping</label>
-              <div class="input-with-button">
-                <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\onedrive.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group-tight flex-1">
-              <label class="form-label">SharePoint Mapping</label>
-              <div class="input-with-button">
-                <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\sharepoint.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-              </div>
-            </div>
-
-            <div class="form-group-tight flex-1">
-              <label class="form-label">Teams Mapping</label>
-              <div class="input-with-button">
-                <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\teams.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group-tight flex-1">
-              <label class="form-label">Teams Chats Mapping</label>
-              <div class="input-with-button">
-                <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\teams-chats.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-              </div>
-            </div>
-
-            <div class="form-group-tight flex-1">
-              <label class="form-label">M365 Groups Mapping</label>
-              <div class="input-with-button">
-                <input type="text" class="form-input form-input-compact" placeholder="C:\Mappings\m365-groups.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-              </div>
-            </div>
           </div>
         </div>
 
