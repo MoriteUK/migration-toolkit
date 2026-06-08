@@ -1,7 +1,22 @@
 {
-  "version": "2.4.0",
-  "releaseDate": "2026-06-03",
+  "version": "2.5.0",
+  "releaseDate": "2026-06-08",
   "changelog": [
+    {
+      "version": "2.5.0",
+      "date": "2026-06-08",
+      "changes": [
+        "Project monitor rows now open directly in Fly portal at the correct project URL",
+        "Fixed Fly portal URL construction to use /#/project/{id}/mappings format",
+        "Get-MigrationData: FailedItems and WarningItems now correctly populated from API",
+        "Get-MigrationData: ProjectId now included in workload summary for portal links",
+        "Start-FlyMigrationStage: skips workloads with no mappings imported",
+        "Start-FlyMigrationStage: handles already-in-progress mappings gracefully without error noise",
+        "Fixed open-logs button to open correct log directory (%APPDATA%\\FlyMigration\\Logs)",
+        "Fixed silent error in project monitor click handler (undeclared _cachedPortalUrl)",
+        "Improved error logging in Get-MigrationData (Write-Verbose -> Write-Warning)"
+      ]
+    },
     {
       "version": "2.4.0",
       "date": "2026-06-03",

@@ -28,6 +28,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Open external URL
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
-  // Execute PowerShell script with arguments
-  executePowerShell: (scriptName, args) => ipcRenderer.invoke('execute-powershell', scriptName, args)
+  // Native file-open dialog
+  showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
+
+  // Execute PowerShell script with arguments (buffered — returns when done)
+  executePowerShell: (scriptName, args) => ipcRenderer.invoke('execute-powershell', scriptName, args),
+
+  // Streaming variant — resolves when done; output arrives via onPsOutput callbacks
+  streamPowerShell: (scriptName, args) => ipcRenderer.invoke('stream-powershell', scriptName, args),
+  onPsOutput:  (cb) => ipcRenderer.on('ps-output', (_e, data) => cb(data)),
+  offPsOutput: ()   => ipcRenderer.removeAllListeners('ps-output'),
+
+  // Shared config (AOS tenant details)
+  getSharedConfig: () => ipcRenderer.invoke('get-shared-config'),
+  saveSharedConfig: (values) => ipcRenderer.invoke('save-shared-config', values)
 });

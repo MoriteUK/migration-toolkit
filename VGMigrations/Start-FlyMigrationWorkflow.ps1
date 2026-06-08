@@ -1,40 +1,37 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Orchestrates a complete AvePoint Fly migration workflow
+    Runs the complete Fly migration workflow for one workload
 .DESCRIPTION
-    Creates project, imports mappings, runs pre-scan, and starts migration
+    1. Connects to Fly and looks up the destination connection by customer name
+    2. Creates the migration project if it doesn't already exist
+    3. Imports the CSV mappings
+    4. Starts a pre-scan (unless -SkipPreScan)
+    5. Starts the migration
 .PARAMETER CustomerPrefix
-    Customer prefix (e.g., "Contoso")
+    Customer prefix, e.g. "Fara"
 .PARAMETER Workload
     Workload type: SharePoint, Exchange, OneDrive, Teams, TeamChat, Groups
 .PARAMETER MappingFile
     Path to CSV file containing mappings
-.PARAMETER StopAt
-    Stop workflow at stage: CreateProject, ImportMappings, PreScan, Verification, StartMigration
 .PARAMETER SkipPreScan
     Skip the pre-scan step
 .PARAMETER SkipVerification
     Skip the verification step
-.EXAMPLE
-    .\Start-FlyMigrationWorkflow.ps1 -CustomerPrefix "Contoso" -Workload Exchange -MappingFile "C:\mappings\exchange.csv"
-.EXAMPLE
-    .\Start-FlyMigrationWorkflow.ps1 -CustomerPrefix "Contoso" -Workload SharePoint -MappingFile "C:\mappings\spo.csv" -StopAt PreScan
 #>
 param(
     [Parameter(Mandatory=$true)]
     [string]$CustomerPrefix,
 
     [Parameter(Mandatory=$true)]
-    [ValidateSet('SharePoint', 'Exchange', 'OneDrive', 'Teams', 'TeamChat', 'Groups')]
+    [ValidateSet('SharePoint','Exchange','OneDrive','Teams','TeamChat','Groups')]
     [string]$Workload,
 
     [Parameter(Mandatory=$true)]
     [string]$MappingFile,
 
     [Parameter(Mandatory=$false)]
-    [ValidateSet('CreateProject', 'ImportMappings', 'PreScan', 'Verification', 'StartMigration')]
-    [string]$StopAt,
+    [string]$CustomerDomain = "",
 
     [Parameter(Mandatory=$false)]
     [switch]$SkipPreScan,
@@ -47,166 +44,160 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Workload command maps
+$importCmds = @{
+    Exchange   = 'Import-FlyExchangeMappings'
+    SharePoint = 'Import-FlySharePointMappings'
+    OneDrive   = 'Import-FlyOneDriveMappings'
+    Teams      = 'Import-FlyTeamsMappings'
+    TeamChat   = 'Import-FlyTeamChatMappings'
+    Groups     = 'Import-FlyM365GroupMappings'
+}
+$preScanCmds = @{
+    Exchange   = 'Start-FlyExchangePreScan'
+    SharePoint = 'Start-FlySharePointPreScan'
+    OneDrive   = 'Start-FlyOneDrivePreScan'
+    Teams      = 'Start-FlyTeamsPreScan'
+    TeamChat   = ''
+    Groups     = 'Start-FlyM365GroupPreScan'
+}
+$startCmds = @{
+    Exchange   = 'Start-FlyExchangeMigration'
+    SharePoint = 'Start-FlySharePointMigration'
+    OneDrive   = 'Start-FlyOneDriveMigration'
+    Teams      = 'Start-FlyTeamsMigration'
+    TeamChat   = 'Start-FlyTeamChatMigration'
+    Groups     = 'Start-FlyM365GroupMigration'
+}
+$sourceConnMap = @{
+    Exchange   = 'OurVolaris - EXO'
+    SharePoint = 'OurVolaris - SPO'
+    OneDrive   = 'OurVolaris - OneDrive'
+    Teams      = 'OurVolaris - MS Teams'
+    TeamChat   = 'OurVolaris - Teams Chats'
+    Groups     = 'OurVolaris - M365 Groups'
+}
+
+$projectName    = "$CustomerPrefix - $Workload"
+$sourceConn     = $sourceConnMap[$Workload]
+
 Write-Host "`n╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║    AvePoint Fly Migration Workflow                      ║" -ForegroundColor Cyan
+Write-Host "║    Fly Migration Workflow                               ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "Project:  $projectName" -ForegroundColor White
+Write-Host "Mapping:  $MappingFile" -ForegroundColor White
 
-Write-Host "`nCustomer: $CustomerPrefix" -ForegroundColor White
-Write-Host "Workload: $Workload" -ForegroundColor White
-Write-Host "Mapping File: $MappingFile" -ForegroundColor White
-
-$projectName = "$CustomerPrefix - $Workload"
-$logFile = Join-Path $PSScriptRoot "logs\migration-$CustomerPrefix-$Workload-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
-
-# Ensure logs directory exists
-$logsDir = Join-Path $PSScriptRoot "logs"
-if (-not (Test-Path $logsDir)) {
-    New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
+# Validate mapping file
+if (-not (Test-Path $MappingFile)) {
+    Write-Error "Mapping file not found: $MappingFile"
+    exit 1
 }
 
-function Write-Log {
-    param([string]$Message, [string]$Level = 'INFO')
-    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $logMessage = "[$timestamp] [$Level] $Message"
-    Add-Content -Path $logFile -Value $logMessage
-
-    switch ($Level) {
-        'ERROR' { Write-Host $Message -ForegroundColor Red }
-        'WARNING' { Write-Host $Message -ForegroundColor Yellow }
-        'SUCCESS' { Write-Host $Message -ForegroundColor Green }
-        default { Write-Host $Message -ForegroundColor White }
-    }
-}
-
-# Start transcript
-Start-Transcript -Path $logFile -Append
+# Load config
+$flyApiCfgPath = Join-Path $env:APPDATA "FlyMigration\config.json"
+if (-not (Test-Path $flyApiCfgPath)) { Write-Error "Fly API config not found. Configure in Settings first."; exit 1 }
 
 try {
-    # Get Fly API configuration
-    Write-Log "`n[1/6] Loading configuration..." "INFO"
-    $flyApiCfgPath = Join-Path $env:APPDATA "FlyMigration\config.json"
-    if (-not (Test-Path $flyApiCfgPath)) {
-        throw "Fly API configuration not found. Please configure in Settings first."
-    }
-
     $rawCfg = Get-Content $flyApiCfgPath -Raw | ConvertFrom-Json
-    $apiUrl = $rawCfg.Url
-    $clientId = $rawCfg.ClientId
-
+    $apiUrl = $rawCfg.Url; $clientId = $rawCfg.ClientId
     if ($rawCfg.EncSecret) {
-        $secureSecret = $rawCfg.EncSecret | ConvertTo-SecureString
-        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
+        $ss = $rawCfg.EncSecret | ConvertTo-SecureString
+        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
         $clientSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
         [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-    } else {
-        throw "Client secret not found in configuration"
-    }
+    } else { Write-Error "Client secret not found."; exit 1 }
+} catch { Write-Error "Failed to load config: $_"; exit 1 }
 
-    Write-Log "✓ Configuration loaded" "SUCCESS"
-
-    # Import Fly.Client module
-    Write-Log "`n[2/6] Loading Fly.Client module..." "INFO"
-    if (-not (Get-Module -Name Fly.Client -ListAvailable)) {
-        throw "Fly.Client module not found. Install: Install-Module -Name Fly.Client"
-    }
+# Load module
+try {
+    if (-not (Get-Module -Name Fly.Client -ListAvailable)) { Write-Error "Fly.Client module not found."; exit 1 }
     Import-Module Fly.Client -ErrorAction Stop
-    Write-Log "✓ Module loaded" "SUCCESS"
+} catch { Write-Error "Failed to import Fly.Client: $_"; exit 1 }
 
-    # Connect to Fly API
-    Write-Log "`n[3/6] Connecting to Fly API..." "INFO"
+# Set up log file
+$logsDir = Join-Path $env:APPDATA "FlyMigration\Logs"
+if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
+$logFile = Join-Path $logsDir "workflow-$CustomerPrefix-$Workload-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+
+function Write-StepLog {
+    param([string]$Message, [string]$Level = 'INFO')
+    $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    "[$ts] [$Level] $Message" | Add-Content -Path $logFile -Encoding UTF8
+    $colour = switch ($Level) {
+        'ERROR'   { 'Red'    }
+        'WARNING' { 'Yellow' }
+        'SUCCESS' { 'Green'  }
+        default   { 'White'  }
+    }
+    Write-Host $Message -ForegroundColor $colour
+}
+
+try {
+    # ── STEP 1: Connect ──────────────────────────────────────────────────────
+    Write-StepLog "`n[1/5] Connecting to Fly API..."
     Connect-Fly -Url $apiUrl -ClientId $clientId -ClientSecret $clientSecret -ErrorAction Stop
-    Write-Log "✓ Connected to Fly API" "SUCCESS"
+    Write-StepLog "Connected" 'SUCCESS'
 
-    # STAGE 1: Create Project
-    Write-Log "`n[4/6] Creating project: $projectName..." "INFO"
+    # ── STEP 2: Find destination connection (auto-creates if missing) ────────
+    Write-StepLog "`n[2/5] Locating destination connection..."
+    $destConn = Find-FlyDestinationConnection `
+        -ProjectName    $projectName `
+        -Workload       $Workload `
+        -ApiUrl         $apiUrl `
+        -CustomerDomain $CustomerDomain
 
-    $existingProject = Get-FlyMigrationProject -Name $projectName -ErrorAction SilentlyContinue
-    if ($existingProject) {
-        Write-Log "Project already exists (ID: $($existingProject.Id))" "WARNING"
+    # ── STEP 3: Ensure project exists ────────────────────────────────────────
+    Write-StepLog "`n[3/5] Checking project '$projectName'..."
+    $project = Get-FlyMigrationProject -Name $projectName -ErrorAction SilentlyContinue
+    if (-not $project -or -not $project.Id) {
+        Write-StepLog "Project not found — creating..." 'WARNING'
+        $policy = Find-FlyPolicy -Workload $Workload -ApiUrl $apiUrl
+        $newProj = New-FlyMigrationProject `
+            -Name                  $projectName `
+            -SourceConnection      $sourceConn `
+            -DestinationConnection $destConn `
+            -Policy                $policy `
+            -ErrorAction Stop
+        Write-StepLog "Project created (ID: $($newProj.Id))" 'SUCCESS'
     } else {
-        $newProject = New-FlyMigrationProject -Name $projectName -ErrorAction Stop
-        Write-Log "✓ Project created (ID: $($newProject.Id))" "SUCCESS"
+        Write-StepLog "Project found (ID: $($project.Id))" 'SUCCESS'
     }
 
-    if ($StopAt -eq 'CreateProject') {
-        Write-Log "`nStopping at CreateProject stage as requested" "INFO"
-        return
-    }
-
-    # STAGE 2: Import Mappings
-    Write-Log "`n[5/6] Importing mappings from: $MappingFile..." "INFO"
-
-    if (-not (Test-Path $MappingFile)) {
-        throw "Mapping file not found: $MappingFile"
-    }
-
-    $importCmd = $script:FlyWorkloadDefs[$Workload].Import
+    # ── STEP 4: Import mappings ───────────────────────────────────────────────
+    Write-StepLog "`n[4/5] Importing mappings from: $MappingFile..."
+    $importCmd = $importCmds[$Workload]
     & $importCmd -Project $projectName -Path $MappingFile -ErrorAction Stop
-    Write-Log "✓ Mappings imported" "SUCCESS"
+    Write-StepLog "Mappings imported" 'SUCCESS'
 
-    if ($StopAt -eq 'ImportMappings') {
-        Write-Log "`nStopping at ImportMappings stage as requested" "INFO"
-        return
-    }
-
-    # STAGE 3: Pre-Scan
+    # ── STEP 5: Pre-scan ─────────────────────────────────────────────────────
     if (-not $SkipPreScan) {
-        Write-Log "`n[6/6] Starting pre-scan..." "INFO"
-
-        $preScanCmd = $script:FlyWorkloadDefs[$Workload].PreScan
+        $preScanCmd = $preScanCmds[$Workload]
         if ($preScanCmd) {
+            Write-StepLog "`n[5/5] Starting pre-scan..."
             & $preScanCmd -Project $projectName -ErrorAction Stop
-            Write-Log "✓ Pre-scan started" "SUCCESS"
-            Write-Log "Monitor progress in AvePoint Fly portal" "INFO"
+            Write-StepLog "Pre-scan started — monitor progress in the Fly portal" 'SUCCESS'
         } else {
-            Write-Log "Pre-scan not available for $Workload" "WARNING"
+            Write-StepLog "`n[5/5] Pre-scan not available for $Workload — skipping." 'WARNING'
         }
+    } else {
+        Write-StepLog "`n[5/5] Pre-scan skipped." 'WARNING'
 
-        if ($StopAt -eq 'PreScan') {
-            Write-Log "`nStopping at PreScan stage as requested" "INFO"
-            return
-        }
-    }
-
-    # STAGE 4: Verification
-    if (-not $SkipVerification) {
-        Write-Log "`n[7/6] Starting verification..." "INFO"
-
-        $verifyCmd = $script:FlyWorkloadDefs[$Workload].Verify
-        if ($verifyCmd) {
-            & $verifyCmd -Project $projectName -ErrorAction Stop
-            Write-Log "✓ Verification started" "SUCCESS"
-        } else {
-            Write-Log "Verification not available for $Workload" "WARNING"
-        }
-
-        if ($StopAt -eq 'Verification') {
-            Write-Log "`nStopping at Verification stage as requested" "INFO"
-            return
+        # If pre-scan skipped, start migration directly
+        if (-not $SkipVerification) {
+            Write-StepLog "Starting migration..."
+            $startCmd = $startCmds[$Workload]
+            & $startCmd -Project $projectName -ErrorAction Stop
+            Write-StepLog "Migration started — monitor progress in the Fly portal" 'SUCCESS'
         }
     }
 
-    # STAGE 5: Start Migration
-    if ($StopAt -ne 'StartMigration') {
-        Write-Log "`n[8/6] Starting migration..." "INFO"
-
-        $startCmd = $script:FlyWorkloadDefs[$Workload].Start
-        & $startCmd -Project $projectName -ErrorAction Stop
-        Write-Log "✓ Migration started" "SUCCESS"
-        Write-Log "Monitor progress in AvePoint Fly portal or using Get-MigrationData.ps1" "INFO"
-    }
-
-    Write-Log "`n╔══════════════════════════════════════════════════════════╗" "SUCCESS"
-    Write-Log "║    Migration Workflow Completed Successfully            ║" "SUCCESS"
-    Write-Log "╚══════════════════════════════════════════════════════════╝" "SUCCESS"
-
-    Write-Log "`nLog file: $logFile" "INFO"
+    Write-StepLog "`n✓ Workflow complete for $projectName" 'SUCCESS'
+    Write-StepLog "Log: $logFile" 'INFO'
 
 } catch {
-    Write-Log "`n✗ Workflow failed: $_" "ERROR"
-    Write-Log "Check log file for details: $logFile" "ERROR"
+    Write-StepLog "`n✗ Workflow failed: $_" 'ERROR'
+    Write-StepLog "Log: $logFile" 'ERROR'
     exit 1
 } finally {
-    Stop-Transcript
     Disconnect-Fly -ErrorAction SilentlyContinue
 }

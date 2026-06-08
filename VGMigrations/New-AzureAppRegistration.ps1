@@ -21,7 +21,10 @@ param(
     [string]$AppName = "AvePoint Fly Migration",
 
     [Parameter(Mandatory=$false)]
-    [switch]$Interactive
+    [switch]$Interactive,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipSavePrompt
 )
 
 Write-Host "`n╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -152,8 +155,10 @@ try {
     Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
 
     # Save to config
-    Write-Host "`n💾 Do you want to save these credentials to Migration Toolkit config? (Y/N): " -ForegroundColor Cyan -NoNewline
-    $save = Read-Host
+    $save = if ($SkipSavePrompt) { 'N' } else {
+        Write-Host "`n💾 Do you want to save these credentials to Migration Toolkit config? (Y/N): " -ForegroundColor Cyan -NoNewline
+        Read-Host
+    }
 
     if ($save -eq 'Y' -or $save -eq 'y') {
         $configPath = Join-Path $env:APPDATA "FlyMigration\config.json"

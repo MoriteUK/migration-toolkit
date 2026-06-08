@@ -5,6 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Migration Toolkit</title>
   <link rel="stylesheet" href="src/styles/main.css?v=2">
+  <style>
+    #avepointConnectionsView .form-card-compact                    { padding: 12px 16px; margin-bottom: 10px; }
+    #avepointConnectionsView .form-card-compact .form-card-title   { margin-bottom: 8px; padding-bottom: 6px; }
+    #avepointConnectionsView .form-card-compact .form-card-subtitle{ margin-top: 6px; margin-bottom: 6px; }
+    #avepointConnectionsView .form-group-tight                     { margin-bottom: 4px; }
+    #avepointConnectionsView .form-row                             { gap: 8px; margin-bottom: 4px; }
+    #avepointConnectionsView .form-label                           { font-size: 11px; margin-bottom: 2px; }
+    #avepointConnectionsView .form-input-compact                   { padding: 3px 7px; font-size: 12px; height: 26px; }
+    #avepointConnectionsView .mapping-area .btn-compact            { padding: 3px 8px; font-size: 12px; height: 26px; }
+    #avepointConnectionsView .view-title                           { margin-bottom: 10px; }
+    #avepointConnectionsView .form-actions                         { margin-top: 10px !important; padding-top: 10px !important; }
+    .workload-checkboxes { display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding:7px 0 2px; }
+    .workload-checkboxes label { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--color-ink); cursor:pointer; user-select:none; white-space:nowrap; }
+    .workload-checkboxes input[type=checkbox] { width:14px; height:14px; margin:0; cursor:pointer; }
+    .workload-checkboxes .wl-label { font-size:11px; font-weight:600; color:var(--color-text-muted,#888); margin-right:2px; }
+
+    /* Settings dialog — compact so Config tab fits without scrollbar */
+    #settingsDialog .dialog-header                { padding: 12px 24px; font-size: 15px; }
+    #settingsDialog .dialog-footer                { padding: 10px 24px; }
+    #settingsDialog .dialog-content               { padding: 0; }
+    #settingsDialog .settings-tabs                { padding: 0 24px; }
+    #settingsDialog .settings-tab                 { padding: 8px 16px; font-size: 13px; }
+    #settingsDialog .settings-tab-content         { padding: 14px 24px 10px; }
+    #configTab .form-group                        { margin-bottom: 9px; }
+    #configTab .form-label                        { font-size: 11px; margin-bottom: 3px; }
+    #configTab .form-input                        { padding: 5px 10px; font-size: 13px; border-radius: 6px; }
+    #configTab .form-row                          { gap: 8px; margin-bottom: 0; }
+    #configTab .form-actions                      { margin: 2px 0 4px; }
+    #configTab .form-help                         { font-size: 11px; margin-top: 2px; line-height: 1.4; }
+  </style>
 </head>
 <body>
   <div class="app-container">
@@ -52,13 +82,13 @@
               <span class="sidebar-sublabel">AOS Setup</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="avepoint-connections">
-              <span class="sidebar-sublabel">Connections</span>
-            </button>
-            <button type="button" class="sidebar-subitem" data-view="avepoint-reports">
-              <span class="sidebar-sublabel">Reports</span>
+              <span class="sidebar-sublabel">Project</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="avepoint-monitor">
               <span class="sidebar-sublabel">Monitor</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="avepoint-reports">
+              <span class="sidebar-sublabel">Reports</span>
             </button>
           </div>
 
@@ -364,8 +394,10 @@
             </button>
           </div>
 
-          <div id="appRegStatus" class="form-help" style="margin-top: 16px; display: none;">
-            <!-- Status messages will appear here -->
+          <div id="appRegStatus" class="form-help" style="margin-top: 12px; display: none;"></div>
+
+          <div id="appRegLog" style="display:none; margin-top:12px;">
+            <pre id="appRegLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:320px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0;"></pre>
           </div>
         </div>
       </div>
@@ -375,146 +407,163 @@
         <h2 class="view-title">AOS Setup</h2>
 
         <p class="form-help" style="margin-bottom: 20px;">
-          Configure your AvePoint Online Services (AOS) tenant and app credentials. This sets up the connection
-          between your migration toolkit and AvePoint Fly.
+          Enter your tenant details below. Sign in to AOS first, then click
+          <strong>Create App Profile &amp; Grant Consent</strong> — the automation
+          handles the rest.
         </p>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Setup Wizard</h3>
-          <p class="form-help">
-            The AOS Setup wizard will guide you through:
-          </p>
-          <ul class="form-help" style="margin-left: 20px; margin-top: 8px;">
-            <li>Signing in to AvePoint Online Services</li>
-            <li>Creating/configuring your AOS tenant</li>
-            <li>Registering your Azure AD app credentials</li>
-            <li>Testing the connection</li>
-          </ul>
+          <h3 class="form-card-title">Tenant Details</h3>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">Display Name</label>
+              <input type="text" class="form-input form-input-compact" id="aosDisplayName"
+                     placeholder="e.g. OurVolaris">
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">Search Code</label>
+              <input type="text" class="form-input form-input-compact" id="aosSearchCode"
+                     placeholder="e.g. ourvolaris">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">App Profile Name</label>
+            <input type="text" class="form-input form-input-compact" id="aosProfileName"
+                   placeholder="e.g. OurVolaris App">
+          </div>
 
           <div class="form-actions" style="margin-top: 20px;">
-            <button type="button" class="btn btn-primary btn-large" id="aosLaunchSetupBtn">
-              🚀 Launch AOS Setup Wizard
+            <button type="button" class="btn btn-secondary" id="aosSignInBtn">
+              🔐 Sign in to AOS
             </button>
-          </div>
-        </div>
-
-        <div class="form-card form-card-compact" style="margin-top: 16px;">
-          <h3 class="form-card-title">Current Configuration</h3>
-
-          <div class="form-group">
-            <label class="form-label">AOS Tenant URL</label>
-            <input type="text" id="aosUrl" class="form-input form-input-compact" placeholder="Not configured" readonly>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Client ID</label>
-            <input type="text" id="aosClientId" class="form-input form-input-compact" placeholder="Not configured" readonly>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Client Secret</label>
-            <input type="password" id="aosClientSecret" class="form-input form-input-compact" placeholder="••••••••" readonly>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="btn btn-secondary" id="aosOpenSettingsBtn">
-              ⚙️ Edit in Settings
-            </button>
-            <button type="button" class="btn btn-primary" id="aosTestConnectionBtn">
-              🔌 Test Connection
+            <button type="button" class="btn btn-primary btn-large" id="aosRunSetupBtn">
+              🚀 Create App Profile &amp; Grant Consent
             </button>
           </div>
 
-          <div id="aosConnectionStatus" class="form-help" style="margin-top: 16px; display: none;">
-            <!-- Status will appear here -->
+          <div id="aosStatus" class="form-help" style="margin-top: 12px; display: none;"></div>
+
+          <div id="aosLog" style="display:none; margin-top:12px;">
+            <pre id="aosLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:320px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0;"></pre>
           </div>
         </div>
       </div>
 
       <!-- AvePoint Fly - Connections -->
       <div id="avepointConnectionsView" class="view-container hidden">
-        <h2 class="view-title">Connections & Mappings</h2>
+        <h2 class="view-title">Project</h2>
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">PowerShell Migration (Recommended)</h3>
           <p class="form-help">Fast, reliable migrations using PowerShell cmdlets. Select customer and mapping files below.</p>
 
-          <div class="form-group-tight">
-            <label class="form-label">Customer</label>
-            <select class="form-input form-input-compact" id="psCustomerPrefix">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+            <label class="form-label" style="white-space:nowrap; margin:0; flex-shrink:0;">Customer</label>
+            <select class="form-input form-input-compact" id="psCustomerPrefix" style="max-width:220px; width:auto;">
               <option value="">Select customer...</option>
             </select>
           </div>
 
-          <h3 class="form-card-subtitle" style="margin-top: 12px;">Mapping Files</h3>
+          <h3 class="form-card-subtitle" style="margin-top: 4px;">Mapping Files</h3>
 
-          <div class="form-row">
-            <div class="form-group-tight flex-1">
-              <label class="form-label">Exchange Mapping</label>
-              <div class="input-with-button">
-                <input type="text" id="exchangeMapping" class="form-input form-input-compact" placeholder="C:\Mappings\exchange.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact" data-mapping="exchange">Browse</button>
+          <div class="mapping-area">
+            <div class="form-row">
+              <div class="form-group-tight flex-1">
+                <label class="form-label">Exchange</label>
+                <div class="input-with-button">
+                  <input type="text" id="exchangeMapping" class="form-input form-input-compact" placeholder="exchange.csv" readonly>
+                  <button type="button" class="btn btn-secondary btn-compact" data-mapping="exchange" title="Browse for Exchange mapping CSV file">Browse</button>
+                </div>
+              </div>
+              <div class="form-group-tight flex-1">
+                <label class="form-label">OneDrive</label>
+                <div class="input-with-button">
+                  <input type="text" id="onedriveMapping" class="form-input form-input-compact" placeholder="onedrive.csv" readonly>
+                  <button type="button" class="btn btn-secondary btn-compact" data-mapping="onedrive" title="Browse for OneDrive mapping CSV file">Browse</button>
+                </div>
+              </div>
+              <div class="form-group-tight flex-1">
+                <label class="form-label">SharePoint</label>
+                <div class="input-with-button">
+                  <input type="text" id="sharepointMapping" class="form-input form-input-compact" placeholder="sharepoint.csv" readonly>
+                  <button type="button" class="btn btn-secondary btn-compact" data-mapping="sharepoint" title="Browse for SharePoint mapping CSV file">Browse</button>
+                </div>
               </div>
             </div>
 
-            <div class="form-group-tight flex-1">
-              <label class="form-label">OneDrive Mapping</label>
-              <div class="input-with-button">
-                <input type="text" id="onedriveMapping" class="form-input form-input-compact" placeholder="C:\Mappings\onedrive.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact" data-mapping="onedrive">Browse</button>
+            <div class="form-row">
+              <div class="form-group-tight flex-1">
+                <label class="form-label">Teams</label>
+                <div class="input-with-button">
+                  <input type="text" id="teamsMapping" class="form-input form-input-compact" placeholder="teams.csv" readonly>
+                  <button type="button" class="btn btn-secondary btn-compact" data-mapping="teams" title="Browse for Teams mapping CSV file">Browse</button>
+                </div>
               </div>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group-tight flex-1">
-              <label class="form-label">SharePoint Mapping</label>
-              <div class="input-with-button">
-                <input type="text" id="sharepointMapping" class="form-input form-input-compact" placeholder="C:\Mappings\sharepoint.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact" data-mapping="sharepoint">Browse</button>
+              <div class="form-group-tight flex-1">
+                <label class="form-label">Teams Chat</label>
+                <div class="input-with-button">
+                  <input type="text" id="teamschatsMapping" class="form-input form-input-compact" placeholder="teams-chats.csv" readonly>
+                  <button type="button" class="btn btn-secondary btn-compact" data-mapping="teamschats" title="Browse for Teams Chat mapping CSV file">Browse</button>
+                </div>
               </div>
-            </div>
-
-            <div class="form-group-tight flex-1">
-              <label class="form-label">Teams Mapping</label>
-              <div class="input-with-button">
-                <input type="text" id="teamsMapping" class="form-input form-input-compact" placeholder="C:\Mappings\teams.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact" data-mapping="teams">Browse</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group-tight flex-1">
-              <label class="form-label">Teams Chats Mapping</label>
-              <div class="input-with-button">
-                <input type="text" id="teamschatsMapping" class="form-input form-input-compact" placeholder="C:\Mappings\teams-chats.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact" data-mapping="teamschats">Browse</button>
-              </div>
-            </div>
-
-            <div class="form-group-tight flex-1">
-              <label class="form-label">M365 Groups Mapping</label>
-              <div class="input-with-button">
-                <input type="text" id="groupsMapping" class="form-input form-input-compact" placeholder="C:\Mappings\m365-groups.csv" readonly>
-                <button type="button" class="btn btn-secondary btn-compact" data-mapping="groups">Browse</button>
+              <div class="form-group-tight flex-1">
+                <label class="form-label">M365 Groups</label>
+                <div class="input-with-button">
+                  <input type="text" id="groupsMapping" class="form-input form-input-compact" placeholder="m365-groups.csv" readonly>
+                  <button type="button" class="btn btn-secondary btn-compact" data-mapping="groups" title="Browse for M365 Groups mapping CSV file">Browse</button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="form-actions" style="gap: 12px; margin-top: 16px; border-top: 1px solid #E5E7EB; padding-top: 16px;">
-            <button type="button" class="btn btn-primary" id="psCreateProjectBtn">
-              📁 Create Project
+          <div class="workload-checkboxes" style="border-top:1px solid #eee; margin-top:8px;">
+            <span class="wl-label">Run stage on:</span>
+            <label><input type="checkbox" id="wlChk-Exchange"   checked> Exchange</label>
+            <label><input type="checkbox" id="wlChk-OneDrive"   checked> OneDrive</label>
+            <label><input type="checkbox" id="wlChk-SharePoint" checked> SharePoint</label>
+            <label><input type="checkbox" id="wlChk-Teams"      checked> Teams</label>
+            <label><input type="checkbox" id="wlChk-TeamChat"   checked> Teams Chat</label>
+            <label><input type="checkbox" id="wlChk-Groups"     checked> Groups</label>
+          </div>
+
+          <div class="form-actions" style="gap: 6px; margin-top: 8px; border-top: 1px solid #E5E7EB; padding-top: 8px; flex-wrap: wrap; align-items: center;">
+            <button type="button" class="btn btn-primary btn-xs" id="psCreateProjectBtn" title="Create migration projects in AvePoint Fly for each selected workload using the customer prefix">
+              📁 Create Projects
             </button>
-            <button type="button" class="btn btn-primary" id="psImportMappingsBtn">
+            <button type="button" class="btn btn-primary btn-xs" id="psImportMappingsBtn" title="Import the selected mapping CSV files into the corresponding AvePoint Fly projects">
               📥 Import Mappings
             </button>
-            <button type="button" class="btn btn-success btn-large" id="psStartWorkflowBtn">
-              🚀 Run Full Workflow
+            <span style="width:1px;height:22px;background:#d0d4db;margin:0 2px;flex-shrink:0;"></span>
+            <button type="button" class="btn btn-secondary btn-xs" id="psVerifyBtn" title="Run a permission and connectivity check on all mapped accounts without migrating any data">
+              ✓ Verify
             </button>
+            <button type="button" class="btn btn-secondary btn-xs" id="psPreScanBtn" title="Scan source mailboxes and sites to estimate migration size and identify potential issues before migrating">
+              🔍 Pre-Scan
+            </button>
+            <button type="button" class="btn btn-secondary btn-xs" id="psFullMigrBtn" title="Start a full migration — copies all content from source to destination">
+              ▶ Full
+            </button>
+            <button type="button" class="btn btn-secondary btn-xs" id="psIncrMigrBtn" title="Start an incremental migration — copies only content that has changed since the last migration run">
+              ↺ Incremental
+            </button>
+            <span style="width:1px;height:22px;background:#d0d4db;margin:0 2px;flex-shrink:0;"></span>
+            <button type="button" class="btn btn-success btn-xs" id="psStartWorkflowBtn" title="Run the complete migration workflow: Create Projects → Import Mappings → Verify → Pre-Scan → Full Migration">
+              🚀 Full Workflow
+            </button>
+            <button type="button" class="btn btn-secondary btn-xs" id="psClearMappingsBtn" style="margin-left:auto;" title="Clear all selected mapping file paths">
+              ✕ Clear
+            </button>
+          </div>
+
+          <div id="connMappingsLog" style="margin-top:12px;">
+            <pre id="connMappingsLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
         </div>
 
+        <!-- Legacy Browser Automation — hidden, kept for reference -->
+        <div style="display:none">
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Legacy Browser Automation</h3>
 
@@ -534,6 +583,7 @@
               📋 Create Connections (Legacy)
             </button>
           </div>
+        </div>
         </div>
       </div>
 
@@ -610,15 +660,15 @@
         <div class="monitor-grid">
           <table class="monitor-table">
             <thead>
-              <tr>
-                <th>Project</th>
-                <th>Total</th>
-                <th>Not Started</th>
-                <th>In Progress</th>
-                <th>Complete</th>
-                <th>Failed</th>
-                <th>Warnings</th>
-                <th>Last Refresh</th>
+              <tr id="monitorTableHead">
+                <th data-col="0" style="cursor:pointer;user-select:none;">Project <span class="sort-arrow"></span></th>
+                <th data-col="1" style="cursor:pointer;user-select:none;">Total <span class="sort-arrow"></span></th>
+                <th data-col="2" style="cursor:pointer;user-select:none;">Not Started <span class="sort-arrow"></span></th>
+                <th data-col="3" style="cursor:pointer;user-select:none;">In Progress <span class="sort-arrow"></span></th>
+                <th data-col="4" style="cursor:pointer;user-select:none;">Complete <span class="sort-arrow"></span></th>
+                <th data-col="5" style="cursor:pointer;user-select:none;">Warnings <span class="sort-arrow"></span></th>
+                <th data-col="6" style="cursor:pointer;user-select:none;">Failed <span class="sort-arrow"></span></th>
+                <th data-col="7" style="cursor:pointer;user-select:none;">Last Refresh <span class="sort-arrow"></span></th>
               </tr>
             </thead>
             <tbody id="monitorTableBody">
@@ -643,34 +693,45 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">OneDrive Provisioning</h3>
+          <p class="form-help">Pre-provisions OneDrive sites for users in a mapping CSV. Requires Microsoft.Online.SharePoint.PowerShell.</p>
 
-          <div class="form-group">
-            <label class="form-label">Tenant URL</label>
+          <div class="form-group-tight">
+            <label class="form-label">SPO Admin URL</label>
             <select class="form-input form-input-compact" id="onedriveTenantUrl">
               <option value="">Select tenant...</option>
             </select>
           </div>
 
-          <div class="form-group">
+          <div class="form-group-tight">
             <label class="form-label">Mapping File (CSV)</label>
             <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" placeholder="C:\OneDrive\mapping.csv" readonly>
-              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+              <input type="text" class="form-input form-input-compact" id="onedriveMappingFile" placeholder="C:\mapping.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact" id="onedriveMappingFileBrowse">Browse</button>
             </div>
-            <small class="form-help">CSV should contain: UserPrincipalName, OneDriveUrl</small>
+            <small class="form-help">UPN column auto-detected from: Destination user, Destination, DestinationUPN, UserPrincipalName</small>
           </div>
 
-          <div class="form-group">
-            <label class="form-checkbox">
-              <input type="checkbox" checked>
-              <span>Skip already provisioned sites</span>
-            </label>
+          <div class="form-row" style="align-items:flex-end;">
+            <div class="form-group-tight flex-1">
+              <label class="form-label">UPN Column override (optional)</label>
+              <input type="text" class="form-input form-input-compact" id="onedriveColumnOverride" placeholder="auto-detect">
+            </div>
+            <div class="form-group-tight" style="padding-bottom:4px;">
+              <label class="form-checkbox">
+                <input type="checkbox" id="onedriveWhatIf">
+                <span style="font-size:12px;">WhatIf — preview only</span>
+              </label>
+            </div>
           </div>
 
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" data-script="provision-onedrives.ps1">
-              Start Provisioning
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-success btn-xs" id="provisionOneDriveBtn">
+              ▶ Start Provisioning
             </button>
+          </div>
+
+          <div id="provisionOneDriveLog" style="margin-top:12px;">
+            <pre id="provisionOneDriveLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
         </div>
       </div>
@@ -681,32 +742,37 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Teams Ownership Management</h3>
+          <p class="form-help">Adds a user as owner (and member if not already) to each Team/Group in the CSV. Requires Microsoft.Graph module.</p>
 
-          <div class="form-group">
+          <div class="form-group-tight">
             <label class="form-label">New Owner UPN</label>
-            <input type="text" class="form-input form-input-compact" placeholder="owner@domain.com">
+            <input type="text" class="form-input form-input-compact" id="teamsOwnerUpn" placeholder="owner@domain.com">
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Teams/Groups CSV File</label>
+          <div class="form-group-tight">
+            <label class="form-label">Teams/Groups CSV</label>
             <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" placeholder="C:\Teams\groups.csv" readonly>
-              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+              <input type="text" class="form-input form-input-compact" id="teamsCsvFile" placeholder="C:\Teams\groups.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact" id="teamsCsvFileBrowse">Browse</button>
             </div>
-            <small class="form-help">CSV should contain: TeamName or GroupId</small>
+            <small class="form-help">CSV must have an "address" column with team/group email addresses</small>
           </div>
 
-          <div class="form-group">
+          <div class="form-group-tight">
             <label class="form-checkbox">
-              <input type="checkbox">
-              <span>Also add to M365 Groups</span>
+              <input type="checkbox" id="teamsWhatIf">
+              <span style="font-size:12px;">WhatIf — preview only, no changes made</span>
             </label>
           </div>
 
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" data-script="Set-TeamsOwners.ps1">
-              Add Owner
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-success btn-xs" id="setTeamsOwnersBtn">
+              ▶ Add Owner
             </button>
+          </div>
+
+          <div id="teamsOwnersLog" style="margin-top:12px;">
+            <pre id="teamsOwnersLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
         </div>
       </div>
@@ -949,7 +1015,6 @@
         <div class="settings-tabs">
           <button type="button" class="settings-tab settings-tab-active" data-tab="config">Config</button>
           <button type="button" class="settings-tab" data-tab="customer">Customer</button>
-          <button type="button" class="settings-tab" data-tab="workloads">Workloads</button>
           <button type="button" class="settings-tab" data-tab="discovery">Discovery</button>
         </div>
 
@@ -992,6 +1057,15 @@
           </div>
 
           <div class="form-group">
+            <label class="form-label">AOS SESSION</label>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <button type="button" class="btn btn-secondary" id="settingsAosSignInBtn">Sign in to AOS</button>
+              <span id="settingsAosSessionStatus" style="font-size:12px;color:var(--color-text-muted)"></span>
+            </div>
+            <small class="form-help">Required to auto-create Fly destination connections. Opens a browser window for Microsoft SSO — sign in once and the session is saved.</small>
+          </div>
+
+          <div class="form-group">
             <label class="form-label">SOFTWARE UPDATES</label>
             <button type="button" class="btn btn-secondary" id="checkUpdatesBtn">Check for Updates</button>
             <span id="updateStatus"></span>
@@ -1018,6 +1092,7 @@
                 <tr>
                   <th>Customer Prefix</th>
                   <th>Account Name</th>
+                  <th>Domain Name</th>
                   <th>SharePoint Admin URL</th>
                 </tr>
               </thead>
@@ -1025,42 +1100,11 @@
                 <tr>
                   <td><input type="text" class="form-input form-input-compact customer-prefix" placeholder="Project prefix"></td>
                   <td><input type="text" class="form-input form-input-compact customer-account" placeholder="account@domain.onmicrosoft.com"></td>
+                  <td><input type="text" class="form-input form-input-compact customer-domain" placeholder="e.g. mbufara"></td>
                   <td><input type="text" class="form-input form-input-compact customer-spo" placeholder="https://tenant-admin.sharepoint.com"></td>
                 </tr>
               </tbody>
             </table>
-          </div>
-        </div>
-
-        <!-- Workloads Tab -->
-        <div class="settings-tab-content hidden" id="workloadsTab">
-          <p class="form-help">These are pre-filled into the Migration Runner for each workload.</p>
-
-          <div class="workload-settings">
-            <div class="workload-setting-row">
-              <label class="workload-label">SharePoint</label>
-              <input type="text" class="form-input" placeholder="SharePoint">
-            </div>
-            <div class="workload-setting-row">
-              <label class="workload-label">Exchange</label>
-              <input type="text" class="form-input" placeholder="Exchange">
-            </div>
-            <div class="workload-setting-row">
-              <label class="workload-label">OneDrive</label>
-              <input type="text" class="form-input" placeholder="OneDrive">
-            </div>
-            <div class="workload-setting-row">
-              <label class="workload-label">Teams</label>
-              <input type="text" class="form-input" placeholder="Teams">
-            </div>
-            <div class="workload-setting-row">
-              <label class="workload-label">Teams Chat</label>
-              <input type="text" class="form-input" placeholder="Teams Chat">
-            </div>
-            <div class="workload-setting-row">
-              <label class="workload-label">Groups</label>
-              <input type="text" class="form-input" placeholder="Groups">
-            </div>
           </div>
         </div>
 
@@ -1096,5 +1140,29 @@
       });
     }, 1000);
   </script>
+
+  <!-- Monitor detail modal -->
+  <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">
+    <div class="dialog dialog-large" style="max-height:80vh; display:flex; flex-direction:column;">
+      <div class="dialog-header" style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #e0e4eb; flex-shrink:0;">
+        <h2 id="monitorDetailTitle" style="margin:0; font-size:16px; font-weight:600;">Project Details</h2>
+        <button id="monitorDetailClose" class="btn btn-secondary btn-compact" style="padding:4px 12px;">✕ Close</button>
+      </div>
+      <div id="monitorDetailBody" class="dialog-content" style="overflow-y:auto; padding:20px 24px; flex:1;">
+      </div>
+    </div>
+  </div>
+
+  <!-- Item error detail modal (second level: click a row in monitor detail) -->
+  <div id="itemDetailOverlay" class="dialog-overlay hidden" style="z-index:3000;">
+    <div class="dialog" style="max-width:620px; max-height:80vh; display:flex; flex-direction:column;">
+      <div class="dialog-header" style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #e0e4eb; flex-shrink:0;">
+        <h2 id="itemDetailTitle" style="margin:0; font-size:16px; font-weight:600; word-break:break-all;"></h2>
+        <button id="itemDetailClose" class="btn btn-secondary btn-compact" style="padding:4px 12px; flex-shrink:0; margin-left:12px;">✕ Close</button>
+      </div>
+      <div id="itemDetailBody" class="dialog-content" style="overflow-y:auto; padding:20px 24px; flex:1;">
+      </div>
+    </div>
+  </div>
 </body>
 </html>

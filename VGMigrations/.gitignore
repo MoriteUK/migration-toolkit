@@ -32,7 +32,7 @@ node_modules/
 *.dll
 
 # Claude AI
-.claude/settings.local.json
+.claude/
 
 # Temporary files
 *.tmp

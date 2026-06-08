@@ -14,7 +14,7 @@
  * v1.0.0 (2026-05-16) - Initial release
  */
 
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const fs   = require('fs');
 const path = require('path');
 const readline = require('readline');
@@ -100,7 +100,7 @@ process.on('unhandledRejection', err => {
 
 async function login() {
   logInfo('==== LOGIN MODE START ====');
-  const browser = await chromium.launch({ headless: HEADLESS });
+  const browser = await chromium.launch({ channel: 'msedge', headless: HEADLESS });
   const context = await browser.newContext();
   const page    = await context.newPage();
 
@@ -151,7 +151,7 @@ async function create() {
     process.exit(4);
   }
 
-  const browser = await chromium.launch({ headless: HEADLESS });
+  const browser = await chromium.launch({ channel: 'msedge', headless: HEADLESS });
   const context = await browser.newContext({ storageState: STORAGE_STATE });
   const page    = await context.newPage();
 
@@ -413,6 +413,25 @@ async function fillFirstVisibleSearch(page, text) {
   return false;
 }
 
+// Picks the Fly app profile option from an already-open dropdown.
+// App profile options always contain '@' (e.g. "ITVolaris-GA@tenant.onmicrosoft.com (Fly app)").
+// Placeholders like "None", "Select all", "Search" never contain '@'.
+// Returns the text of what was selected, or '' if no app profile option was found.
+async function pickFirstNonNoneOption(page) {
+  await page.waitForTimeout(500);
+  // Primary: find an option whose text contains '@' — definitive marker of a real app profile
+  const emailOption = page.locator('[role="option"], .fui-Option, [class*="OptionItem"]')
+    .filter({ hasText: /@/ }).first();
+  if (await emailOption.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    const text = (await emailOption.textContent().catch(() => '')).trim();
+    await emailOption.click();
+    return text;
+  }
+  // No app profile registered for this tenant — leave as None
+  logWarn('No app profile option found (no @ in any option) — leaving as None');
+  return '';
+}
+
 async function pickDropdownOptionContaining(page, needle) {  // Match option by title attribute (exact), then by visible text (substring).
   // Fluent UI v9 uses .fui-Option with role="option" and a title attribute.
   const escaped = needle.replace(/"/g, '\\"');
@@ -526,13 +545,13 @@ async function createOneConnection(page, task) {
   await appProfileLabel.waitFor({ state: 'visible', timeout: 15_000 });
   await page.waitForTimeout(600); // let the section finish hydrating
 
-  // --- App profile: open dropdown, type the credentials name, pick the match ---
+  // --- App profile: pick first available option automatically ---
+  // The option name contains the tenant domain (e.g. "ITVolaris-GA@mbufara.onmicrosoft.com")
+  // which changes per customer, so we always auto-select rather than matching by name.
   logStep(`${task.id} open App profile dropdown`);
   await openDropdownAfterLabel(page, 'App profile');
-  logStep(`${task.id} search App profile for "${task.credentialsName}"`);
-  // Search input in the opened listbox - placeholder may be specific or just "Search"
-  await fillFirstVisibleSearch(page, task.credentialsName);
-  await pickDropdownOptionContaining(page, task.credentialsName);
+  const selectedAppProfile = await pickFirstNonNoneOption(page);
+  logStep(`${task.id} App profile selected: "${selectedAppProfile}"`);
 
   // --- Service account authentication: pick Modern authentication ---
   // This field is absent for Teams Chat Destination (and any other flow that
@@ -550,30 +569,25 @@ async function createOneConnection(page, task) {
     logStep(`${task.id} Service account authentication field not present - skipping`);
   }
 
-  // --- Microsoft delegated app profile: open, type credentials name, pick the match ---
-  // Selecting Modern authentication (above) or being on a Destination form (e.g.
-  // Teams Chat) both surface this required field. Same credentials substring
-  // matches in either case.
+  // --- Microsoft delegated app profile: pick first available option automatically ---
   logStep(`${task.id} open Microsoft delegated app profile dropdown`);
   await openDropdownAfterLabel(page, 'Microsoft delegated app profile');
-  logStep(`${task.id} search delegated app profile for "${task.credentialsName}"`);
-  await fillFirstVisibleSearch(page, task.credentialsName);
-  await pickDropdownOptionContaining(page, task.credentialsName);
+  const selectedDelegatedProfile = await pickFirstNonNoneOption(page);
+  logStep(`${task.id} Delegated app profile selected: "${selectedDelegatedProfile}"`);
 
-  // --- Placeholder account (Teams Chat Destination): derive email and fill ---
-  // Format: <credentialsName>@<tenantSearch>.onmicrosoft.com
-  // The field is a plain text input, not a dropdown. Only present on certain
-  // destination flows; no-op otherwise.
+  // --- Placeholder account (Teams Chat Destination): derive from selected app profile ---
+  // The email is extracted from the selected profile text, e.g.
+  // "ITVolaris-GA@mbufara.onmicrosoft.com (Fly app)" → "ITVolaris-GA@mbufara.onmicrosoft.com"
   const placeholderLabel = page.locator(
     'xpath=//label[starts-with(normalize-space(.), "Placeholder account")]'
   ).first();
   if (await placeholderLabel.isVisible({ timeout: 1_500 }).catch(() => false)) {
-    let credName = task.credentialsName || '';
-    const placeholderEmail = credName.includes('@')
-      ? credName
-      : `${credName}@${task.tenantSearch}.onmicrosoft.com`;
+    const profileText = selectedDelegatedProfile || selectedAppProfile || '';
+    const emailMatch = profileText.match(/([^\s(]+@[^\s()]+)/);
+    const placeholderEmail = emailMatch
+      ? emailMatch[1]
+      : `account@${task.tenantSearch}.onmicrosoft.com`;
     logStep(`${task.id} fill Placeholder account="${placeholderEmail}"`);
-    // The textbox is the next focusable input after the label.
     const placeholderInput = page.locator(
       'xpath=//label[starts-with(normalize-space(.), "Placeholder account")]' +
       '/following::input[@type="text" or @type="email" or not(@type)][1]'
@@ -692,7 +706,7 @@ async function setup() {
     process.exit(4);
   }
 
-  const browser = await chromium.launch({ headless: HEADLESS });
+  const browser = await chromium.launch({ channel: 'msedge', headless: HEADLESS });
   const context = await browser.newContext({ storageState: STORAGE_STATE });
   const page    = await context.newPage();
 
@@ -935,6 +949,133 @@ async function addOneTenant(page, task) {
 }
 
 // ---------------------------------------------------------------------------
+// For an existing app profile row, open its detail/consent view and grant
+// any missing consents.  Tries three escalating strategies:
+//   1. Click the profile name cell → wait for side panel → scan for consent links
+//   2. Look for an Edit / "…" action button in the row → click it
+//   3. Fall back to grantAdminConsent's built-in right-click fallback
+// ---------------------------------------------------------------------------
+async function openProfileAndGrantConsent(page, task, row) {
+  // Fluent UI DetailsList reveals action buttons only on hover — do this first
+  await row.hover({ timeout: 3_000 }).catch(() => {});
+  await page.waitForTimeout(400);
+
+  // Diagnostic: log every cell in the row so we can see the structure
+  try {
+    const allCells = row.locator('td, [role="gridcell"], [role="cell"]');
+    const cnt = await allCells.count().catch(() => 0);
+    for (let ci = 0; ci < Math.min(cnt, 10); ci++) {
+      const c = allCells.nth(ci);
+      const vis  = await c.isVisible({ timeout: 100 }).catch(() => false);
+      const txt  = (await c.textContent().catch(() => '')).trim().substring(0, 60);
+      const key  = await c.getAttribute('data-automation-key').catch(() => '');
+      logStep(`${task.id}   cell[${ci}] vis=${vis} key="${key}" text="${txt}"`);
+    }
+    // Log any buttons visible after hover
+    const btns = row.locator('button');
+    const bCnt = await btns.count().catch(() => 0);
+    for (let bi = 0; bi < Math.min(bCnt, 6); bi++) {
+      const b   = btns.nth(bi);
+      const vis = await b.isVisible({ timeout: 100 }).catch(() => false);
+      const lbl = await b.getAttribute('aria-label').catch(() => '');
+      const txt = (await b.textContent().catch(() => '')).trim().substring(0, 40);
+      logStep(`${task.id}   btn[${bi}] vis=${vis} aria-label="${lbl}" text="${txt}"`);
+    }
+  } catch {}
+
+  // Strategy 1 — click the first VISIBLE cell (the checkbox column is invisible;
+  // skip it by iterating until we find one that is actually rendered)
+  logStep(`${task.id} openProfileAndGrantConsent: clicking first visible cell`);
+  try {
+    const cells = row.locator('td, [role="gridcell"], [role="cell"]');
+    const cellCount = await cells.count().catch(() => 0);
+    let nameCell = null;
+    for (let ci = 0; ci < cellCount; ci++) {
+      const c = cells.nth(ci);
+      if (await c.isVisible({ timeout: 300 }).catch(() => false)) {
+        nameCell = c; break;
+      }
+    }
+    // Fall back to clicking the row itself if all individual cells appear hidden
+    await (nameCell || row).click({ timeout: 5_000 });
+    await page.waitForTimeout(1500);
+
+    const panelSel = '[role="dialog"], .ant-drawer-content, .fui-Drawer, .ms-Panel-main';
+    const panelVisible = await page.locator(panelSel).first()
+      .waitFor({ state: 'visible', timeout: 6_000 }).then(() => true).catch(() => false);
+
+    if (panelVisible) {
+      logStep(`${task.id} detail panel opened`);
+      // Click a "Consents" / "Permissions" tab if the panel is tabbed
+      const consentTab = page.locator('[role="tab"]').filter({ hasText: /consent|permission/i }).first();
+      if (await consentTab.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        logStep(`${task.id} clicking Consents tab`);
+        await consentTab.click();
+        await page.waitForTimeout(800);
+      }
+      const granted = await grantAdminConsent(page, task, page.locator(panelSel).first());
+      const closeBtn = page.locator(
+        '.ant-drawer-close, .ms-Panel-closeButton, button[aria-label="Close"], button[title="Close"]'
+      ).first();
+      if (await closeBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await closeBtn.click().catch(() => {});
+      } else {
+        await page.keyboard.press('Escape').catch(() => {});
+      }
+      await page.waitForTimeout(500);
+      if (granted) return true;
+    } else {
+      // Click navigated to a full detail page rather than opening a panel
+      logStep(`${task.id} no panel — scanning full page for consent links`);
+      const granted = await grantAdminConsent(page, task, page.locator('body'));
+      await navigateToAosManagement(page, 'app');
+      await page.waitForTimeout(1000);
+      if (granted) return true;
+    }
+  } catch (err) {
+    logWarn(`${task.id} strategy 1 error: ${err.message}`);
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(500);
+  }
+
+  // Strategy 2 — hover-revealed action buttons (Edit / "…" / Manage)
+  // Re-hover after the Escape above to make them visible again
+  await row.hover({ timeout: 3_000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  logStep(`${task.id} openProfileAndGrantConsent: trying hover-revealed action button`);
+  const actionBtns = [
+    row.locator('button[aria-label*="more" i], button[aria-label*="action" i], button[aria-label*="edit" i]').first(),
+    row.locator('button[title*="more" i], button[title*="action" i], button[title*="edit" i]').first(),
+    row.locator('button').filter({ hasText: /^\.\.\.$|^…$|^⋮$/ }).first(),
+    row.getByRole('button', { name: /^(edit|manage|open|view|consent)$/i }).first(),
+  ];
+  for (const btn of actionBtns) {
+    if (await btn.isVisible({ timeout: 800 }).catch(() => false)) {
+      logStep(`${task.id} clicking action button: ${await btn.getAttribute('aria-label').catch(() => '?')}`);
+      await btn.click({ timeout: 3_000 });
+      await page.waitForTimeout(600);
+      const menuConsent = page.locator('[role="menuitem"], [role="option"]').filter({ hasText: /consent/i }).first();
+      if (await menuConsent.isVisible({ timeout: 1500 }).catch(() => false)) {
+        await menuConsent.click();
+        await page.waitForTimeout(1000);
+        const granted = await grantAdminConsent(page, task, page.locator('body'));
+        if (granted) return true;
+      } else {
+        await page.keyboard.press('Escape').catch(() => {});
+      }
+      break;
+    }
+  }
+
+  // Strategy 3 — grantAdminConsent's own right-click fallback
+  // Take a screenshot first so we can see exactly what the page looks like
+  const ssFail = path.join(RUN_DIR, `consent-fallback-${task.id}-${Date.now()}.png`);
+  await page.screenshot({ path: ssFail, fullPage: true }).catch(() => {});
+  logStep(`${task.id} screenshot: ${ssFail}`);
+  return await grantAdminConsent(page, task, row);
+}
+
+// ---------------------------------------------------------------------------
 // App Management — add one app profile via the 3-step wizard then grant consent
 // Wizard steps observed in AOS:
 //   1. Select services  (tenant dropdown + service radio e.g. "Fly")
@@ -956,9 +1097,9 @@ async function addOneAppProfile(page, task) {
     const existing = page.locator('td, [role="gridcell"], [role="cell"]')
                          .filter({ hasText: new RegExp(escapeRegex(needle), 'i') }).first();
     if (await existing.isVisible({ timeout: 1_000 }).catch(() => false)) {
-      logStep(`${task.id} app profile already exists (matched "${needle}")`);
+      logStep(`${task.id} app profile already exists (matched "${needle}") — opening profile to grant consents`);
       const row = existing.locator('xpath=ancestor::tr | ancestor::*[@role="row"]').first();
-      const granted = await grantAdminConsent(page, task, row);
+      const granted = await openProfileAndGrantConsent(page, task, row);
       return granted ? 'already exists (consent granted)' : 'already exists';
     }
   }
@@ -1097,82 +1238,90 @@ async function addOneAppProfile(page, task) {
 // Also handles the App Management list row case (button or link in a row).
 // Returns true if at least one consent was processed.
 // ---------------------------------------------------------------------------
-async function grantAdminConsent(page, task, rowLocator) {
-  logStep(`${task.id} grantAdminConsent: looking for consent links`);
-
-  // Collect all visible "Consent" links/buttons — prefer links since the
-  // wizard uses <a> elements, fall back to buttons for the list-row case.
-  const candidateSels = [
-    page.getByRole('link',   { name: /^consent$/i }),
-    page.getByRole('button', { name: /^consent$/i }),
-    page.locator('a').filter({ hasText: /^consent$/i }),
-    page.locator('button').filter({ hasText: /^consent$/i }),
-    page.getByRole('button', { name: /grant.*consent/i }),
+// Scan for the first visible "Consent" link or button on the current page.
+// Returns a Playwright locator, or null if none found.
+// ---------------------------------------------------------------------------
+async function findFirstConsentLink(page) {
+  const candidates = [
+    page.getByRole('link',   { name: /^consent$/i }).first(),
+    page.getByRole('button', { name: /^consent$/i }).first(),
+    page.locator('a').filter({ hasText: /^consent$/i }).first(),
+    page.locator('button').filter({ hasText: /^consent$/i }).first(),
+    page.getByRole('button', { name: /grant.*consent/i }).first(),
+    page.locator('a, button').filter({ hasText: /^consent$/i }).first(),
   ];
-
-  let consentLinks = [];
-  for (const sel of candidateSels) {
-    const n = await sel.count().catch(() => 0);
-    for (let i = 0; i < n; i++) {
-      if (await sel.nth(i).isVisible({ timeout: 300 }).catch(() => false)) {
-        consentLinks.push(sel.nth(i));
-      }
-    }
-    if (consentLinks.length > 0) break;
+  for (const loc of candidates) {
+    if (await loc.isVisible({ timeout: 400 }).catch(() => false)) return loc;
   }
+  return null;
+}
 
-  // Fallback: try row-level context menu for the App Management list case
-  if (consentLinks.length === 0) {
-    logStep(`${task.id} no consent links visible — trying row right-click`);
-    await rowLocator.click({ button: 'right', timeout: 3_000 }).catch(() => {});
-    await page.waitForTimeout(300);
-    const ctxItem = page.locator('[role="menuitem"]').filter({ hasText: /consent/i }).first();
-    if (await ctxItem.isVisible({ timeout: 1000 }).catch(() => false)) {
-      consentLinks.push(ctxItem);
-    } else {
-      await page.keyboard.press('Escape').catch(() => {});
-      logWarn(`${task.id} consent links not found — manual consent required`);
-      return false;
-    }
-  }
+// ---------------------------------------------------------------------------
+// Grant admin consent for all consent links on the current page.
+// Re-scans after each popup closes so it catches all items regardless of
+// whether they are <a> or <button> elements, and handles DOM updates where
+// the portal removes/changes a link after consent is granted.
+// Returns true if at least one consent was processed.
+// ---------------------------------------------------------------------------
+async function grantAdminConsent(page, task, rowLocator) {
+  logStep(`${task.id} grantAdminConsent: start`);
 
-  logStep(`${task.id} found ${consentLinks.length} consent link(s) — processing each`);
   let anyGranted = false;
+  const MAX_ROUNDS = 12; // safety cap — AvePoint currently has 6 apps
 
-  for (let i = 0; i < consentLinks.length; i++) {
-    // Re-locate by index each iteration in case the DOM updated after a prior consent
-    let link = consentLinks[i];
-    if (!await link.isVisible({ timeout: 500 }).catch(() => false)) {
-      logStep(`${task.id} consent ${i + 1}/${consentLinks.length} no longer visible — skipping`);
-      continue;
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    // Let the DOM settle before each scan (longer pause after first round to
+    // allow the page to reflect the previous consent grant).
+    await page.waitForTimeout(round === 0 ? 400 : 900);
+
+    const link = await findFirstConsentLink(page);
+    if (!link) {
+      logStep(`${task.id} grantAdminConsent: no more consent links (after ${round} granted)`);
+      break;
     }
 
-    logStep(`${task.id} clicking consent ${i + 1}/${consentLinks.length}`);
+    logStep(`${task.id} consent round ${round + 1}: clicking`);
+    emit({ event: 'info', message: `Admin consent ${round + 1}: approve in the Microsoft popup that opens.` });
+
     const popupPromise = page.waitForEvent('popup', { timeout: 5_000 }).catch(() => null);
     await link.click({ timeout: 5_000 });
 
     const popup = await popupPromise;
     if (popup) {
-      logStep(`${task.id} OAuth popup opened: ${popup.url()}`);
-      emit({ event: 'info', message: `Admin consent ${i + 1}/${consentLinks.length}: approve in the Microsoft popup.` });
-      // Wait for the popup to close on its own — AvePoint's OAuth callback page
-      // calls window.close() once it has processed the consent response.
-      // Do NOT close it early (e.g. on redirect) or the consent won't register.
+      logStep(`${task.id} popup: ${popup.url()}`);
+      // AvePoint's OAuth callback calls window.close() — do not close early
       await popup.waitForEvent('close', { timeout: 300_000 });
-      logStep(`${task.id} consent ${i + 1} popup closed`);
+      logStep(`${task.id} consent ${round + 1} popup closed`);
       await page.waitForTimeout(800);
     } else {
-      // Popup not caught by Playwright — may have opened in an untracked window.
-      // Wait a moment for the page to settle then continue.
-      logWarn(`${task.id} consent ${i + 1} popup not tracked — waiting 3s`);
+      logWarn(`${task.id} consent ${round + 1} popup not tracked — waiting 3s`);
       await page.waitForTimeout(3_000);
     }
 
-    await page.waitForTimeout(600);
     anyGranted = true;
   }
 
-  logStep(`${task.id} grantAdminConsent: done`);
+  // Fallback: context-menu on the row (App Management list-page case)
+  if (!anyGranted) {
+    logStep(`${task.id} no consent links via normal scan — trying row right-click`);
+    await rowLocator.click({ button: 'right', timeout: 3_000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const ctxItem = page.locator('[role="menuitem"]').filter({ hasText: /consent/i }).first();
+    if (await ctxItem.isVisible({ timeout: 1000 }).catch(() => false)) {
+      const popupPromise = page.waitForEvent('popup', { timeout: 5_000 }).catch(() => null);
+      await ctxItem.click();
+      const popup = await popupPromise;
+      if (popup) {
+        await popup.waitForEvent('close', { timeout: 300_000 });
+        anyGranted = true;
+      }
+    } else {
+      await page.keyboard.press('Escape').catch(() => {});
+      logWarn(`${task.id} consent links not found — manual consent required`);
+    }
+  }
+
+  logStep(`${task.id} grantAdminConsent: done (anyGranted=${anyGranted})`);
   return anyGranted;
 }
 

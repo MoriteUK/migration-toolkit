@@ -12,7 +12,7 @@ function Show-AosSetupForm {
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="AOS Tenant &amp; App Setup"
-        Width="820" Height="640" MinWidth="640" MinHeight="500"
+        Width="820" Height="560" MinWidth="640" MinHeight="440"
         WindowStartupLocation="CenterScreen"
         Background="#F0F2F8">
     <DockPanel>
@@ -43,32 +43,12 @@ function Show-AosSetupForm {
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Tenant details -->
-            <GroupBox Grid.Row="0" Header="Tenant" Margin="0,0,0,6">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="150"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="20"/>
-                        <ColumnDefinition Width="150"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Label  Grid.Column="0" Content="Display Name:" VerticalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Name="TxtDisplayName" Margin="0,4,0,4"
-                             ToolTip="Shown in AOS, e.g. OurVolaris"/>
-                    <Label  Grid.Column="3" Content="Search Code:" VerticalAlignment="Center"/>
-                    <TextBox Grid.Column="4" Name="TxtSearchCode" Margin="0,4,0,4"
-                             ToolTip="Short code used in the AOS Tenant dropdown, e.g. ourvolaris"/>
-                </Grid>
-            </GroupBox>
-
-            <!-- App profile -->
-            <GroupBox Grid.Row="1" Header="App Profile (credentials registered in AOS)" Margin="0,0,0,6">
+            <!-- Tenant & App Profile -->
+            <GroupBox Grid.Row="0" Header="Tenant &amp; App Profile" Margin="0,0,0,6">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="150"/>
@@ -81,30 +61,30 @@ function Show-AosSetupForm {
                         <RowDefinition/>
                         <RowDefinition/>
                     </Grid.RowDefinitions>
-                    <Label  Grid.Row="0" Grid.Column="0" Content="Profile Name:" VerticalAlignment="Center"/>
-                    <TextBox Grid.Row="0" Grid.Column="1" Name="TxtAppProfileName" Margin="0,4,0,2"
+                    <Label  Grid.Row="0" Grid.Column="0" Content="Display Name:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="0" Grid.Column="1" Name="TxtDisplayName" Margin="0,4,0,4"
+                             ToolTip="Shown in AOS, e.g. OurVolaris"/>
+                    <Label  Grid.Row="0" Grid.Column="3" Content="Search Code:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="0" Grid.Column="4" Name="TxtSearchCode" Margin="0,4,0,4"
+                             ToolTip="Short code used in the AOS Tenant dropdown, e.g. ourvolaris"/>
+                    <Label  Grid.Row="1" Grid.Column="0" Content="Profile Name:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" Name="TxtAppProfileName" Margin="0,4,0,4"
                              ToolTip="Name for the app profile in AOS App Management, e.g. OurVolaris App"/>
-                    <Label  Grid.Row="0" Grid.Column="3" Content="Client ID:" VerticalAlignment="Center"/>
-                    <TextBox Grid.Row="0" Grid.Column="4" Name="TxtClientId" Margin="0,4,0,2"
-                             ToolTip="App (Client) ID from Entra / the Create App Registration screen"/>
-                    <Label  Grid.Row="1" Grid.Column="3" Content="Client Secret:" VerticalAlignment="Center"/>
-                    <PasswordBox Grid.Row="1" Grid.Column="4" Name="TxtClientSecret" Margin="0,2,0,4"
-                                 ToolTip="Copy from the Create App Registration screen — Copy Secret button"/>
                 </Grid>
             </GroupBox>
 
             <!-- Buttons -->
-            <Grid Grid.Row="2" Margin="0,2,0,8">
+            <Grid Grid.Row="1" Margin="0,2,0,8">
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
                     <Button Name="BtnClear"    Content="Clear Results"  Margin="0,0,6,0"/>
                     <Button Name="BtnStop"     Content="Stop"           IsEnabled="False" Margin="0,0,6,0"/>
-                    <Button Name="BtnRunSetup" Content="Run Setup"
-                            Background="#0064B4" Foreground="White" FontWeight="SemiBold" Width="110"/>
+                    <Button Name="BtnRunSetup" Content="Create App Profile &amp; Grant Consent"
+                            Background="#0064B4" Foreground="White" FontWeight="SemiBold" Width="240"/>
                 </StackPanel>
             </Grid>
 
             <!-- Results grid -->
-            <DataGrid Grid.Row="3" Name="DgSetup" AutoGenerateColumns="False"
+            <DataGrid Grid.Row="2" Name="DgSetup" AutoGenerateColumns="False"
                       IsReadOnly="True" HeadersVisibility="Column"
                       GridLinesVisibility="Horizontal"
                       AlternatingRowBackground="#F5F6FA"
@@ -132,7 +112,7 @@ function Show-AosSetupForm {
             </DataGrid>
 
             <!-- Status bar -->
-            <Border Grid.Row="4" Background="#EEF0F5" Padding="10,6" Margin="0,8,0,0"
+            <Border Grid.Row="3" Background="#EEF0F5" Padding="10,6" Margin="0,8,0,0"
                     BorderBrush="#D2D7E4" BorderThickness="1">
                 <TextBlock Name="TxtSetupStatus" Text="Ready" Foreground="#646C78"/>
             </Border>
@@ -252,7 +232,6 @@ function Show-AosSetupForm {
             return $false
         }
 
-        # ArgumentList lets .NET handle quoting — safe for paths containing spaces.
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName               = $node
         $psi.WorkingDirectory       = $PSScriptRoot
@@ -309,7 +288,6 @@ function Show-AosSetupForm {
     $script:aosCtrl['TxtDisplayName'].Add_TextChanged({
         $dn = $script:aosCtrl['TxtDisplayName'].Text.Trim()
         $current = $script:aosCtrl['TxtAppProfileName'].Text
-        # Only auto-update if it still looks auto-generated (ends with " App" or is empty)
         if ([string]::IsNullOrWhiteSpace($current) -or $current -match ' App$') {
             if ($dn) { $script:aosCtrl['TxtAppProfileName'].Text = "$dn App" }
         }
@@ -343,21 +321,17 @@ function Show-AosSetupForm {
         }
     })
 
-    # ── Run Setup ─────────────────────────────────────────────────────────────
+    # ── Create App Profile & Grant Consent ────────────────────────────────────
     $script:aosCtrl['BtnRunSetup'].Add_Click({
         $displayName = $script:aosCtrl['TxtDisplayName'].Text.Trim()
         $searchCode  = $script:aosCtrl['TxtSearchCode'].Text.Trim()
         $appProfile  = $script:aosCtrl['TxtAppProfileName'].Text.Trim()
-        $clientId    = $script:aosCtrl['TxtClientId'].Text.Trim()
-        $clientSecret = $script:aosCtrl['TxtClientSecret'].Password
 
         if ([string]::IsNullOrWhiteSpace($displayName) -or
             [string]::IsNullOrWhiteSpace($searchCode)  -or
-            [string]::IsNullOrWhiteSpace($appProfile)  -or
-            [string]::IsNullOrWhiteSpace($clientId)    -or
-            [string]::IsNullOrWhiteSpace($clientSecret)) {
+            [string]::IsNullOrWhiteSpace($appProfile)) {
             [System.Windows.MessageBox]::Show(
-                "All fields are required:`n• Display Name`n• Search Code`n• Profile Name`n• Client ID`n• Client Secret",
+                "All fields are required:`n• Display Name`n• Search Code`n• Profile Name",
                 "Validation", 'OK', 'Warning') | Out-Null
             return
         }
@@ -368,14 +342,11 @@ function Show-AosSetupForm {
             tenantDisplayName = $displayName
             tenantSearch      = $searchCode
             appProfileName    = $appProfile
-            clientId          = $clientId
-            clientSecret      = $clientSecret
         }
 
         Add-AosPendingRow $id $displayName
         $stdinLines = @($task | ConvertTo-Json -Compress)
 
-        # Persist display name + search code to shared config
         Update-SharedConfig @{
             TenantName   = $displayName
             TenantSearch = $searchCode
@@ -384,7 +355,7 @@ function Show-AosSetupForm {
         $script:aosCtrl['BtnRunSetup'].IsEnabled = $false
         $script:aosCtrl['BtnSignIn'].IsEnabled   = $false
         $script:aosCtrl['BtnStop'].IsEnabled     = $true
-        Set-AosStatus "Running setup..."
+        Set-AosStatus "Creating app profile and granting consent..."
         try {
             Invoke-AosConnector -Mode 'setup' -StdinLines $stdinLines -DisplayName $displayName | Out-Null
         } finally {
@@ -398,12 +369,10 @@ function Show-AosSetupForm {
 
     # ── Pre-fill from shared config ───────────────────────────────────────────
     $_sc = Read-SharedConfig
-    if ($_sc.TenantName)   { $script:aosCtrl['TxtDisplayName'].Text  = $_sc.TenantName }
-    if ($_sc.TenantSearch) { $script:aosCtrl['TxtSearchCode'].Text   = $_sc.TenantSearch }
+    if ($_sc.TenantName)   { $script:aosCtrl['TxtDisplayName'].Text    = $_sc.TenantName }
+    if ($_sc.TenantSearch) { $script:aosCtrl['TxtSearchCode'].Text     = $_sc.TenantSearch }
     if ($_sc.TenantName)   { $script:aosCtrl['TxtAppProfileName'].Text = "$($_sc.TenantName) App" }
-    if ($_sc.TargetAppId)  { $script:aosCtrl['TxtClientId'].Text     = $_sc.TargetAppId }
 
-    # Session status
     $authFile = Join-Path $PSScriptRoot 'auth\storageState.json'
     if (Test-Path $authFile) {
         $script:aosCtrl['TxtAuthStatus'].Text = "Previous session found. Sign in again only if expired."

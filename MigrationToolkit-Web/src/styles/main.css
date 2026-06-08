@@ -1455,6 +1455,23 @@ textarea.form-input-compact {
   box-shadow: 0 4px 16px rgba(220, 53, 69, 0.4);
 }
 
+.btn-success {
+  background: linear-gradient(135deg, #17a34a, #138a3f);
+  color: white;
+  box-shadow: 0 2px 8px rgba(23, 163, 74, 0.3);
+}
+
+.btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(23, 163, 74, 0.4);
+}
+
+.btn-xs {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
 /* Form Elements */
 .form-radio {
   display: flex;
