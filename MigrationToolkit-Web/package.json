@@ -35,9 +35,41 @@
       "src/**/*",
       "public/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "../VGMigrations",
+        "to": "VGMigrations",
+        "filter": [
+          "**/*",
+          "!auth/**",
+          "!logs/**",
+          "!reports/**",
+          "!node_modules/**",
+          "!tenant-sites.json",
+          "!tenant-sites.meta.json",
+          "!domains.json",
+          "!design-system/**",
+          "!*.md"
+        ]
+      }
+    ],
     "win": {
       "target": "nsis",
-      "icon": "public/icon.ico"
+      "icon": "public/icon.ico",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Migration Toolkit",
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "installerHeader": "public/icon.ico",
+      "include": "installer.nsh",
+      "runAfterFinish": true
     }
   }
 }

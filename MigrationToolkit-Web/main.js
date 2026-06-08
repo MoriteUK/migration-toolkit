@@ -5,8 +5,10 @@ const { spawn } = require('child_process');
 
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
-// PowerShell integration
-const PS_SCRIPT_PATH = path.join(__dirname, '..', 'VGMigrations');
+// PowerShell integration — resolves correctly in both dev (source) and installed (packaged) modes
+const PS_SCRIPT_PATH = app.isPackaged
+  ? path.join(process.resourcesPath, 'VGMigrations')
+  : path.join(__dirname, '..', 'VGMigrations');
 
 let mainWindow;
 
