@@ -195,15 +195,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Discovery - auto-fill VBU ID when a domain is chosen from the dropdown
-  const discoveryDomainInput = document.getElementById('discoveryDomain');
-  if (discoveryDomainInput) {
-    discoveryDomainInput.addEventListener('change', () => {
-      const domain = discoveryDomainInput.value.trim().toLowerCase();
+  // Discovery domain combobox
+  (function initDomainCombobox() {
+    const input  = document.getElementById('discoveryDomain');
+    const btn    = document.getElementById('domainDropdownBtn');
+    const panel  = document.getElementById('domainDropdownPanel');
+    const list   = document.getElementById('domainDropdownList');
+    if (!input || !btn || !panel || !list) return;
+
+    function selectDomain(domain) {
+      input.value = domain;
+      const vbuInput = document.getElementById('discoveryVbuId');
+      if (vbuInput) vbuInput.value = _vbuMap[domain.toLowerCase()] || '';
+      panel.classList.add('hidden');
+    }
+
+    function renderItems(filter) {
+      const q = (filter || '').toLowerCase();
+      const rows = _vbuRows.filter(r => !q || r.domain.includes(q) || (r.vbuName && r.vbuName.toLowerCase().includes(q)));
+      if (rows.length === 0) {
+        list.innerHTML = `<div class="domain-dropdown-empty">${_vbuRows.length === 0 ? 'No domains loaded — set VBU CSV path in Settings' : 'No matches'}</div>`;
+      } else {
+        list.innerHTML = rows.map(r =>
+          `<div class="domain-dropdown-item" data-domain="${r.domain}">
+            <span class="di-domain">${r.domain}</span>
+            ${r.vbuName ? `<span class="di-vbu">${r.vbuName}</span>` : ''}
+          </div>`
+        ).join('');
+        list.querySelectorAll('.domain-dropdown-item').forEach(el => {
+          el.addEventListener('mousedown', e => { e.preventDefault(); selectDomain(el.dataset.domain); });
+        });
+      }
+    }
+
+    function openPanel() {
+      renderItems(input.value);
+      panel.classList.remove('hidden');
+    }
+
+    function closePanel() {
+      panel.classList.add('hidden');
+    }
+
+    btn.addEventListener('click', () => {
+      if (panel.classList.contains('hidden')) { input.focus(); openPanel(); } else { closePanel(); }
+    });
+
+    input.addEventListener('input', () => { openPanel(); });
+    input.addEventListener('focus', () => { openPanel(); });
+    input.addEventListener('blur', () => {
+      // delay so mousedown on item fires first
+      setTimeout(closePanel, 150);
+      // auto-fill VBU if exact match
+      const domain = input.value.trim().toLowerCase();
       const vbuInput = document.getElementById('discoveryVbuId');
       if (vbuInput && _vbuMap[domain] !== undefined) vbuInput.value = _vbuMap[domain];
     });
-  }
+
+    document.addEventListener('click', e => {
+      if (!input.contains(e.target) && !btn.contains(e.target) && !panel.contains(e.target)) closePanel();
+    });
+  })();
 
   // Discovery - Start button
   const startDiscoveryBtn = document.getElementById('startDiscoveryBtn');
@@ -1622,6 +1674,7 @@ function switchView(viewName) {
 
 // ── Discovery: domain/VBU dropdown ───────────────────────────────────────────
 let _vbuMap = {};
+let _vbuRows = [];
 
 async function loadDiscoveryDomains() {
   try {
@@ -1633,14 +1686,8 @@ async function loadDiscoveryDomains() {
     if (!result.success || !result.rows.length) return;
 
     _vbuMap = {};
+    _vbuRows = result.rows;
     result.rows.forEach(r => { _vbuMap[r.domain] = r.vbuId; });
-
-    const datalist = document.getElementById('domainDatalist');
-    if (datalist) {
-      datalist.innerHTML = result.rows
-        .map(r => `<option value="${r.domain}">${r.vbuName ? r.vbuName + ' — ' + r.domain : r.domain}</option>`)
-        .join('');
-    }
   } catch (err) {
     console.error('loadDiscoveryDomains failed:', err);
   }

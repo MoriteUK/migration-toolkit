@@ -861,19 +861,7 @@ body {
   left: 0;
   height: 100%;
   border-radius: 12px;
-  transition: width 500ms ease;
-}
-
-.workload-bar-fill.status-ontrack {
-  background: linear-gradient(90deg, #28a745, #20c997);
-}
-
-.workload-bar-fill.status-warning {
-  background: linear-gradient(90deg, #ff9800, #ffb74d);
-}
-
-.workload-bar-fill.status-failed {
-  background: linear-gradient(90deg, #dc3545, #e57373);
+  transition: width 600ms ease, background 600ms ease;
 }
 
 .workload-bar-count {
@@ -886,7 +874,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .status-badge {
@@ -898,18 +887,23 @@ body {
 }
 
 .status-badge.badge-ontrack {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: #dcfce7;
+  color: #15803d;
 }
 
 .status-badge.badge-warning {
-  background: #fff3e0;
-  color: #e65100;
+  background: #ffedd5;
+  color: #c2410c;
 }
 
 .status-badge.badge-failed {
-  background: #ffebee;
-  color: #c62828;
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.status-badge.badge-neutral {
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 /* Navigation Tiles */
@@ -1826,4 +1820,91 @@ textarea.form-input-compact {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #b0b8c4;
+}
+
+/* ── Domain combobox (Discovery view) ─────────────────────────────────────── */
+.domain-combobox {
+  position: relative;
+  display: flex;
+}
+
+.domain-combobox .domain-combobox-input {
+  flex: 1;
+  border-radius: 8px 0 0 8px;
+  border-right: none;
+}
+
+.domain-combobox .domain-combobox-input:focus {
+  border-right: none;
+}
+
+.domain-combobox-btn {
+  border: 2px solid #e0e4eb;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  background: #f5f7fa;
+  padding: 0 12px;
+  cursor: pointer;
+  color: #555;
+  font-size: 13px;
+  line-height: 1;
+  transition: background 150ms, border-color 150ms;
+}
+
+.domain-combobox-btn:hover {
+  background: #e8ecf3;
+  border-color: #c8d0db;
+}
+
+.domain-combobox-input:focus ~ .domain-combobox-btn {
+  border-color: var(--color-primary);
+}
+
+.domain-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 2px solid var(--color-primary);
+  border-radius: 8px;
+  max-height: 230px;
+  overflow-y: auto;
+  z-index: 300;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.domain-dropdown-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: var(--font-ui);
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.domain-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.domain-dropdown-item:hover,
+.domain-dropdown-item.highlighted {
+  background: #e8f0fc;
+}
+
+.domain-dropdown-item .di-domain {
+  font-weight: 600;
+  color: #1a2332;
+}
+
+.domain-dropdown-item .di-vbu {
+  font-size: 0.78rem;
+  color: #667;
+  margin-left: 6px;
+}
+
+.domain-dropdown-empty {
+  padding: 10px 14px;
+  color: #888;
+  font-size: 0.85rem;
+  font-style: italic;
 }

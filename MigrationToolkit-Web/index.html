@@ -280,8 +280,13 @@
             <div class="form-row">
               <div class="form-group flex-1">
                 <label class="form-label">Domain</label>
-                <input type="text" class="form-input form-input-compact" id="discoveryDomain" list="domainDatalist" placeholder="Select or type a domain..." autocomplete="off">
-                <datalist id="domainDatalist"></datalist>
+                <div class="domain-combobox">
+                  <input type="text" class="form-input form-input-compact domain-combobox-input" id="discoveryDomain" placeholder="Select or type a domain..." autocomplete="off">
+                  <button class="domain-combobox-btn" id="domainDropdownBtn" type="button" tabindex="-1">▾</button>
+                  <div class="domain-dropdown-panel hidden" id="domainDropdownPanel">
+                    <div id="domainDropdownList"></div>
+                  </div>
+                </div>
               </div>
               <div class="form-group flex-1">
                 <label class="form-label">VBU ID</label>
