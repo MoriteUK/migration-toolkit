@@ -1,7 +1,62 @@
 {
-  "version": "2.5.0",
-  "releaseDate": "2026-06-08",
+  "version": "2.7.0",
+  "releaseDate": "2026-06-16",
   "changelog": [
+    {
+      "version": "2.7.0",
+      "date": "2026-06-16",
+      "changes": [
+        "Discovery: domain field replaced with searchable combobox — click ▾ or type to filter by domain or VBU name",
+        "Discovery: now runs search-domain.ps1 directly in the Electron UI (no separate window)",
+        "Discovery: domain list populated from VBU ID CSV; VBU ID auto-fills on selection",
+        "Discovery: Graph authentication falls back to device-code flow when WAM/HWND unavailable (fixes 0-users issue)",
+        "Discovery: output folder Browse now opens a folder picker; path is also editable",
+        "Discovery: -OutputPath parameter added to search-domain.ps1",
+        "Settings: added VBU CSV path field in Discovery tab",
+        "Fix: Save Settings no longer fails with JSON parse error on BOM-prefixed config.json (PS 5.1 compat)",
+        "Fix: settings.ps1 now writes config.json without UTF-8 BOM",
+        "Added Fix-ConfigBOM.ps1 — cleanup script for servers with existing BOM-prefixed config.json",
+        "Added Install-Prerequisites.bat + Install-Prerequisites.ps1 for one-step server setup"
+      ]
+    },
+    {
+      "version": "2.6.2",
+      "date": "2026-06-12",
+      "changes": [
+        "Added New-SharePointSites.ps1: creates missing destination SharePoint sites from a mapping CSV",
+        "Connections view: new 'Create Sites' button runs site creation before Verify (SharePoint only)",
+        "Connections view: added 'SharePoint site owner' email input for destination tenant admin UPN",
+        "Sites are created as modern team sites (STS#3 template) using Microsoft.Online.SharePoint.PowerShell"
+      ]
+    },
+    {
+      "version": "2.6.1",
+      "date": "2026-06-12",
+      "changes": [
+        "Fixed Import-FlyMappings: bypassed Fly.Client module's broken project lookup entirely",
+        "Root cause: Fly API search returns no results for names containing ' - ' (e.g. 'Pcentra - Exchange')",
+        "Fix: now searches with customer prefix only ('Pcentra'), finds project by exact name, posts mappings via REST API directly",
+        "Supports all workloads: Exchange, SharePoint, OneDrive, Teams, TeamChat, Groups"
+      ]
+    },
+    {
+      "version": "2.6.0",
+      "date": "2026-06-12",
+      "changes": [
+        "Added Deduplicate Inventory script to Misc Scripts (classifies Teams, Groups, SharePoint from discovery workbook)",
+        "Fixed Import-FlyMappings: removed unreliable project pre-check that blocked valid imports",
+        "Fixed Import-FlyMappings: NaN response from Fly API now correctly reported as a failure with diagnostics",
+        "Fixed Import-FlyMappings: CSV always normalised to UTF-8 BOM before passing to Fly.Client",
+        "Fixed Import-FlyMappings: source file encoding auto-detected from BOM (handles UTF-8, UTF-16, ANSI)",
+        "Fixed Import-FlyMappings: duplicate/same-row detection uses OrdinalIgnoreCase for non-ASCII characters",
+        "Fixed Import-FlyMappings: CSV column names and detected source/destination columns now logged",
+        "Fixed Start-FlyMigrationStage: removed hanging Get-FlyMigrationProject fallback scan",
+        "Fixed runner.ps1: removed invalid -Top parameter from Get-FlyMigrationProject call",
+        "Deduplicate Inventory: hardcoded SharePoint Admin URL to ourvolaris-admin.sharepoint.com",
+        "Log panels: added max-height cap so output scrolls instead of growing off-screen",
+        "Node.js: installed as portable (no admin required) with user PATH registration"
+      ]
+    },
     {
       "version": "2.5.0",
       "date": "2026-06-08",
