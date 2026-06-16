@@ -24,11 +24,32 @@ async function openFileBrowser(inputEl, opts) {
 
 // Event delegation — handles every Browse button that sits inside an
 // .input-with-button container (all views, current and future).
+// Buttons may carry data-extensions="xlsx" (or other comma-separated exts)
+// to override the default CSV filter.
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.input-with-button button');
   if (!btn) return;
   const input = btn.closest('.input-with-button')?.querySelector('input');
-  if (input) openFileBrowser(input);
+  if (!input) return;
+  const exts = btn.dataset.extensions;
+  if (btn.dataset.folder) {
+    window.electronAPI.showOpenDialog({ properties: ['openDirectory'] }).then(result => {
+      if (!result.canceled && result.filePaths.length > 0) {
+        input.value = result.filePaths[0];
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }).catch(err => console.error('Folder dialog error:', err));
+  } else if (exts) {
+    const extList = exts.split(',').map(s => s.trim());
+    openFileBrowser(input, {
+      filters: [
+        { name: extList.map(x => x.toUpperCase()).join('/') + ' Files', extensions: extList },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+  } else {
+    openFileBrowser(input);
+  }
 });
 
 console.log('=== RENDERER.JS LOADING ===');
@@ -174,36 +195,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // Discovery - auto-fill VBU ID when a domain is chosen from the dropdown
+  const discoveryDomainInput = document.getElementById('discoveryDomain');
+  if (discoveryDomainInput) {
+    discoveryDomainInput.addEventListener('change', () => {
+      const domain = discoveryDomainInput.value.trim().toLowerCase();
+      const vbuInput = document.getElementById('discoveryVbuId');
+      if (vbuInput && _vbuMap[domain] !== undefined) vbuInput.value = _vbuMap[domain];
+    });
+  }
+
   // Discovery - Start button
   const startDiscoveryBtn = document.getElementById('startDiscoveryBtn');
   if (startDiscoveryBtn) {
     startDiscoveryBtn.addEventListener('click', async () => {
-      const domain = document.getElementById('discoveryDomain').value.trim();
+      const domainMode = document.querySelector('input[name="domainMode"]:checked')?.value || 'single';
       const vbuId = document.getElementById('discoveryVbuId').value.trim();
       const skipPP = document.getElementById('skipPowerPlatform').checked;
       const hybrid = document.getElementById('hybrid').checked;
       const members = document.getElementById('includeMembers').checked;
       const continueOnError = document.getElementById('continueOnError').checked;
+      const outputFolder = document.getElementById('outputFolder').value.trim() || 'C:\\M365Discovery';
 
-      if (!domain) {
-        alert('Please enter a domain name');
-        return;
+      let domainsToRun = [];
+      if (domainMode === 'single') {
+        const domain = document.getElementById('discoveryDomain').value.trim();
+        if (!domain) { alert('Please enter a domain name'); return; }
+        domainsToRun = [domain];
+      } else {
+        domainsToRun = (document.getElementById('discoveryDomains').value || '')
+          .split('\n').map(d => d.trim().toLowerCase()).filter(d => d && !d.startsWith('#') && d.includes('.'));
+        if (domainsToRun.length === 0) { alert('Please enter at least one domain name'); return; }
       }
 
       // Show log section
       const logSection = document.getElementById('discoveryLog');
       const logOutput = document.getElementById('discoveryLogOutput');
       logSection.classList.remove('hidden');
-      logOutput.textContent = `Starting discovery for ${domain}...\n`;
-      logOutput.textContent += `VBU ID: ${vbuId || 'Not specified'}\n`;
-      logOutput.textContent += `Skip Power Platform: ${skipPP}\n`;
-      logOutput.textContent += `Hybrid Mode: ${hybrid}\n`;
-      logOutput.textContent += `Include Members: ${members}\n`;
-      logOutput.textContent += `Continue on Error: ${continueOnError}\n\n`;
-      logOutput.textContent += `Launching PowerShell discovery script...\n`;
+      logOutput.textContent = `Starting discovery for: ${domainsToRun.join(', ')}\n`;
+      if (vbuId) logOutput.textContent += `VBU ID: ${vbuId}\n`;
+      logOutput.textContent += `Options: SkipPP=${skipPP}  Hybrid=${hybrid}  Members=${members}\n`;
+      logOutput.textContent += `Output: ${outputFolder}\n\n`;
 
-      // Launch the actual PowerShell script
-      await launchScript('discovery-menu.ps1', startDiscoveryBtn);
+      startDiscoveryBtn.disabled = true;
+      startDiscoveryBtn.textContent = 'Running...';
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+
+      let lastResult;
+      try {
+        for (const domain of domainsToRun) {
+          if (domainsToRun.length > 1) logOutput.textContent += `\n=== ${domain} ===\n`;
+          const args = ['-Domain', domain, '-OutputPath', outputFolder];
+          if (vbuId) args.push('-BusinessUnitId', vbuId);
+          if (skipPP) args.push('-SkipPowerPlatform');
+          if (hybrid) args.push('-Hybrid');
+          if (members) args.push('-IncludeMembers');
+          lastResult = await window.electronAPI.streamPowerShell('search-domain.ps1', args);
+          if (!lastResult.success && !continueOnError) break;
+        }
+        logOutput.textContent += lastResult?.success ? '\n✓ Discovery complete\n' : `\n✗ Failed (exit ${lastResult?.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\n✗ Error: ${err.message}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        startDiscoveryBtn.disabled = false;
+        startDiscoveryBtn.textContent = 'Start Discovery';
+      }
     });
   }
 
@@ -804,7 +864,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const config = await window.electronAPI.getConfig();
       if (config.success && config.config && config.config.Customers) {
-        const customers = config.config.Customers;
+        const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
         dashboardDomainSelect.innerHTML = '<option value="">Select migration...</option>';
 
         customers.forEach(customer => {
@@ -951,44 +1011,69 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateWorkloadBars();
   }
 
+  function buildBarGradient(completed, inProgress, failed) {
+    const filled = completed + inProgress + failed;
+    if (filled === 0) return null;
+
+    // Segment boundaries as % of the filled portion
+    const gEnd = (completed   / filled) * 100;
+    const oEnd = ((completed + inProgress) / filled) * 100;
+    const blend = 7; // blend overlap in percentage points
+
+    // Single-colour fast paths
+    if (inProgress === 0 && failed === 0) return 'linear-gradient(90deg, #16a34a, #22c55e)';
+    if (completed  === 0 && failed === 0) return 'linear-gradient(90deg, #ea580c, #f97316)';
+    if (completed  === 0 && inProgress === 0) return 'linear-gradient(90deg, #dc2626, #ef4444)';
+
+    const stops = [];
+    if (completed > 0) {
+      stops.push('#22c55e 0%');
+      stops.push(`#22c55e ${Math.max(gEnd - blend, 0).toFixed(1)}%`);
+    }
+    if (inProgress > 0) {
+      stops.push(`#f97316 ${(completed > 0 ? Math.min(gEnd + blend, oEnd) : 0).toFixed(1)}%`);
+      if (failed > 0) {
+        stops.push(`#f97316 ${Math.max(oEnd - blend, gEnd).toFixed(1)}%`);
+      } else {
+        stops.push('#f97316 100%');
+      }
+    }
+    if (failed > 0) {
+      stops.push(`#ef4444 ${((completed > 0 || inProgress > 0) ? Math.min(oEnd + blend, 100) : 0).toFixed(1)}%`);
+      stops.push('#ef4444 100%');
+    }
+    return `linear-gradient(90deg, ${stops.join(', ')})`;
+  }
+
   function updateWorkloadBars() {
     workloadBars.innerHTML = '';
 
-    // Use real workload data from currentStatData
     const workloadsData = currentStatData.workloads || {};
 
-    // If no workload data, show nothing
     if (Object.keys(workloadsData).length === 0) {
       workloadBars.innerHTML = '<p style="color: #6c757d; padding: 20px; text-align: center;">No workload data available</p>';
       return;
     }
 
-    // Process each workload from real data
     Object.keys(workloadsData).forEach(workloadName => {
-      const wlData = workloadsData[workloadName];
-      const total = wlData.Total || 0;
-      const completed = wlData.Completed || 0;
-      const failed = wlData.Failed || 0;
-      const warnings = wlData.Warnings || 0;
+      const wlData     = workloadsData[workloadName];
+      const total      = wlData.Total      || 0;
+      const completed  = wlData.Completed  || 0;
+      const failed     = wlData.Failed     || 0;
       const inProgress = wlData.InProgress || 0;
-      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-      let statusClass = 'status-ontrack';
-      let statusBadge = 'On track';
-      let badgeClass = 'badge-ontrack';
+      const filledPct  = total > 0 ? ((completed + inProgress + failed) / total) * 100 : 0;
+      const gradient   = buildBarGradient(completed, inProgress, failed);
+      const fillStyle  = gradient
+        ? `width:${filledPct.toFixed(1)}%; background:${gradient};`
+        : `width:0%;`;
 
-      if (failed > 0) {
-        statusClass = 'status-failed';
-        statusBadge = `${failed} failed`;
-        badgeClass = 'badge-failed';
-      } else if (warnings > 0) {
-        statusClass = 'status-warning';
-        statusBadge = `${warnings} warnings`;
-        badgeClass = 'badge-warning';
-      } else if (inProgress > 0) {
-        statusBadge = `${inProgress} in progress`;
-        badgeClass = 'badge-ontrack';
-      }
+      // Status badge — show all active counts
+      const parts = [];
+      if (completed > 0)  parts.push(`<span class="status-badge badge-ontrack">${completed} done</span>`);
+      if (inProgress > 0) parts.push(`<span class="status-badge badge-warning">${inProgress} in progress</span>`);
+      if (failed > 0)     parts.push(`<span class="status-badge badge-failed">${failed} failed</span>`);
+      if (parts.length === 0 && total > 0) parts.push(`<span class="status-badge badge-neutral">Not started</span>`);
 
       const bar = document.createElement('div');
       bar.className = 'workload-bar-item';
@@ -997,12 +1082,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       bar.innerHTML = `
         <div class="workload-bar-name">${workloadName}</div>
         <div class="workload-bar-progress">
-          <div class="workload-bar-fill ${statusClass}" style="width: ${progress}%"></div>
+          <div class="workload-bar-fill" style="${fillStyle}"></div>
         </div>
         <div class="workload-bar-count">${completed}/${total}</div>
-        <div class="workload-bar-status">
-          <span class="status-badge ${badgeClass}">${statusBadge}</span>
-        </div>
+        <div class="workload-bar-status">${parts.join('')}</div>
       `;
 
       workloadBars.appendChild(bar);
@@ -1269,7 +1352,7 @@ async function loadOneDriveTenants() {
     console.log('Config loaded:', config);
 
     if (config.success && config.config && config.config.Customers) {
-      const customers = config.config.Customers;
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
       console.log('Customers found:', customers.length);
       onedriveTenantUrl.innerHTML = '<option value="">Select tenant...</option>';
 
@@ -1297,7 +1380,7 @@ async function loadMonitorProjects() {
 
     const config = await window.electronAPI.getConfig();
     if (config.success && config.config && config.config.Customers) {
-      const customers = config.config.Customers;
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
       monitorProject.innerHTML = '<option value="">Select project...</option>';
 
       customers.forEach(customer => {
@@ -1344,7 +1427,7 @@ async function loadConnectionsCustomers() {
     const config = await window.electronAPI.getConfig();
 
     if (config.success && config.config && config.config.Customers) {
-      const customers = config.config.Customers;
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
       console.log('Loading customers into dropdown:', customers.length);
 
       psCustomerPrefix.innerHTML = '<option value="">Select customer...</option>';
@@ -1493,6 +1576,8 @@ function switchView(viewName) {
     // Misc Scripts sub-views
     'misc-onedrive': 'miscOneDriveView',
     'misc-teams': 'miscTeamsView',
+    'misc-deduplicate': 'miscDeduplicateView',
+    'misc-purge-spo':   'miscPurgeSpoView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -1508,7 +1593,9 @@ function switchView(viewName) {
       targetView.classList.remove('hidden');
 
       // Load dropdowns when specific views are shown
-      if (viewName === 'misc-onedrive') {
+      if (viewName === 'discovery') {
+        loadDiscoveryDomains();
+      } else if (viewName === 'misc-onedrive') {
         loadOneDriveTenants();
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
@@ -1530,6 +1617,32 @@ function switchView(viewName) {
   // Stop dashboard auto-refresh when navigating away from dashboard
   if (viewName !== 'dashboard') {
     stopDashboardAutoRefresh();
+  }
+}
+
+// ── Discovery: domain/VBU dropdown ───────────────────────────────────────────
+let _vbuMap = {};
+
+async function loadDiscoveryDomains() {
+  try {
+    const cfgResult = await window.electronAPI.getConfig();
+    const csvPath = cfgResult?.config?.VbuCsvPath;
+    if (!csvPath) return;
+
+    const result = await window.electronAPI.readVbuCsv(csvPath);
+    if (!result.success || !result.rows.length) return;
+
+    _vbuMap = {};
+    result.rows.forEach(r => { _vbuMap[r.domain] = r.vbuId; });
+
+    const datalist = document.getElementById('domainDatalist');
+    if (datalist) {
+      datalist.innerHTML = result.rows
+        .map(r => `<option value="${r.domain}">${r.vbuName ? r.vbuName + ' — ' + r.domain : r.domain}</option>`)
+        .join('');
+    }
+  } catch (err) {
+    console.error('loadDiscoveryDomains failed:', err);
   }
 }
 
@@ -1699,6 +1812,7 @@ async function openSettings() {
       document.getElementById('sharePointAdminUrl').value = result.config.SharePointAdminUrl || '';
       document.getElementById('secretExpiry').value = result.config.SecretExpiry || '';
       document.getElementById('discoveryOutputPath').value = result.config.DiscoveryOutputPath || '';
+      document.getElementById('vbuCsvPath').value = result.config.VbuCsvPath || '';
 
       // Load customers into table
       const customerTableBody = document.getElementById('customerTableBody');
@@ -1782,6 +1896,7 @@ async function saveSettings() {
     const sharePointAdminUrl = document.getElementById('sharePointAdminUrl').value.trim();
     const secretExpiry = document.getElementById('secretExpiry').value.trim();
     const discoveryOutputPath = document.getElementById('discoveryOutputPath').value.trim();
+    const vbuCsvPath = document.getElementById('vbuCsvPath').value.trim();
 
     // Collect customer data from table
     const customerRows = document.querySelectorAll('#customerTableBody tr');
@@ -1812,6 +1927,7 @@ async function saveSettings() {
       SharePointAdminUrl: sharePointAdminUrl,
       SecretExpiry: secretExpiry,
       DiscoveryOutputPath: discoveryOutputPath,
+      VbuCsvPath: vbuCsvPath,
       Customers: customers
     };
 
@@ -1931,6 +2047,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const psCustomerPrefix    = document.getElementById('psCustomerPrefix');
   const psCreateProjectBtn  = document.getElementById('psCreateProjectBtn');
   const psImportMappingsBtn = document.getElementById('psImportMappingsBtn');
+  const psCreateSitesBtn    = document.getElementById('psCreateSitesBtn');
   const psVerifyBtn         = document.getElementById('psVerifyBtn');
   const psPreScanBtn        = document.getElementById('psPreScanBtn');
   const psFullMigrBtn       = document.getElementById('psFullMigrBtn');
@@ -2060,6 +2177,50 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         psImportMappingsBtn.disabled = false;
         psImportMappingsBtn.textContent = '📥 Import Mappings';
+      }
+    });
+  }
+
+  if (psCreateSitesBtn) {
+    psCreateSitesBtn.addEventListener('click', async () => {
+      const prefix = psCustomerPrefix?.value?.trim();
+      if (!prefix) { alert('Please select a customer first.'); return; }
+
+      const spFile = document.getElementById('sharepointMapping')?.value?.trim();
+      if (!spFile) {
+        alert('Please browse for the SharePoint mapping CSV file first.');
+        return;
+      }
+
+      const cfgResult = await window.electronAPI.getConfig();
+      const cfg = cfgResult.success ? cfgResult.config : {};
+      const customer = (cfg.Customers || []).find(c => c.Prefix === prefix);
+      const ownerEmail = customer?.AccountName?.trim();
+      if (!ownerEmail) {
+        alert(`No AccountName found for customer "${prefix}".\n\nAdd the destination admin email in Settings → Customer.`);
+        return;
+      }
+
+      psCreateSitesBtn.disabled = true;
+      psCreateSitesBtn.textContent = 'Creating Sites...';
+      showConnLog(true);
+      appendConnLog(`=== Create SharePoint Sites — ${prefix} ===\n`);
+      appendConnLog(`Site owner: ${ownerEmail}\n\n`);
+
+      window.electronAPI.onPsOutput(appendConnLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('New-SharePointSites.ps1', [
+          '-MappingFile', spFile,
+          '-SiteOwner',   ownerEmail
+        ]);
+        appendConnLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+        appendConnLog('\n=== Finished ===\n');
+      } catch (err) {
+        appendConnLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        psCreateSitesBtn.disabled = false;
+        psCreateSitesBtn.textContent = '🌐 Create Sites';
       }
     });
   }
@@ -2465,6 +2626,78 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         provisionOneDriveBtn.disabled = false;
         provisionOneDriveBtn.textContent = '▶ Start Provisioning';
+      }
+    });
+  }
+
+  // ── Deduplicate Inventory ─────────────────────────────────────────────────
+  const deduplicateRunBtn   = document.getElementById('deduplicateRunBtn');
+  const deduplicateWorkbook = document.getElementById('deduplicateWorkbook');
+  const deduplicateLogPre   = document.getElementById('deduplicateLogPre');
+
+  function appendDeduplicateLog(text) {
+    if (!deduplicateLogPre) return;
+    deduplicateLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    deduplicateLogPre.scrollTop = deduplicateLogPre.scrollHeight;
+  }
+
+  if (deduplicateRunBtn) {
+    deduplicateRunBtn.addEventListener('click', async () => {
+      const workbook = deduplicateWorkbook?.value?.trim();
+      if (!workbook) { alert('Please browse for a discovery workbook.'); return; }
+
+      deduplicateRunBtn.disabled = true;
+      deduplicateRunBtn.textContent = 'Running…';
+      if (deduplicateLogPre) deduplicateLogPre.textContent = '';
+
+      const args = ['-SourceWorkbook', workbook];
+
+      window.electronAPI.onPsOutput(appendDeduplicateLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Deduplicate-Inventory.ps1', args);
+        appendDeduplicateLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendDeduplicateLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        deduplicateRunBtn.disabled = false;
+        deduplicateRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Purge Deleted SPO Sites ───────────────────────────────────────────────
+  const purgeSpoRunBtn     = document.getElementById('purgeSpoRunBtn');
+  const purgeSpoMappingFile = document.getElementById('purgeSpoMappingFile');
+  const purgeSpoLogPre     = document.getElementById('purgeSpoLogPre');
+
+  if (purgeSpoRunBtn) {
+    purgeSpoRunBtn.addEventListener('click', async () => {
+      const mappingFile = purgeSpoMappingFile?.value?.trim();
+      if (!mappingFile) { alert('Please browse for the SharePoint mapping CSV file.'); return; }
+
+      purgeSpoRunBtn.disabled = true;
+      purgeSpoRunBtn.textContent = 'Purging…';
+      if (purgeSpoLogPre) purgeSpoLogPre.textContent = '';
+
+      const appendLog = text => {
+        if (!purgeSpoLogPre) return;
+        purgeSpoLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+        purgeSpoLogPre.scrollTop = purgeSpoLogPre.scrollHeight;
+      };
+
+      window.electronAPI.onPsOutput(appendLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Remove-DeletedSharePointSites.ps1', [
+          '-MappingFile', mappingFile
+        ]);
+        appendLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        purgeSpoRunBtn.disabled = false;
+        purgeSpoRunBtn.textContent = '🗑 Purge Deleted Sites';
       }
     });
   }

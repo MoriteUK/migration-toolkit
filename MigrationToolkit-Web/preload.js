@@ -41,5 +41,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Shared config (AOS tenant details)
   getSharedConfig: () => ipcRenderer.invoke('get-shared-config'),
-  saveSharedConfig: (values) => ipcRenderer.invoke('save-shared-config', values)
+  saveSharedConfig: (values) => ipcRenderer.invoke('save-shared-config', values),
+
+  // VBU CSV reader — parses domain/VBU ID mapping from a CSV file
+  readVbuCsv: (filePath) => ipcRenderer.invoke('read-vbu-csv', filePath)
 });

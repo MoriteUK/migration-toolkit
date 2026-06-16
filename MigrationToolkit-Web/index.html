@@ -105,6 +105,12 @@
             <button type="button" class="sidebar-subitem" data-view="misc-teams">
               <span class="sidebar-sublabel">Set Teams Owners</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-deduplicate">
+              <span class="sidebar-sublabel">Deduplicate Inventory</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-purge-spo">
+              <span class="sidebar-sublabel">Purge Deleted SPO Sites</span>
+            </button>
           </div>
 
           <!-- Domain Removal - Expandable -->
@@ -274,11 +280,12 @@
             <div class="form-row">
               <div class="form-group flex-1">
                 <label class="form-label">Domain</label>
-                <input type="text" class="form-input form-input-compact" id="discoveryDomain" placeholder="e.g., contoso.com">
+                <input type="text" class="form-input form-input-compact" id="discoveryDomain" list="domainDatalist" placeholder="Select or type a domain..." autocomplete="off">
+                <datalist id="domainDatalist"></datalist>
               </div>
               <div class="form-group flex-1">
                 <label class="form-label">VBU ID</label>
-                <input type="text" class="form-input form-input-compact" id="discoveryVbuId" placeholder="Optional">
+                <input type="text" class="form-input form-input-compact" id="discoveryVbuId" placeholder="Auto-filled from CSV">
               </div>
             </div>
           </div>
@@ -331,8 +338,8 @@
           <div class="form-group">
             <label class="form-label">Output Folder</label>
             <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" id="outputFolder" value="C:\M365Discovery" readonly>
-              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+              <input type="text" class="form-input form-input-compact" id="outputFolder" value="C:\M365Discovery">
+              <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
             </div>
           </div>
 
@@ -534,6 +541,9 @@
             </button>
             <button type="button" class="btn btn-primary btn-xs" id="psImportMappingsBtn" title="Import the selected mapping CSV files into the corresponding AvePoint Fly projects">
               📥 Import Mappings
+            </button>
+            <button type="button" class="btn btn-primary btn-xs" id="psCreateSitesBtn" title="Create missing destination SharePoint sites. Requires the SharePoint mapping file and the site owner email above.">
+              🌐 Create Sites
             </button>
             <span style="width:1px;height:22px;background:#d0d4db;margin:0 2px;flex-shrink:0;"></span>
             <button type="button" class="btn btn-secondary btn-xs" id="psVerifyBtn" title="Run a permission and connectivity check on all mapped accounts without migrating any data">
@@ -773,6 +783,63 @@
 
           <div id="teamsOwnersLog" style="margin-top:12px;">
             <pre id="teamsOwnersLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Deduplicate Inventory -->
+      <div id="miscDeduplicateView" class="view-container hidden">
+        <h2 class="view-title">Deduplicate Inventory</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Discovery Workbook Deduplication</h3>
+          <p class="form-help">Classifies Teams, M365 Groups, and SharePoint sites from a discovery workbook, removing duplicates and group-connected sites. Outputs <code>Discovery-Classified.xlsx</code> next to the source file. Requires ImportExcel and Microsoft.Online.SharePoint.PowerShell modules.</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">Discovery Workbook (.xlsx)</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="deduplicateWorkbook" placeholder="C:\discovery.xlsx" readonly>
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx">Browse</button>
+            </div>
+            <small class="form-help">Must contain Teams, M365Groups, and SharePointSites worksheets</small>
+          </div>
+
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-success btn-xs" id="deduplicateRunBtn">
+              ▶ Run
+            </button>
+          </div>
+
+          <div id="deduplicateLog" style="margin-top:12px;">
+            <pre id="deduplicateLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:320px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Purge Deleted SPO Sites -->
+      <div id="miscPurgeSpoView" class="view-container hidden">
+        <h2 class="view-title">Purge Deleted SharePoint Sites</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Permanently Remove Sites from Recycle Bin</h3>
+          <p class="form-help">Permanently purges destination SharePoint sites (from a mapping CSV) that are sitting in the SPO recycle bin. Run this before recreating sites if a previous test created and then deleted them. Requires Microsoft.Online.SharePoint.PowerShell module.</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">SharePoint Mapping CSV</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="purgeSpoMappingFile" placeholder="sharepoint.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv" data-target="purgeSpoMappingFile">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-danger btn-xs" id="purgeSpoRunBtn">
+              🗑 Purge Deleted Sites
+            </button>
+          </div>
+
+          <div id="purgeSpoLog" style="margin-top:12px;">
+            <pre id="purgeSpoLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:320px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
         </div>
       </div>
@@ -1114,9 +1181,17 @@
             <label class="form-label">DISCOVERY OUTPUT FOLDER</label>
             <div class="input-with-button">
               <input type="text" class="form-input" id="discoveryOutputPath" placeholder="C:\Discovery">
-              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+              <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
             </div>
             <small class="form-help">Base folder where discovery CSVs and Excel files are saved. Each domain gets its own subfolder inside.</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label">VBU ID CSV FILE</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input" id="vbuCsvPath" placeholder="Path to VBU ID Report CSV">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv">Browse</button>
+            </div>
+            <small class="form-help">CSV with "Email Domain" and "VBU ID" columns. Used to populate the domain dropdown in Discovery and auto-fill the VBU ID.</small>
           </div>
         </div>
       </div>

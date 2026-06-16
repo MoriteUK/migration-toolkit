@@ -186,7 +186,7 @@ function registerIPCHandlers() {
         return { success: true, config: null };
       }
 
-      const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const configData = JSON.parse(fs.readFileSync(configPath, 'utf8').replace(/^﻿/, ''));
       return { success: true, config: configData };
     } catch (error) {
       return { success: false, error: error.message };
@@ -204,11 +204,15 @@ function registerIPCHandlers() {
         fs.mkdirSync(configDir, { recursive: true });
       }
 
-      // Load existing config
+      // Load existing config (strip UTF-8 BOM written by PS 5.1)
       let existingConfig = {};
       if (fs.existsSync(configPath)) {
-        const rawData = fs.readFileSync(configPath, 'utf8');
-        existingConfig = JSON.parse(rawData);
+        const rawData = fs.readFileSync(configPath, 'utf8').replace(/^﻿/, '');
+        try {
+          existingConfig = JSON.parse(rawData);
+        } catch {
+          existingConfig = {};
+        }
       }
 
       // Merge configs
@@ -342,7 +346,7 @@ function registerIPCHandlers() {
       const fs = require('fs');
       const cfgPath = path.join(process.env.LOCALAPPDATA, 'FlyMigration', 'shared-config.json');
       if (!fs.existsSync(cfgPath)) return { success: true, config: {} };
-      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8').replace(/^﻿/, ''));
       return { success: true, config: cfg };
     } catch (error) {
       return { success: false, error: error.message };
@@ -357,7 +361,7 @@ function registerIPCHandlers() {
       if (!fs.existsSync(cfgDir)) fs.mkdirSync(cfgDir, { recursive: true });
       let cfg = {};
       if (fs.existsSync(cfgPath)) {
-        try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); } catch {}
+        try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8').replace(/^﻿/, '')); } catch {}
       }
       Object.assign(cfg, values);
       fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), 'utf8');
@@ -385,6 +389,43 @@ function registerIPCHandlers() {
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('read-vbu-csv', async (event, filePath) => {
+    try {
+      const fs = require('fs');
+      if (!filePath || !fs.existsSync(filePath)) {
+        return { success: false, error: 'File not found', rows: [] };
+      }
+      const content = fs.readFileSync(filePath, 'utf8');
+      const lines = content.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return { success: true, rows: [] };
+
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const domainIdx  = header.indexOf('email domain');
+      const vbuIdIdx   = header.indexOf('vbu id');
+      const vbuNameIdx = header.indexOf('vbu name');
+
+      if (domainIdx === -1 || vbuIdIdx === -1) {
+        return { success: false, error: 'Columns "Email Domain" and "VBU ID" not found in CSV', rows: [] };
+      }
+
+      const rows = lines.slice(1)
+        .map(line => {
+          const cols = line.split(',');
+          return {
+            domain:  (cols[domainIdx]  || '').trim().toLowerCase(),
+            vbuId:   (cols[vbuIdIdx]   || '').trim(),
+            vbuName: vbuNameIdx >= 0 ? (cols[vbuNameIdx] || '').trim() : ''
+          };
+        })
+        .filter(r => r.domain && r.domain.includes('.'))
+        .sort((a, b) => a.domain.localeCompare(b.domain));
+
+      return { success: true, rows };
+    } catch (error) {
+      return { success: false, error: error.message, rows: [] };
     }
   });
 }

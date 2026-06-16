@@ -204,7 +204,8 @@ param (
     [switch]$IncludeMembers,
     [switch]$Hybrid,
     [string]$BusinessUnitId,
-    [switch]$SkipPowerPlatform       # When set, the upfront Power Platform scan is bypassed (useful for unattended/overnight runs and batch orchestration)
+    [switch]$SkipPowerPlatform,      # When set, the upfront Power Platform scan is bypassed (useful for unattended/overnight runs and batch orchestration)
+    [string]$OutputPath              # Base directory for output; overrides (Get-Location) when passed from the Electron UI
 )
 
 Set-StrictMode -Version Latest
@@ -876,6 +877,10 @@ $DomainPrefix = ($Domain -split '\.')[0]
 # OUTPUT FOLDER + LOG
 # ─────────────────────────────────────────────────────────────
 $SafeName     = $Domain -replace '[\\/:*?"<>|]', '_'
+if ($OutputPath) {
+    if (-not (Test-Path $OutputPath)) { New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null }
+    Set-Location $OutputPath
+}
 $OutputFolder    = Join-Path (Get-Location) $SafeName
 if (-not (Test-Path $OutputFolder)) { New-Item -ItemType Directory -Path $OutputFolder -Force | Out-Null }
 $DiscoveryFolder = Join-Path $OutputFolder 'Discovery'
@@ -994,13 +999,47 @@ Write-Detail "================================================"
 # 1. Microsoft Graph (interactive sign-in)
 if ($GraphModuleOk) {
     Write-Log "[1/4] Connecting to Microsoft Graph (tenant: $Domain)..."
+    $graphScopes = @('Directory.Read.All','Group.Read.All','Sites.Read.All','Application.Read.All','User.Read.All','Device.Read.All','DeviceManagementManagedDevices.Read.All','Tasks.Read','Policy.Read.All')
+    # Suppress WAM broker noise from [Console]::Out — same pattern as the EXO block below.
+    $consoleSwallowG = New-Object System.IO.StringWriter
+    $origOutG  = [Console]::Out
+    $origErrG  = [Console]::Error
+    [Console]::SetOut($consoleSwallowG)
+    [Console]::SetError($consoleSwallowG)
     try {
-        $scopes = @('Directory.Read.All','Group.Read.All','Sites.Read.All','Application.Read.All','User.Read.All','Device.Read.All','DeviceManagementManagedDevices.Read.All','Tasks.Read','Policy.Read.All')
         # -TenantId directs the login prompt to the SOURCE company's tenant.
         # Sign in with an account that has at least Global Reader access there.
-        Connect-MgGraph -Scopes $scopes -TenantId $Domain -NoWelcome
+        Connect-MgGraph -Scopes $graphScopes -TenantId $Domain -NoWelcome
+        [Console]::SetOut($origOutG); [Console]::SetError($origErrG)
         $GraphAvailable = $true
         Write-Log "Connected to Microsoft Graph." -Level SUCCESS
+    } catch {
+        [Console]::SetOut($origOutG); [Console]::SetError($origErrG)
+        $graphMsg = $_.Exception.Message
+        $swallowedG = $consoleSwallowG.ToString()
+        if ($swallowedG) { Write-Detail "Graph broker console output (swallowed): $($swallowedG -replace [Environment]::NewLine,' || ')" }
+
+        if ($graphMsg -match 'window handle|WAM|broker|RuntimeBroker|InteractiveBrowser' -or $_.Exception -is [System.NullReferenceException]) {
+            Write-Log "Graph WAM auth failed — falling back to device-code flow." -Level WARN
+            Write-Log "  When prompted, enter the code shown at https://microsoft.com/devicelogin" -Level WARN
+            try {
+                Connect-MgGraph -Scopes $graphScopes -TenantId $Domain -NoWelcome -UseDeviceAuthentication
+                $GraphAvailable = $true
+                Write-Log "Connected to Microsoft Graph via device-code." -Level SUCCESS
+            } catch {
+                $GraphAvailable = $false
+                Write-Log "Graph device-code connection failed: $($_.Exception.Message)" -Level ERROR
+            }
+        } else {
+            $GraphAvailable = $false
+            Write-Log "Graph connection failed — Graph sections will be skipped: $graphMsg" -Level WARN
+        }
+    } finally {
+        if ([Console]::Out  -ne $origOutG)  { [Console]::SetOut($origOutG)   }
+        if ([Console]::Error -ne $origErrG) { [Console]::SetError($origErrG) }
+    }
+
+    if ($GraphAvailable) {
         try {
             $ctx = Get-MgContext
             Write-Log "  Signed in as : $($ctx.Account)" -Level SUCCESS
@@ -1012,9 +1051,6 @@ if ($GraphModuleOk) {
             $gc.Timeout = [System.TimeSpan]::FromSeconds(900)
             Write-Log "Graph HTTP timeout set to 900 s."
         } catch { }
-    } catch {
-        $GraphAvailable = $false
-        Write-Log "Graph connection failed — Graph sections will be skipped: $($_.Exception.Message)" -Level WARN
     }
 } else {
     Write-Log "Microsoft.Graph.Authentication not available — Graph sections will be skipped." -Level WARN
