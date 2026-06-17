@@ -1629,7 +1629,8 @@ function switchView(viewName) {
     'misc-onedrive': 'miscOneDriveView',
     'misc-teams': 'miscTeamsView',
     'misc-deduplicate': 'miscDeduplicateView',
-    'misc-purge-spo':   'miscPurgeSpoView',
+    'misc-purge-spo':     'miscPurgeSpoView',
+    'misc-domain-devices': 'miscDomainDevicesView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -2789,6 +2790,14 @@ document.addEventListener('DOMContentLoaded', () => {
         setTeamsOwnersBtn.disabled = false;
         setTeamsOwnersBtn.textContent = '▶ Add Owner';
       }
+    });
+  }
+
+  // ── Get Domain Devices ────────────────────────────────────────────────────
+  const getDomainDevicesBtn = document.getElementById('getDomainDevicesBtn');
+  if (getDomainDevicesBtn) {
+    getDomainDevicesBtn.addEventListener('click', async () => {
+      await launchScript('Get-DomainDevices.ps1', getDomainDevicesBtn);
     });
   }
 

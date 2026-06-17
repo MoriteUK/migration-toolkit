@@ -111,6 +111,9 @@
             <button type="button" class="sidebar-subitem" data-view="misc-purge-spo">
               <span class="sidebar-sublabel">Purge Deleted SPO Sites</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-domain-devices">
+              <span class="sidebar-sublabel">Get Domain Devices</span>
+            </button>
           </div>
 
           <!-- Domain Removal - Expandable -->
@@ -845,6 +848,22 @@
 
           <div id="purgeSpoLog" style="margin-top:12px;">
             <pre id="purgeSpoLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:320px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Get Domain Devices -->
+      <div id="miscDomainDevicesView" class="view-container hidden">
+        <h2 class="view-title">Get Domain Devices</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Export Entra Registered Devices for a Domain</h3>
+          <p class="form-help">Connects to Microsoft Graph, retrieves all users whose UPN belongs to the specified domain, and exports their registered devices to a CSV. You will be prompted to sign in when the window opens.</p>
+
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-success btn-xs" id="getDomainDevicesBtn">
+              ▶ Open Get Domain Devices
+            </button>
           </div>
         </div>
       </div>
