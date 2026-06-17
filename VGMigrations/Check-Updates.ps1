@@ -107,7 +107,7 @@ Write-UpdateLog "Checking GitHub for updates..."
 
 try {
     # Get latest version.json from GitHub
-    $GitHubVersionUrl = "https://raw.githubusercontent.com/$GitHubRepo/master/VGMigrations/version.json"
+    $GitHubVersionUrl = "https://raw.githubusercontent.com/$GitHubRepo/main/VGMigrations/version.json"
     $RemoteVersionJson = Invoke-RestMethod -Uri $GitHubVersionUrl -ErrorAction Stop
     $RemoteVersion = $RemoteVersionJson.version
 
@@ -180,7 +180,7 @@ try {
     New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
     # Download ZIP from GitHub
-    $ZipUrl = "https://github.com/$GitHubRepo/archive/refs/heads/master.zip"
+    $ZipUrl = "https://github.com/$GitHubRepo/archive/refs/heads/main.zip"
     $ZipPath = Join-Path $TempDir "update.zip"
 
     Write-UpdateLog "Downloading from: $ZipUrl"
