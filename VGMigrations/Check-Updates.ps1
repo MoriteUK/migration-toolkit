@@ -192,12 +192,19 @@ try {
     Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
 
     # Find extracted folder (GitHub adds repo name to folder)
-    # Source must be the VGMigrations subfolder so relative paths map correctly to $ScriptRoot
     $ExtractedFolder = Get-ChildItem -Path $TempDir -Directory | Select-Object -First 1
-    $SourcePath = Join-Path $ExtractedFolder.FullName 'VGMigrations'
-    if (-not (Test-Path $SourcePath)) {
-        throw "Expected VGMigrations subfolder not found in extracted archive: $SourcePath"
+    $RepoRoot  = $ExtractedFolder.FullName
+
+    $VGSource  = Join-Path $RepoRoot 'VGMigrations'
+    $WebSource = Join-Path $RepoRoot 'MigrationToolkit-Web'
+    if (-not (Test-Path $VGSource)) {
+        throw "Expected VGMigrations subfolder not found in extracted archive: $VGSource"
     }
+
+    # Destination roots derived from script location (ScriptRoot = ...VGMigrations\)
+    $ToolkitRoot = Split-Path $ScriptRoot -Parent
+    $VGDest      = $ScriptRoot
+    $WebDest     = Join-Path $ToolkitRoot 'MigrationToolkit-Web'
 
     # Backup user configuration files
     Write-UpdateLog "Backing up user configuration..."
@@ -235,30 +242,43 @@ try {
         Write-UpdateLog "  Backed up: Shared config (from LOCALAPPDATA)"
     }
 
-    # Copy new files (excluding config files)
-    Write-UpdateLog "Installing update..."
-    $Exclude = @('*.log', 'logs', 'reports', 'backup-*', 'auth') + $ConfigFiles
+    # Helper: copy all files from a source folder to a destination folder
+    function Copy-UpdateFolder {
+        param([string]$Source, [string]$Dest, [string[]]$Exclude)
+        Get-ChildItem -Path $Source -Recurse -File | ForEach-Object {
+            $RelativePath = $_.FullName.Substring($Source.Length + 1)
+            $DestPath = Join-Path $Dest $RelativePath
 
-    Get-ChildItem -Path $SourcePath -Recurse -File | ForEach-Object {
-        $RelativePath = $_.FullName.Substring($SourcePath.Length + 1)
-        $DestPath = Join-Path $ScriptRoot $RelativePath
+            $Skip = $false
+            foreach ($pattern in $Exclude) {
+                if ($RelativePath -like $pattern -or $_.Name -like $pattern -or
+                    $RelativePath -like "$pattern\*" -or $RelativePath -like "$pattern/*") {
+                    $Skip = $true; break
+                }
+            }
 
-        # Skip excluded files
-        $Skip = $false
-        foreach ($pattern in $Exclude) {
-            if ($RelativePath -like $pattern -or $_.Name -like $pattern) {
-                $Skip = $true
-                break
+            if (-not $Skip) {
+                $DestDir = Split-Path $DestPath
+                if (-not (Test-Path $DestDir)) {
+                    New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
+                }
+                Copy-Item -Path $_.FullName -Destination $DestPath -Force
             }
         }
+    }
 
-        if (-not $Skip) {
-            $DestDir = Split-Path $DestPath
-            if (-not (Test-Path $DestDir)) {
-                New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
-            }
-            Copy-Item -Path $_.FullName -Destination $DestPath -Force
-        }
+    # Copy VGMigrations files
+    Write-UpdateLog "Installing update (VGMigrations)..."
+    $VGExclude = @('*.log', 'logs', 'reports', 'backup-*', 'auth') + $ConfigFiles
+    Copy-UpdateFolder -Source $VGSource -Dest $VGDest -Exclude $VGExclude
+
+    # Copy MigrationToolkit-Web files (skip node_modules and build artifacts)
+    if (Test-Path $WebSource) {
+        Write-UpdateLog "Installing update (MigrationToolkit-Web)..."
+        $WebExclude = @('node_modules', 'dist', '*.log')
+        Copy-UpdateFolder -Source $WebSource -Dest $WebDest -Exclude $WebExclude
+    } else {
+        Write-UpdateLog "MigrationToolkit-Web not found in archive — skipping web update." 'WARN'
     }
 
     # Restore user configuration
