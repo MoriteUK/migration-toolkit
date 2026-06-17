@@ -237,6 +237,44 @@ function Show-MiscSubMenu {
     $dlg.Controls.Add($miscSub2)
     $y += 26
 
+    # ── Get Domain Devices ────────────────────────────────────────────────────
+    $miscScript3 = Join-Path $PSScriptRoot 'Get-DomainDevices.ps1'
+    $miscBtn3 = New-Object System.Windows.Forms.Button
+    $miscBtn3.Text      = 'Get Domain Devices'
+    $miscBtn3.Font      = New-Object System.Drawing.Font('Segoe UI Semibold', 14)
+    $miscBtn3.Location  = [System.Drawing.Point]::new($bX, $y)
+    $miscBtn3.Size      = [System.Drawing.Size]::new($bW, $bH)
+    $miscBtn3.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $miscBtn3.FlatAppearance.BorderSize = 0
+    $miscBtn3.BackColor = $clrAccent
+    $miscBtn3.ForeColor = [System.Drawing.Color]::White
+    $miscBtn3.Cursor    = [System.Windows.Forms.Cursors]::Hand
+    $miscBtn3.Add_Click({
+        Write-Log "Get Domain Devices clicked  path=$miscScript3"
+        if (-not (Test-Path $miscScript3)) {
+            [System.Windows.Forms.MessageBox]::Show("Script not found:`n$miscScript3", 'Not Found', 'OK', 'Warning') | Out-Null; return
+        }
+        try   { [FlyConsole.NativeMethods]::AllowSetForegroundWindow(-1) | Out-Null } catch {}
+        try {
+            Start-HiddenProcess 'pwsh.exe' "-NoProfile -ExecutionPolicy Bypass -File `"$miscScript3`""
+            Write-Log 'Get Domain Devices launched'
+        } catch {
+            Write-Log "Get Domain Devices launch FAILED: $_" 'ERROR'
+            [System.Windows.Forms.MessageBox]::Show("Failed to launch:`n$_", 'Launch Error', 'OK', 'Error') | Out-Null
+        }
+    }.GetNewClosure())
+    $dlg.Controls.Add($miscBtn3)
+    $y += $bH + 6
+
+    $miscSub3 = New-Object System.Windows.Forms.Label
+    $miscSub3.Text      = 'Export Entra registered devices for users in a specific domain'
+    $miscSub3.Font      = New-Object System.Drawing.Font('Segoe UI', 8.5)
+    $miscSub3.ForeColor = $clrMuted
+    $miscSub3.Location  = [System.Drawing.Point]::new($bX + 4, $y)
+    $miscSub3.AutoSize  = $true
+    $dlg.Controls.Add($miscSub3)
+    $y += 26
+
     $dlg.ClientSize = [System.Drawing.Size]::new(480, ($y + 56))
 
     $footer = New-Object System.Windows.Forms.Panel

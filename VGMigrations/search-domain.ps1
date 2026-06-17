@@ -3055,9 +3055,15 @@ try {
     $DeviceResults = [System.Collections.Generic.List[object]]::new()
     if (-not $GraphAvailable) { Write-Log "Graph unavailable — skipping Devices." -Level WARN }
     else {
-        # Retrieve all member users in the connected (source) tenant.
+        # Retrieve all member users, then filter to those whose UPN belongs to this domain.
         $userUri = "https://graph.microsoft.com/v1.0/users?`$filter=userType eq 'Member'&`$select=id,displayName,userPrincipalName,accountEnabled"
-        $domainUsers = @(Invoke-GraphGetAll -Uri $userUri)
+        $allTenantUsers = @(Invoke-GraphGetAll -Uri $userUri)
+        $domainSuffix = "@$($Domain.ToLower())"
+        $domainUsers = @($allTenantUsers | Where-Object {
+            $upn = Get-ObjProp $_ 'userPrincipalName'
+            $upn -and $upn.ToLower().EndsWith($domainSuffix)
+        })
+        Write-Log "Tenant has $($allTenantUsers.Count) member user(s); $($domainUsers.Count) match domain '$Domain'."
 
         if ($domainUsers.Count -eq 0) {
             Write-Log "No users found matching '*$Domain' — no devices to scan." -Level WARN
