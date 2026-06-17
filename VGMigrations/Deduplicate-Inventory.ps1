@@ -9,7 +9,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Read SPO admin URL from shared config; fall back to Volaris default
 $TenantAdminUrl = 'https://ourvolaris-admin.sharepoint.com'
+$_sharedCfg = Join-Path $env:LOCALAPPDATA 'FlyMigration\shared-config.json'
+if (Test-Path $_sharedCfg) {
+    try {
+        $_cfg = Get-Content $_sharedCfg -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($_cfg.SharePointAdminUrl) { $TenantAdminUrl = $_cfg.SharePointAdminUrl.TrimEnd('/') }
+    } catch {}
+}
 
 Add-Type -AssemblyName System.Windows.Forms
 

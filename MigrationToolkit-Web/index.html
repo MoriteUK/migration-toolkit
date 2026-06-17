@@ -610,32 +610,11 @@
         <h2 class="view-title">Migration Reports</h2>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Report Options</h3>
-
-          <div class="form-group">
-            <label class="form-label">Report Type</label>
-            <select class="form-input form-input-compact">
-              <option>Migration Summary</option>
-              <option>User Status Report</option>
-              <option>Error Report</option>
-              <option>Complete Status Export</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Date Range</label>
-            <div class="form-row">
-              <input type="date" class="form-input form-input-compact">
-              <input type="date" class="form-input form-input-compact">
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" data-script="menu.ps1">
-              Generate Report
-            </button>
-            <button type="button" class="btn btn-secondary">
-              Export to CSV
+          <h3 class="form-card-title">Project Monitor</h3>
+          <p class="form-help">Migration reporting is available via the Project Monitor view. Select a project there to view live progress, counts, and status across all workloads.</p>
+          <div class="form-actions" style="margin-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="reportsGoToMonitorBtn">
+              Go to Project Monitor
             </button>
           </div>
         </div>
@@ -874,51 +853,17 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Complete Domain Removal Process</h3>
+          <p class="form-help">Guided 3-step workflow: updates on-premises UPNs, triggers Entra Connect sync, then removes the domain from M365. Collects all inputs in its own window.</p>
 
-          <div class="form-group">
-            <label class="form-label">Domain to Remove</label>
-            <input type="text" class="form-input form-input-compact" placeholder="old-domain.com">
+          <div class="workflow-steps" style="margin:12px 0;">
+            <div class="workflow-step"><span class="step-number">1</span><span class="step-text">Update On-Premises UPNs</span></div>
+            <div class="workflow-step"><span class="step-number">2</span><span class="step-text">Sync to Cloud (Entra Connect)</span></div>
+            <div class="workflow-step"><span class="step-number">3</span><span class="step-text">Remove Domain from M365</span></div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Replacement Domain</label>
-            <input type="text" class="form-input form-input-compact" placeholder="new-domain.com">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">User Mapping CSV</label>
-            <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" placeholder="C:\Users\mapping.csv" readonly>
-              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-            </div>
-            <small class="form-help">CSV format: OldUPN, NewUPN</small>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Workflow Steps</label>
-            <div class="workflow-steps">
-              <div class="workflow-step">
-                <span class="step-number">1</span>
-                <span class="step-text">Update On-Premises UPNs</span>
-              </div>
-              <div class="workflow-step">
-                <span class="step-number">2</span>
-                <span class="step-text">Sync to Cloud (Entra Connect)</span>
-              </div>
-              <div class="workflow-step">
-                <span class="step-number">3</span>
-                <span class="step-text">Update Cloud UPNs</span>
-              </div>
-              <div class="workflow-step">
-                <span class="step-number">4</span>
-                <span class="step-text">Remove Domain from M365</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" data-script="domain-removal.ps1">
-              Start Workflow
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-danger btn-xs" id="domainWorkflowLaunchBtn">
+              ▶ Open Workflow
             </button>
           </div>
         </div>
@@ -929,30 +874,16 @@
         <h2 class="view-title">Remove Domain</h2>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Remove Verified Domain</h3>
+          <h3 class="form-card-title">Remove M365 Domain Objects</h3>
+          <p class="form-help">Reads discovery CSVs and removes the corresponding M365 objects (mailboxes, groups, contacts, apps, devices, proxy addresses) via Exchange Online and Microsoft Graph. Select the discovery folder and objects to remove in the window.</p>
 
-          <div class="form-group">
-            <label class="form-label">Domain Name</label>
-            <input type="text" class="form-input form-input-compact" placeholder="domain-to-remove.com">
+          <div class="alert alert-warning" style="margin:10px 0;">
+            <strong>Warning:</strong> This permanently removes M365 objects. Ensure discovery CSVs are from the correct domain run.
           </div>
 
-          <div class="form-group">
-            <label class="form-checkbox">
-              <input type="checkbox">
-              <span>Force removal (skip dependency checks)</span>
-            </label>
-          </div>
-
-          <div class="alert alert-warning">
-            <strong>Warning:</strong> Ensure no users, groups, or resources are using this domain before removal.
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="btn btn-danger btn-large" data-script="remove-domain.ps1">
-              Remove Domain
-            </button>
-            <button type="button" class="btn btn-secondary">
-              Check Dependencies
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-danger btn-xs" id="domainRemoveLaunchBtn">
+              ▶ Open Remove Domain
             </button>
           </div>
         </div>
@@ -964,31 +895,11 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Active Directory UPN Update</h3>
+          <p class="form-help">Updates user UPN suffixes in on-premises Active Directory from a mapping CSV (SamAccountName, NewUPN). Supports WhatIf preview. Select the CSV and options in the window.</p>
 
-          <div class="form-group">
-            <label class="form-label">Domain Controller</label>
-            <input type="text" class="form-input form-input-compact" placeholder="dc01.domain.local">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">User Mapping CSV</label>
-            <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" placeholder="C:\AD\users.csv" readonly>
-              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-            </div>
-            <small class="form-help">CSV format: SamAccountName, NewUPN</small>
-          </div>
-
-          <div class="form-group">
-            <label class="form-checkbox">
-              <input type="checkbox" checked>
-              <span>Generate log file</span>
-            </label>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" data-script="Update-OnPremUPN.ps1">
-              Update On-Prem UPNs
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="domainOnPremLaunchBtn">
+              ▶ Open On-Prem UPN Update
             </button>
           </div>
         </div>
@@ -1000,31 +911,11 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Microsoft 365 UPN Update</h3>
+          <p class="form-help">Connects to Microsoft Graph and updates user UPN domain suffixes. Select the source domain, target domain, and optionally filter by a mapping CSV in the window.</p>
 
-          <div class="form-group">
-            <label class="form-label">Tenant</label>
-            <input type="text" class="form-input form-input-compact" placeholder="tenant.onmicrosoft.com">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">User Mapping CSV</label>
-            <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" placeholder="C:\M365\users.csv" readonly>
-              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-            </div>
-            <small class="form-help">CSV format: CurrentUPN, NewUPN</small>
-          </div>
-
-          <div class="form-group">
-            <label class="form-checkbox">
-              <input type="checkbox">
-              <span>Skip immutable ID users</span>
-            </label>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" data-script="Update-UPN.ps1">
-              Update Cloud UPNs
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="domainCloudLaunchBtn">
+              ▶ Open Cloud UPN Update
             </button>
           </div>
         </div>
@@ -1036,40 +927,11 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Exchange Global Address List</h3>
+          <p class="form-help">Sets HiddenFromAddressListsEnabled on Exchange Online recipients from discovery CSVs (mailboxes, distribution groups, mail contacts, shared mailboxes). Select the discovery folder in the window.</p>
 
-          <div class="form-group">
-            <label class="form-label">Input Method</label>
-            <div class="radio-group">
-              <label class="form-radio">
-                <input type="radio" name="hideMethod" value="csv" checked>
-                <span>CSV File</span>
-              </label>
-              <label class="form-radio">
-                <input type="radio" name="hideMethod" value="domain">
-                <span>All Users in Domain</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">User List CSV</label>
-            <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" placeholder="C:\Users\hide-users.csv" readonly>
-              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-            </div>
-            <small class="form-help">CSV format: UserPrincipalName</small>
-          </div>
-
-          <div class="form-group">
-            <label class="form-checkbox">
-              <input type="checkbox">
-              <span>Include shared mailboxes</span>
-            </label>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" data-script="Hide-AddressBook.ps1">
-              Hide from Address Book
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="domainHideLaunchBtn">
+              ▶ Open Hide from Address Book
             </button>
           </div>
         </div>

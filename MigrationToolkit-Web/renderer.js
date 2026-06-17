@@ -1992,10 +1992,10 @@ async function saveSettings() {
       alert('Settings saved successfully');
       closeSettings();
 
-      // Reload customer domains in dashboard
-      if (typeof loadCustomerDomains === 'function') {
-        loadCustomerDomains();
-      }
+      // Reload customer data in all views that cache it
+      if (typeof loadCustomerDomains === 'function') loadCustomerDomains();
+      if (typeof loadMonitorProjects === 'function') loadMonitorProjects();
+      if (typeof loadConnectionsCustomers === 'function') loadConnectionsCustomers();
     } else {
       alert(`Failed to save settings:\n${result.error}`);
     }
@@ -2381,7 +2381,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (psViewDocsBtn) {
     psViewDocsBtn.addEventListener('click', async () => {
       try {
-        await window.electronAPI.openExternal('file:///C:/Temp/Scripts/VGMigrations/POWERSHELL-AUTOMATION.md');
+        await window.electronAPI.openExternal('https://docs.avepoint.com/fly/');
       } catch (error) {
         alert(`Error opening documentation: ${error.message}`);
       }
@@ -2798,6 +2798,50 @@ document.addEventListener('DOMContentLoaded', () => {
   if (getDomainDevicesBtn) {
     getDomainDevicesBtn.addEventListener('click', async () => {
       await launchScript('Get-DomainDevices.ps1', getDomainDevicesBtn);
+    });
+  }
+
+  // ── Reports → redirect to Monitor ────────────────────────────────────────
+  const reportsGoToMonitorBtn = document.getElementById('reportsGoToMonitorBtn');
+  if (reportsGoToMonitorBtn) {
+    reportsGoToMonitorBtn.addEventListener('click', () => {
+      switchView('avepoint-monitor');
+    });
+  }
+
+  // ── Domain Removal launch buttons ─────────────────────────────────────────
+  const domainWorkflowLaunchBtn = document.getElementById('domainWorkflowLaunchBtn');
+  if (domainWorkflowLaunchBtn) {
+    domainWorkflowLaunchBtn.addEventListener('click', async () => {
+      await launchScript('Domain-Removal-Workflow.ps1', domainWorkflowLaunchBtn);
+    });
+  }
+
+  const domainRemoveLaunchBtn = document.getElementById('domainRemoveLaunchBtn');
+  if (domainRemoveLaunchBtn) {
+    domainRemoveLaunchBtn.addEventListener('click', async () => {
+      await launchScript('remove-domain.ps1', domainRemoveLaunchBtn);
+    });
+  }
+
+  const domainOnPremLaunchBtn = document.getElementById('domainOnPremLaunchBtn');
+  if (domainOnPremLaunchBtn) {
+    domainOnPremLaunchBtn.addEventListener('click', async () => {
+      await launchScript('Update-OnPremUPN.ps1', domainOnPremLaunchBtn);
+    });
+  }
+
+  const domainCloudLaunchBtn = document.getElementById('domainCloudLaunchBtn');
+  if (domainCloudLaunchBtn) {
+    domainCloudLaunchBtn.addEventListener('click', async () => {
+      await launchScript('Update-UPN.ps1', domainCloudLaunchBtn);
+    });
+  }
+
+  const domainHideLaunchBtn = document.getElementById('domainHideLaunchBtn');
+  if (domainHideLaunchBtn) {
+    domainHideLaunchBtn.addEventListener('click', async () => {
+      await launchScript('Hide-AddressBook.ps1', domainHideLaunchBtn);
     });
   }
 
