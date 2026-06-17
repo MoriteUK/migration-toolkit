@@ -192,8 +192,12 @@ try {
     Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
 
     # Find extracted folder (GitHub adds repo name to folder)
+    # Source must be the VGMigrations subfolder so relative paths map correctly to $ScriptRoot
     $ExtractedFolder = Get-ChildItem -Path $TempDir -Directory | Select-Object -First 1
-    $SourcePath = $ExtractedFolder.FullName
+    $SourcePath = Join-Path $ExtractedFolder.FullName 'VGMigrations'
+    if (-not (Test-Path $SourcePath)) {
+        throw "Expected VGMigrations subfolder not found in extracted archive: $SourcePath"
+    }
 
     # Backup user configuration files
     Write-UpdateLog "Backing up user configuration..."
@@ -233,7 +237,7 @@ try {
 
     # Copy new files (excluding config files)
     Write-UpdateLog "Installing update..."
-    $Exclude = @('*.log', 'logs', 'reports', 'backup-*', 'auth', '.git', '.gitignore') + $ConfigFiles
+    $Exclude = @('*.log', 'logs', 'reports', 'backup-*', 'auth') + $ConfigFiles
 
     Get-ChildItem -Path $SourcePath -Recurse -File | ForEach-Object {
         $RelativePath = $_.FullName.Substring($SourcePath.Length + 1)
