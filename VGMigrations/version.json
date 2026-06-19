@@ -1,7 +1,16 @@
 {
-  "version": "2.7.0",
-  "releaseDate": "2026-06-16",
+  "version": "2.7.1",
+  "releaseDate": "2026-06-19",
   "changelog": [
+    {
+      "version": "2.7.1",
+      "date": "2026-06-19",
+      "changes": [
+        "Connections: added Stop Jobs button (red, right-aligned next to Clear) to stop in-progress Fly migration jobs",
+        "Added Stop-FlyMigrationStage.ps1 — calls Fly REST API DELETE to stop running jobs per workload",
+        "Discovery: default output folder changed to E:\\Work\\Jolera\\Volaris\\Discovery"
+      ]
+    },
     {
       "version": "2.7.0",
       "date": "2026-06-16",

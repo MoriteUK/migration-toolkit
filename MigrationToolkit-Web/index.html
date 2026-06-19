@@ -346,7 +346,7 @@
           <div class="form-group">
             <label class="form-label">Output Folder</label>
             <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" id="outputFolder" value="C:\M365Discovery">
+              <input type="text" class="form-input form-input-compact" id="outputFolder" value="E:\Work\Jolera\Volaris\Discovery">
               <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
             </div>
           </div>
@@ -570,7 +570,10 @@
             <button type="button" class="btn btn-success btn-xs" id="psStartWorkflowBtn" title="Run the complete migration workflow: Create Projects → Import Mappings → Verify → Pre-Scan → Full Migration">
               🚀 Full Workflow
             </button>
-            <button type="button" class="btn btn-secondary btn-xs" id="psClearMappingsBtn" style="margin-left:auto;" title="Clear all selected mapping file paths">
+            <button type="button" class="btn btn-danger btn-xs" id="psStopJobsBtn" style="margin-left:auto;" title="Stop all in-progress migration jobs for the selected customer">
+              ⏹ Stop Jobs
+            </button>
+            <button type="button" class="btn btn-secondary btn-xs" id="psClearMappingsBtn" title="Clear all selected mapping file paths">
               ✕ Clear
             </button>
           </div>
@@ -700,6 +703,11 @@
           </div>
 
           <div class="form-group-tight">
+            <label class="form-label">One-off Admin URL <small style="font-weight:normal; color:#6B7280;">(overrides selection above — not saved)</small></label>
+            <input type="text" class="form-input form-input-compact" id="onedriveAdHocUrl" placeholder="https://tenant-admin.sharepoint.com">
+          </div>
+
+          <div class="form-group-tight">
             <label class="form-label">Mapping File (CSV)</label>
             <div class="input-with-button">
               <input type="text" class="form-input form-input-compact" id="onedriveMappingFile" placeholder="C:\mapping.csv" readonly>
@@ -721,7 +729,18 @@
             </div>
           </div>
 
+          <div class="form-group-tight">
+            <label class="form-label">Export clean CSV <small style="font-weight:normal; color:#6B7280;">(Check Status only — saves rows where OneDrive exists)</small></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="onedriveExportClean" placeholder="Optional — browse to choose save location">
+              <button type="button" class="btn btn-secondary btn-compact" id="onedriveExportCleanBrowse">Browse</button>
+            </div>
+          </div>
+
           <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-secondary btn-xs" id="checkOneDriveStatusBtn">
+              Check Status
+            </button>
             <button type="button" class="btn btn-success btn-xs" id="provisionOneDriveBtn">
               ▶ Start Provisioning
             </button>
