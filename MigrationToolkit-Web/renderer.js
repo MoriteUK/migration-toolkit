@@ -203,18 +203,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     const list   = document.getElementById('domainDropdownList');
     if (!input || !btn || !panel || !list) return;
 
+    let highlightedIndex = -1;
+
     function selectDomain(domain) {
       input.value = domain;
       const vbuInput = document.getElementById('discoveryVbuId');
       if (vbuInput) vbuInput.value = _vbuMap[domain.toLowerCase()] || '';
-      panel.classList.add('hidden');
+      closePanel();
+    }
+
+    function getVisibleItems() {
+      return Array.from(list.querySelectorAll('.domain-dropdown-item'));
+    }
+
+    function setHighlight(index) {
+      const items = getVisibleItems();
+      items.forEach(el => el.classList.remove('highlighted'));
+      if (index >= 0 && index < items.length) {
+        items[index].classList.add('highlighted');
+        items[index].scrollIntoView({ block: 'nearest' });
+      }
+      highlightedIndex = index;
     }
 
     function renderItems(filter) {
+      highlightedIndex = -1;
       const q = (filter || '').toLowerCase();
       const rows = _vbuRows.filter(r => !q || r.domain.includes(q) || (r.vbuName && r.vbuName.toLowerCase().includes(q)));
       if (rows.length === 0) {
-        list.innerHTML = `<div class="domain-dropdown-empty">${_vbuRows.length === 0 ? 'No domains loaded — set VBU CSV path in Settings' : 'No matches'}</div>`;
+        list.innerHTML = `<div class="domain-dropdown-empty">No matches</div>`;
       } else {
         list.innerHTML = rows.map(r =>
           `<div class="domain-dropdown-item" data-domain="${r.domain}">
@@ -229,27 +246,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function openPanel() {
+      // Don't show panel if no data is loaded — just let user type freely
+      if (_vbuRows.length === 0) { closePanel(); return; }
       renderItems(input.value);
       panel.classList.remove('hidden');
     }
 
     function closePanel() {
       panel.classList.add('hidden');
+      highlightedIndex = -1;
     }
 
     btn.addEventListener('click', () => {
+      if (_vbuRows.length === 0) { input.focus(); return; }
       if (panel.classList.contains('hidden')) { input.focus(); openPanel(); } else { closePanel(); }
     });
 
     input.addEventListener('input', () => { openPanel(); });
     input.addEventListener('focus', () => { openPanel(); });
     input.addEventListener('blur', () => {
-      // delay so mousedown on item fires first
-      setTimeout(closePanel, 150);
-      // auto-fill VBU if exact match
-      const domain = input.value.trim().toLowerCase();
-      const vbuInput = document.getElementById('discoveryVbuId');
-      if (vbuInput && _vbuMap[domain] !== undefined) vbuInput.value = _vbuMap[domain];
+      setTimeout(() => {
+        closePanel();
+        // auto-fill VBU if exact match
+        const domain = input.value.trim().toLowerCase();
+        const vbuInput = document.getElementById('discoveryVbuId');
+        if (vbuInput && _vbuMap[domain] !== undefined) vbuInput.value = _vbuMap[domain];
+      }, 150);
+    });
+
+    input.addEventListener('keydown', e => {
+      if (panel.classList.contains('hidden')) return;
+      const items = getVisibleItems();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlight(Math.min(highlightedIndex + 1, items.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlight(Math.max(highlightedIndex - 1, 0));
+      } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+        e.preventDefault();
+        selectDomain(items[highlightedIndex].dataset.domain);
+      } else if (e.key === 'Escape') {
+        closePanel();
+      }
     });
 
     document.addEventListener('click', e => {

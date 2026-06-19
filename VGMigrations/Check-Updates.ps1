@@ -139,39 +139,25 @@ try {
     return
 }
 
-# ── Prompt for Update (unless Silent) ─────────────────────────────────────────
-if (-not $Silent) {
-    $changelog = $RemoteVersionJson.changelog | Where-Object { $_.version -eq $RemoteVersion } | Select-Object -First 1
-    $changeText = if ($changelog) {
-        "`n`nChanges in version $RemoteVersion`:"
-        foreach ($change in $changelog.changes) {
-            $changeText += "`n  • $change"
-        }
-        $changeText
-    } else {
-        ""
-    }
+# ── Show what's new and auto-install ──────────────────────────────────────────
+$changelog = $RemoteVersionJson.changelog | Where-Object { $_.version -eq $RemoteVersion } | Select-Object -First 1
 
-    Write-Host "`n╔═══════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║    UPDATE AVAILABLE                       ║" -ForegroundColor Cyan
-    Write-Host "╚═══════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host "`nCurrent version: " -NoNewline
-    Write-Host $LocalVersion -ForegroundColor Yellow
-    Write-Host "Latest version:  " -NoNewline
-    Write-Host $RemoteVersion -ForegroundColor Green
+Write-Host "`n╔═══════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║    UPDATE AVAILABLE — INSTALLING          ║" -ForegroundColor Cyan
+Write-Host "╚═══════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "`nCurrent version: " -NoNewline
+Write-Host $LocalVersion -ForegroundColor Yellow
+Write-Host "Latest version:  " -NoNewline
+Write-Host $RemoteVersion -ForegroundColor Green
 
-    if ($changeText) {
-        Write-Host $changeText -ForegroundColor Gray
-    }
-
-    Write-Host "`nDo you want to download and install this update? [Y/N]: " -NoNewline -ForegroundColor Cyan
-    $response = Read-Host
-
-    if ($response -notmatch '^[Yy]') {
-        Write-UpdateLog "Update declined by user"
-        return
+if ($changelog) {
+    Write-Host "`nWhat's new in $RemoteVersion`:" -ForegroundColor Cyan
+    foreach ($change in $changelog.changes) {
+        Write-Host "  • $change" -ForegroundColor Gray
     }
 }
+
+Write-Host ""
 
 # ── Download and Install Update ───────────────────────────────────────────────
 Write-UpdateLog "Downloading update from GitHub..."

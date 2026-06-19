@@ -1,7 +1,16 @@
 {
-  "version": "2.7.2",
+  "version": "2.7.3",
   "releaseDate": "2026-06-19",
   "changelog": [
+    {
+      "version": "2.7.3",
+      "date": "2026-06-19",
+      "changes": [
+        "Discovery: domain combobox now works as plain text when no VBU CSV is configured — no longer blocks typing",
+        "Discovery: arrow keys (Up/Down) navigate the domain list; Enter selects; Escape closes",
+        "Check-Updates: auto-installs without asking — shows what's new and proceeds immediately"
+      ]
+    },
     {
       "version": "2.7.2",
       "date": "2026-06-19",
