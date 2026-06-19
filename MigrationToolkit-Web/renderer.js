@@ -1782,34 +1782,48 @@ async function settingsAosSignIn() {
   }
 }
 
-// Manual check for updates (from settings)
+// Manual check for updates (from settings) — streams output so user can see progress
 async function manualCheckUpdates() {
   const statusSpan = document.getElementById('updateStatus');
+  const logPre = document.getElementById('updateLog');
   const btn = document.getElementById('checkUpdatesBtn');
 
+  btn.disabled = true;
+  statusSpan.textContent = 'Checking...';
+  statusSpan.style.color = '#6c757d';
+  logPre.textContent = '';
+  logPre.style.display = 'block';
+
+  let accumulated = '';
+
+  const onOutput = (text) => {
+    accumulated += text;
+    logPre.textContent += text;
+    logPre.scrollTop = logPre.scrollHeight;
+  };
+
+  window.electronAPI.onPsOutput(onOutput);
+
   try {
-    btn.disabled = true;
-    statusSpan.textContent = 'Checking...';
-    statusSpan.style.color = '#6c757d';
+    const result = await window.electronAPI.streamPowerShell('Check-Updates.ps1', ['-Force']);
 
-    const result = await window.electronAPI.checkUpdates();
-
-    if (result.success) {
-      if (result.output && result.output.includes('UPDATE_AVAILABLE')) {
-        statusSpan.textContent = '✓ Update available! Restart to install.';
+    if (result.success || result.code === 0) {
+      if (accumulated.includes('UPDATE_AVAILABLE')) {
+        statusSpan.textContent = '✓ Update available!';
         statusSpan.style.color = '#28a745';
       } else {
-        statusSpan.textContent = '✓ You have the latest version';
+        statusSpan.textContent = '✓ Already up to date';
         statusSpan.style.color = '#28a745';
       }
     } else {
-      statusSpan.textContent = `❌ ${result.error || 'Check failed'}`;
+      statusSpan.textContent = `❌ Check failed (exit ${result.code ?? '?'})`;
       statusSpan.style.color = '#dc3545';
     }
   } catch (error) {
     statusSpan.textContent = `❌ Error: ${error.message}`;
     statusSpan.style.color = '#dc3545';
   } finally {
+    window.electronAPI.offPsOutput(onOutput);
     btn.disabled = false;
   }
 }

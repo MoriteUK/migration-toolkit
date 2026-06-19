@@ -108,7 +108,8 @@ Write-UpdateLog "Checking GitHub for updates..."
 try {
     # Get latest version.json from GitHub
     $GitHubVersionUrl = "https://raw.githubusercontent.com/$GitHubRepo/main/VGMigrations/version.json"
-    $RemoteVersionJson = Invoke-RestMethod -Uri $GitHubVersionUrl -ErrorAction Stop
+    Write-UpdateLog "Contacting GitHub..."
+    $RemoteVersionJson = Invoke-RestMethod -Uri $GitHubVersionUrl -TimeoutSec 20 -ErrorAction Stop
     $RemoteVersion = $RemoteVersionJson.version
 
     Write-UpdateLog "Remote version: $RemoteVersion"
@@ -130,6 +131,7 @@ try {
     }
 
     Write-UpdateLog "Update available: $LocalVersion -> $RemoteVersion" 'OK'
+    Write-Host "UPDATE_AVAILABLE"
 
 } catch {
     Write-UpdateLog "Failed to check for updates: $($_.Exception.Message)" 'ERROR'
@@ -184,7 +186,7 @@ try {
     $ZipPath = Join-Path $TempDir "update.zip"
 
     Write-UpdateLog "Downloading from: $ZipUrl"
-    Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -ErrorAction Stop
+    Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -TimeoutSec 120 -ErrorAction Stop
     Write-UpdateLog "Download complete" 'OK'
 
     # Extract ZIP
