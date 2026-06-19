@@ -1,7 +1,21 @@
 {
-  "version": "2.7.1",
+  "version": "2.7.2",
   "releaseDate": "2026-06-19",
   "changelog": [
+    {
+      "version": "2.7.2",
+      "date": "2026-06-19",
+      "changes": [
+        "Settings: Check for Updates now streams output in real time so you can see each step",
+        "Settings: fixed Update Available banner never showing (UPDATE_AVAILABLE signal was missing from script)",
+        "Check-Updates: added 20-second timeout on GitHub version check — fails clearly instead of hanging",
+        "Import-FlyMappings: DNS pre-check logs whether API hostname resolves before connecting",
+        "Import-FlyMappings: BOM-aware CSV encoding detection (handles UTF-8, UTF-16, ANSI)",
+        "Import-FlyMappings: smarter source/destination column detection (prefers email/URL columns over plain name columns)",
+        "Added Check-OneDriveStatus.ps1, Get-UserMailboxLicenses.ps1, Set-DestinationLicenses.ps1",
+        "Added show-save-dialog IPC handler for native file save dialogs"
+      ]
+    },
     {
       "version": "2.7.1",
       "date": "2026-06-19",
