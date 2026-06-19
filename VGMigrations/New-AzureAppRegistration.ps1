@@ -81,6 +81,16 @@ try {
     exit 1
 }
 
+# Resolve tenant display name
+$tenantName = $TenantId
+try {
+    $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
+    if ($org.DisplayName) { $tenantName = $org.DisplayName }
+    Write-Host "Tenant name: $tenantName" -ForegroundColor Gray
+} catch {
+    Write-Host "Could not resolve tenant name — using tenant ID in filename." -ForegroundColor Gray
+}
+
 # Define required permissions
 Write-Host "`n🔐 Configuring permissions..." -ForegroundColor Cyan
 
@@ -153,6 +163,43 @@ try {
     Write-Host "  $($passwordCred.EndDateTime)" -ForegroundColor White
 
     Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+
+    # Save credentials to a Notepad file and open it
+    $safeTenantName = $tenantName -replace '[\\/:*?"<>|]', '_'
+    $notepadPath = Join-Path $env:USERPROFILE "Desktop\AppReg_${safeTenantName}_$($app.AppId.Substring(0,8)).txt"
+    $notepadContent = @"
+AvePoint Fly App Registration Credentials
+Created: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+Tenant Name: $tenantName
+App Name: $AppName
+========================================
+
+Tenant ID:
+  $TenantId
+
+Application (Client) ID:
+  $($app.AppId)
+
+Client Secret:
+  $($passwordCred.SecretText)
+
+Secret Expiry:
+  $($passwordCred.EndDateTime)
+
+========================================
+NEXT STEPS:
+1. Grant admin consent in Azure Portal:
+   https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/CallAnAPI/appId/$($app.AppId)
+2. Enter the Client ID and Secret in Migration Toolkit > Settings > Config tab
+3. Test the connection using the 'Test Connection' button
+
+IMPORTANT: Delete this file once you have saved the credentials securely.
+"@
+    Set-Content -Path $notepadPath -Value $notepadContent -Encoding UTF8
+    Write-Host "`n📄 Credentials saved to: $notepadPath" -ForegroundColor Cyan
+    $notepadProc = Start-Process notepad.exe $notepadPath -PassThru
+    Start-Sleep -Milliseconds 800
+    (New-Object -ComObject WScript.Shell).AppActivate($notepadProc.Id) | Out-Null
 
     # Save to config
     $save = if ($SkipSavePrompt) { 'N' } else {

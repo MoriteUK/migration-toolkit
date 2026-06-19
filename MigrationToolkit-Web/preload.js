@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Native file-open dialog
   showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
 
+  // Native file-save dialog
+  showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
+
   // Execute PowerShell script with arguments (buffered — returns when done)
   executePowerShell: (scriptName, args) => ipcRenderer.invoke('execute-powershell', scriptName, args),
 

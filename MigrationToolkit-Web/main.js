@@ -382,6 +382,11 @@ function registerIPCHandlers() {
     });
   });
 
+  ipcMain.handle('show-save-dialog', async (event, options) => {
+    const { dialog } = require('electron');
+    return dialog.showSaveDialog(mainWindow, options || {});
+  });
+
   ipcMain.handle('open-external', async (event, url) => {
     try {
       const { shell } = require('electron');

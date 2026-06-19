@@ -721,7 +721,7 @@ function Show-MigrationRunnerForm {
             Connect-Fly -Url $cfg.Url -ClientId $cfg.ClientId -ClientSecret $cfg.ClientSecret -ErrorAction Stop
             Write-Log "Testing API endpoint..."
             try {
-                Get-FlyMigrationProject -Top 1 -ErrorAction Stop | Out-Null
+                Get-FlyMigrationProject -ErrorAction Stop | Out-Null
                 Write-Log "API endpoint reachable OK" "OK"
             } catch {
                 $testErr = $_.Exception.Message
