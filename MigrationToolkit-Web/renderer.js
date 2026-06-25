@@ -3150,15 +3150,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── Update SIP Domain ─────────────────────────────────────────────────────
+  // ── SIP / IM Addresses — mode toggle ──────────────────────────────────────
+  const sipModeEl = document.getElementById('sipMode');
+  if (sipModeEl) {
+    const sipToggle = () => {
+      const isRemove = sipModeEl.value === 'Remove';
+      document.getElementById('sipRemoveFields').style.display   = isRemove ? '' : 'none';
+      document.getElementById('sipNewDomainGroup').style.display = isRemove ? 'none' : '';
+    };
+    sipModeEl.addEventListener('change', sipToggle);
+    sipToggle();
+  }
+
+  // ── SIP / IM Addresses — run ───────────────────────────────────────────────
   const sipRunBtn = document.getElementById('sipRunBtn');
   if (sipRunBtn) {
     sipRunBtn.addEventListener('click', async () => {
+      const mode      = document.getElementById('sipMode').value;
       const oldDomain = document.getElementById('sipOldDomain').value.trim();
       const newDomain = document.getElementById('sipNewDomain').value.trim();
+      const skuId     = document.getElementById('sipLicenceSkuId').value.trim();
+      const waitMins  = parseInt(document.getElementById('sipWaitMinutes').value, 10) || 5;
       const whatIf    = document.getElementById('sipWhatIf').checked;
 
-      if (!oldDomain || !newDomain) { alert('Please enter both old and new domains.'); return; }
+      if (!oldDomain) { alert('Please enter the old domain.'); return; }
+      if (mode === 'Replace' && !newDomain) { alert('Please enter the new domain.'); return; }
 
       const logSection = document.getElementById('sipLog');
       const logOutput  = document.getElementById('sipLogOutput');
@@ -3168,7 +3184,13 @@ document.addEventListener('DOMContentLoaded', () => {
       sipRunBtn.disabled = true;
       sipRunBtn.textContent = 'Running…';
 
-      const args = ['-OldDomain', oldDomain, '-NewDomain', newDomain];
+      const args = ['-OldDomain', oldDomain, '-Mode', mode];
+      if (mode === 'Replace') {
+        args.push('-NewDomain', newDomain);
+      } else {
+        if (skuId) args.push('-LicenseSkuId', skuId);
+        args.push('-WaitMinutes', String(waitMins));
+      }
       if (whatIf) args.push('-WhatIf');
 
       window.electronAPI.onPsOutput((text) => {

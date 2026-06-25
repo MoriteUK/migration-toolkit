@@ -1,7 +1,16 @@
 {
-  "version": "2.8.4",
+  "version": "2.8.5",
   "releaseDate": "2026-06-25",
   "changelog": [
+    {
+      "version": "2.8.5",
+      "date": "2026-06-25",
+      "changes": [
+        "SIP / IM Addresses: new Remove mode — assigns a temporary Exchange/Teams licence, waits for provisioning, deletes the SIP/EUM addresses, then revokes the licence; licence SKU auto-detected from tenant or can be specified manually",
+        "SIP / IM Addresses: mode selector in UI (Remove / Replace); Remove mode shows licence SKU and wait-time fields; Replace mode shows new-domain field",
+        "Sidebar label updated to 'SIP / IM Addresses'"
+      ]
+    },
     {
       "version": "2.8.4",
       "date": "2026-06-25",

@@ -142,7 +142,7 @@
               <span class="sidebar-sublabel">Remove Aliases</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="domain-sip">
-              <span class="sidebar-sublabel">Update SIP Domain</span>
+              <span class="sidebar-sublabel">SIP / IM Addresses</span>
             </button>
           </div>
         </nav>
@@ -1081,22 +1081,43 @@
         </div>
       </div>
 
-      <!-- Domain Removal - Update SIP Domain -->
+      <!-- Domain Removal - SIP / IM Addresses -->
       <div id="domainSIPView" class="view-container hidden">
-        <h2 class="view-title">Update SIP Domain</h2>
+        <h2 class="view-title">SIP / IM Addresses</h2>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Replace SIP / IM Address Domain</h3>
-          <p class="form-help">Finds all Exchange Online recipients with <code>SIP:</code> or <code>EUM:</code> addresses on the old domain and replaces the domain suffix, preserving the local part. All other addresses are left untouched.</p>
+          <h3 class="form-card-title">Remove or Replace SIP / IM Addresses</h3>
 
-          <div class="form-row" style="margin-top:4px;">
+          <div class="form-group" style="margin-top:4px;">
+            <label class="form-label">Mode</label>
+            <select class="form-input form-input-compact" id="sipMode">
+              <option value="Remove">Remove IM addresses (assign temp licence, wait, delete, revoke)</option>
+              <option value="Replace">Replace domain suffix only</option>
+            </select>
+          </div>
+
+          <div class="form-row" style="margin-top:8px;">
             <div class="form-group flex-1">
               <label class="form-label">Old Domain</label>
               <input type="text" class="form-input form-input-compact" id="sipOldDomain" value="tarantosystems.com">
             </div>
-            <div class="form-group flex-1">
+            <div class="form-group flex-1" id="sipNewDomainGroup">
               <label class="form-label">New Domain</label>
               <input type="text" class="form-input form-input-compact" id="sipNewDomain" value="ourvolaris.onmicrosoft.com">
+            </div>
+          </div>
+
+          <!-- Remove-mode extras -->
+          <div id="sipRemoveFields" style="margin-top:8px;">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label">Licence SKU ID <span style="font-weight:400;color:#6B7280">(leave blank to auto-detect)</span></label>
+                <input type="text" class="form-input form-input-compact" id="sipLicenceSkuId" placeholder="e.g. 6fd2c87f-b296-42f0-b197-1e91e994b900">
+              </div>
+              <div class="form-group" style="width:110px;">
+                <label class="form-label">Wait (minutes)</label>
+                <input type="number" class="form-input form-input-compact" id="sipWaitMinutes" value="5" min="1" max="30">
+              </div>
             </div>
           </div>
 
