@@ -32,10 +32,11 @@
 #>
 
 param(
-    [string]$OldDomain    = 'tarantosystems.com',
+    [Parameter(Mandatory=$true)]
+    [string]$OldDomain,
     [ValidateSet('Remove','Replace')]
     [string]$Mode         = 'Remove',
-    [string]$NewDomain    = 'ourvolaris.onmicrosoft.com',
+    [string]$NewDomain    = '',
     [string]$LicenseSkuId = '',
     [int]$WaitMinutes     = 5,
     [switch]$WhatIf

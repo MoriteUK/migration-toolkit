@@ -1,7 +1,14 @@
 {
-  "version": "2.8.5",
+  "version": "2.8.6",
   "releaseDate": "2026-06-25",
   "changelog": [
+    {
+      "version": "2.8.6",
+      "date": "2026-06-25",
+      "changes": [
+        "SIP / IM Addresses: Old Domain and New Domain fields are now blank by default — enter any domain, not just tarantosystems.com"
+      ]
+    },
     {
       "version": "2.8.5",
       "date": "2026-06-25",
