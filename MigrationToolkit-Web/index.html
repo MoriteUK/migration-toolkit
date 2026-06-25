@@ -1033,7 +1033,7 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Remove Alias &amp; IM Addresses</h3>
-          <p class="form-help">Strips secondary SMTP aliases (<code>smtp:</code>) and IM addresses (<code>SIP:</code>, <code>EUM:</code>) from Exchange Online recipients in discovery CSVs. The primary <code>SMTP:</code> address is always preserved. Optionally filter by domain to target only aliases from a specific domain.</p>
+          <p class="form-help">Strips selected address types from Exchange Online recipients in discovery CSVs. The primary <code>SMTP:</code> address is always preserved. Optionally filter by domain to target only addresses from a specific domain.</p>
 
           <div class="form-group">
             <label class="form-label">Discovery Folder</label>
@@ -1044,8 +1044,20 @@
           </div>
 
           <div class="form-group" style="margin-top:8px;">
-            <label class="form-label">Domain Filter <span style="font-weight:normal;color:var(--color-text-muted)">(optional — leave blank to remove all aliases)</span></label>
+            <label class="form-label">Domain Filter <span style="font-weight:normal;color:var(--color-text-muted)">(optional — leave blank to remove from all domains)</span></label>
             <input type="text" class="form-input form-input-compact" id="aliasDomain" placeholder="e.g. olddomain.com">
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">What to remove</label>
+            <label class="form-checkbox" style="margin-bottom:4px;">
+              <input type="checkbox" id="aliasRemoveAliases" checked>
+              <span>Alias SMTP addresses (<code>smtp:</code> — secondary addresses, lowercase prefix)</span>
+            </label>
+            <label class="form-checkbox">
+              <input type="checkbox" id="aliasRemoveSIP" checked>
+              <span>IM / SIP addresses (<code>SIP:</code>, <code>EUM:</code> — Skype, Teams, Unified Messaging)</span>
+            </label>
           </div>
 
           <div class="form-group" style="margin-top:8px;">

@@ -3109,11 +3109,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const aliasRunBtn = document.getElementById('aliasRunBtn');
   if (aliasRunBtn) {
     aliasRunBtn.addEventListener('click', async () => {
-      const folder = document.getElementById('aliasDiscoveryFolder').value.trim();
-      const domain = document.getElementById('aliasDomain').value.trim();
-      const whatIf = document.getElementById('aliasWhatIf').checked;
+      const folder         = document.getElementById('aliasDiscoveryFolder').value.trim();
+      const domain         = document.getElementById('aliasDomain').value.trim();
+      const removeAliases  = document.getElementById('aliasRemoveAliases').checked;
+      const removeSIP      = document.getElementById('aliasRemoveSIP').checked;
+      const whatIf         = document.getElementById('aliasWhatIf').checked;
 
       if (!folder) { alert('Please select a discovery folder.'); return; }
+      if (!removeAliases && !removeSIP) { alert('Select at least one address type to remove.'); return; }
 
       const logSection = document.getElementById('aliasLog');
       const logOutput  = document.getElementById('aliasLogOutput');
@@ -3123,7 +3126,9 @@ document.addEventListener('DOMContentLoaded', () => {
       aliasRunBtn.disabled = true;
       aliasRunBtn.textContent = 'Running…';
 
-      const args = ['-DiscoveryFolder', folder];
+      const args = ['-DiscoveryFolder', folder,
+                    '-RemoveAliases', removeAliases ? 'true' : 'false',
+                    '-RemoveSIP',     removeSIP     ? 'true' : 'false'];
       if (domain) args.push('-Domain', domain);
       if (whatIf) args.push('-WhatIf');
 

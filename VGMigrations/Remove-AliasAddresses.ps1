@@ -9,7 +9,13 @@
 
 .PARAMETER Domain
     Optional: restrict removal to addresses containing this domain (e.g. "olddomain.com").
-    If omitted, all secondary smtp: and SIP/EUM addresses are removed.
+    If omitted, all matching address types are removed regardless of domain.
+
+.PARAMETER RemoveAliases
+    Remove secondary SMTP alias addresses (smtp: prefix, lowercase). Default: $true.
+
+.PARAMETER RemoveSIP
+    Remove IM/SIP and EUM addresses (SIP: and EUM: prefixes). Default: $true.
 
 .PARAMETER WhatIf
     Preview which addresses would be removed without making changes.
@@ -26,6 +32,10 @@ param(
 
     [Parameter(Mandatory=$false)]
     [string]$Domain,
+
+    [bool]$RemoveAliases = $true,
+
+    [bool]$RemoveSIP = $true,
 
     [switch]$WhatIf
 )
@@ -52,20 +62,25 @@ $script:SectionDefs = @(
 )
 
 # Returns which addresses to keep and which to remove.
-# Removes: smtp: (alias), sip:, eum: — keeps SMTP: (primary) and all others.
+# Keeps SMTP: (primary) and any type not selected for removal.
 # If FilterDomain is set, only removes addresses containing that domain.
 function Split-Addresses {
-    param([string[]]$Addresses, [string]$FilterDomain)
+    param(
+        [string[]]$Addresses,
+        [string]$FilterDomain,
+        [bool]$DoAliases,
+        [bool]$DoSIP
+    )
 
     $keep   = [System.Collections.Generic.List[string]]::new()
     $remove = [System.Collections.Generic.List[string]]::new()
 
     foreach ($addr in $Addresses) {
         $prefix = ($addr -split ':')[0]
-        # smtp: (lowercase) = alias; sip:/eum: = IM — case-sensitive prefix check
-        $isRemovable = ($prefix -ceq 'smtp') -or ($prefix -iin @('sip','eum'))
+        $isAlias = $DoAliases -and ($prefix -ceq 'smtp')
+        $isIM    = $DoSIP     -and ($prefix -iin @('sip','eum'))
 
-        if ($isRemovable -and (-not $FilterDomain -or $addr -like "*@$FilterDomain")) {
+        if (($isAlias -or $isIM) -and (-not $FilterDomain -or $addr -like "*@$FilterDomain")) {
             $remove.Add($addr)
         } else {
             $keep.Add($addr)
@@ -92,11 +107,20 @@ if (-not (Test-Path $discFolder)) {
     exit 1
 }
 
-$scopeMsg = if ($Domain) { "addresses matching @$Domain" } else { 'all alias (smtp:) and IM (sip:/eum:) addresses' }
+if (-not $RemoveAliases -and -not $RemoveSIP) {
+    Write-Host 'ERROR: Nothing to remove — select at least one of RemoveAliases or RemoveSIP.'
+    exit 1
+}
+
+$typeList = @()
+if ($RemoveAliases) { $typeList += 'smtp: aliases' }
+if ($RemoveSIP)     { $typeList += 'SIP/EUM addresses' }
+$scopeMsg = ($typeList -join ' and ') + $(if ($Domain) { " matching @$Domain" } else { '' })
+
 Write-Host "=== Remove Alias Addresses$(if ($WhatIf) { ' [WhatIf]' }) ==="
 Write-Host "Discovery folder : $discFolder"
-Write-Host "Scope            : removing $scopeMsg"
-_RawLog "DiscoveryFolder=$discFolder  Domain=$Domain  WhatIf=$WhatIf"
+Write-Host "Removing         : $scopeMsg"
+_RawLog "DiscoveryFolder=$discFolder  Domain=$Domain  RemoveAliases=$RemoveAliases  RemoveSIP=$RemoveSIP  WhatIf=$WhatIf"
 
 $mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
 if (-not $mod) {
@@ -143,7 +167,7 @@ foreach ($sec in $script:SectionDefs) {
         try {
             $obj     = & $sec.GetCmd -Identity $identity -ErrorAction Stop
             $current = @($obj.EmailAddresses | ForEach-Object { "$_" })
-            $split   = Split-Addresses -Addresses $current -FilterDomain $Domain
+            $split   = Split-Addresses -Addresses $current -FilterDomain $Domain -DoAliases $RemoveAliases -DoSIP $RemoveSIP
 
             if ($split.Remove.Count -eq 0) {
                 Write-Host "  No change : $identity"
