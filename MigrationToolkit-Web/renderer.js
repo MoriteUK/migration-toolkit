@@ -1673,7 +1673,8 @@ function switchView(viewName) {
     'domain-cloud': 'domainCloudView',
     'domain-hide': 'domainHideView',
     'domain-alias': 'domainAliasView',
-    'domain-sip': 'domainSIPView'
+    'domain-sip': 'domainSIPView',
+    'domain-entra-remove': 'domainEntraRemoveView'
   };
 
   const targetViewId = viewMap[viewName];
@@ -3240,6 +3241,55 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         sipRunBtn.disabled = false;
         sipRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Remove Entra Users (last resort) ─────────────────────────────────────
+  const entraRemoveBrowseBtn = document.getElementById('entraRemoveBrowseBtn');
+  if (entraRemoveBrowseBtn) {
+    entraRemoveBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('entraRemoveOutputFolder').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const entraRemoveRunBtn = document.getElementById('entraRemoveRunBtn');
+  if (entraRemoveRunBtn) {
+    entraRemoveRunBtn.addEventListener('click', async () => {
+      const domain       = document.getElementById('entraRemoveDomain').value.trim();
+      const outputFolder = document.getElementById('entraRemoveOutputFolder').value.trim();
+      const whatIf       = document.getElementById('entraRemoveWhatIf').checked;
+
+      if (!domain) { alert('Please enter the domain to target.'); return; }
+
+      const logSection = document.getElementById('entraRemoveLog');
+      const logOutput  = document.getElementById('entraRemoveLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      entraRemoveRunBtn.disabled = true;
+      entraRemoveRunBtn.textContent = 'Running…';
+
+      const args = ['-Domain', domain];
+      if (outputFolder) args.push('-OutputFolder', outputFolder);
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Remove-EntraUsers.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        entraRemoveRunBtn.disabled = false;
+        entraRemoveRunBtn.textContent = '▶ Export & Remove';
       }
     });
   }

@@ -144,6 +144,9 @@
             <button type="button" class="sidebar-subitem" data-view="domain-sip">
               <span class="sidebar-sublabel">SIP / IM Addresses</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-entra-remove">
+              <span class="sidebar-sublabel">Remove Entra Users ⚠</span>
+            </button>
           </div>
         </nav>
 
@@ -916,6 +919,14 @@
               <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-remove">Go →</button>
             </div>
           </div>
+
+          <div style="margin-top:14px; padding:10px 12px; background:#FFF7ED; border:1px solid #FED7AA; border-radius:6px;">
+            <div style="font-size:12px; font-weight:600; color:#92400E; margin-bottom:4px;">⚠ Last Resort — domain still blocked?</div>
+            <div style="font-size:12px; color:#78350F;">If M365 refuses to remove the domain because cloud-only users still reference it, use <strong>Remove Entra Users</strong> to export a full backup CSV then delete those accounts. The CSV lets you recreate them once the domain is gone.</div>
+            <div style="margin-top:6px;">
+              <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-entra-remove" style="font-size:11px;">Remove Entra Users →</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -975,6 +986,56 @@
         <div class="log-section hidden" id="removeLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="removeLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Remove Entra Users (last resort) -->
+      <div id="domainEntraRemoveView" class="view-container hidden">
+        <h2 class="view-title">Remove Entra Users</h2>
+
+        <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <span style="font-size:11px; color:#92400E; font-weight:600;">⚠ Last resort</span>
+          </div>
+
+          <h3 class="form-card-title">Export &amp; Remove Cloud-Only Entra ID Users</h3>
+          <p class="form-help">Use this only when M365 refuses to remove the domain because cloud-only users still reference it. Exports a full backup CSV (DisplayName, UPN, licences, group memberships, etc.) then deletes the users. On-premises synced users are always skipped. Deleted users remain in the Entra ID recycle bin for 30 days.</p>
+
+          <div class="alert alert-warning" style="margin:8px 0;">
+            <strong>Warning:</strong> This permanently deletes cloud user accounts. Always run WhatIf first and keep the backup CSV safe.
+          </div>
+
+          <div class="form-row" style="margin-top:4px;">
+            <div class="form-group flex-1">
+              <label class="form-label">Domain to target</label>
+              <input type="text" class="form-input form-input-compact" id="entraRemoveDomain" placeholder="e.g. olddomain.com">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Backup CSV output folder <span style="font-weight:normal; color:var(--color-text-muted)">(leave blank for default logs\ folder)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="entraRemoveOutputFolder" placeholder="Leave blank to save alongside script logs...">
+              <button type="button" class="btn btn-secondary btn-compact" id="entraRemoveBrowseBtn">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="entraRemoveWhatIf" checked>
+              <span>WhatIf — export CSV and preview deletions without actually removing accounts</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-danger btn-xs" id="entraRemoveRunBtn">▶ Export &amp; Remove</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="entraRemoveLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="entraRemoveLogOutput"></div>
         </div>
       </div>
 
