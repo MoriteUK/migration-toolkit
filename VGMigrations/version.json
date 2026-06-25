@@ -1,7 +1,19 @@
 {
-  "version": "2.7.3",
-  "releaseDate": "2026-06-19",
+  "version": "2.8.0",
+  "releaseDate": "2026-06-25",
   "changelog": [
+    {
+      "version": "2.8.0",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal: Update On-Prem UPNs now runs in-app — browse CSV folder, enter source/target domain, stream output directly (no separate PowerShell window)",
+        "Domain Removal: Update Cloud UPNs now runs in-app — enter old/new domain, device-code sign-in appears in the log panel",
+        "Domain Removal: Hide from Address Book now runs in-app — browse discovery folder, stream EXO progress in-app",
+        "Domain Removal: Added 'Remove Aliases' tool — strips secondary smtp: and IM (SIP/EUM) addresses from recipients in discovery CSVs, optional domain filter",
+        "All three converted scripts support WhatIf mode for safe preview before making changes",
+        "Removed debug console logging from renderer and index.html"
+      ]
+    },
     {
       "version": "2.7.3",
       "date": "2026-06-19",
