@@ -1671,7 +1671,8 @@ function switchView(viewName) {
     'domain-remove': 'domainRemoveView',
     'domain-onprem': 'domainOnPremView',
     'domain-cloud': 'domainCloudView',
-    'domain-hide': 'domainHideView'
+    'domain-hide': 'domainHideView',
+    'domain-alias': 'domainAliasView'
   };
 
   const targetViewId = viewMap[viewName];
@@ -3090,6 +3091,55 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         hideRunBtn.disabled = false;
         hideRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Remove Alias Addresses ────────────────────────────────────────────────
+  const aliasBrowseBtn = document.getElementById('aliasBrowseBtn');
+  if (aliasBrowseBtn) {
+    aliasBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (!result.canceled && result.filePaths.length > 0) {
+        document.getElementById('aliasDiscoveryFolder').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const aliasRunBtn = document.getElementById('aliasRunBtn');
+  if (aliasRunBtn) {
+    aliasRunBtn.addEventListener('click', async () => {
+      const folder = document.getElementById('aliasDiscoveryFolder').value.trim();
+      const domain = document.getElementById('aliasDomain').value.trim();
+      const whatIf = document.getElementById('aliasWhatIf').checked;
+
+      if (!folder) { alert('Please select a discovery folder.'); return; }
+
+      const logSection = document.getElementById('aliasLog');
+      const logOutput  = document.getElementById('aliasLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      aliasRunBtn.disabled = true;
+      aliasRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder];
+      if (domain) args.push('-Domain', domain);
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Remove-AliasAddresses.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        aliasRunBtn.disabled = false;
+        aliasRunBtn.textContent = '▶ Run';
       }
     });
   }
