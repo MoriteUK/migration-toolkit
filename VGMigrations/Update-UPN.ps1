@@ -12,6 +12,16 @@
     On-prem synced users are shown in amber and skipped — change their UPN in AD instead.
 #>
 
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$OldDomain,
+
+    [Parameter(Mandatory=$false)]
+    [string]$NewDomain,
+
+    [switch]$WhatIf
+)
+
 $script:RootDir = $PSScriptRoot
 
 # Disable WAM broker BEFORE any Graph modules load
@@ -808,9 +818,68 @@ try {
     try { if (Get-Command Disconnect-MsolService -ErrorAction SilentlyContinue)   { Disconnect-MsolService -ErrorAction SilentlyContinue; Write-Log 'Final disconnect: Disconnect-MsolService' 'OK' } } catch {}
 }
 
-try {
-    Show-UpdateUpnUI
-} catch {
-    Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
-    [System.Windows.Forms.MessageBox]::Show("Failed to start: $($_.Exception.Message)", 'Launch Error', 'OK', 'Error') | Out-Null
+if ($OldDomain -and $NewDomain) {
+    # ── Headless mode ──────────────────────────────────────────────────────────
+    $old = $OldDomain.TrimStart('@')
+    $new = $NewDomain.TrimStart('@')
+    Write-Host "=== Update-UPN  @$old  →  @$new$(if ($WhatIf) { '  [WhatIf]' }) ==="
+    Write-Host 'Loading Microsoft Graph modules...'
+
+    foreach ($mod in @('Microsoft.Graph.Authentication','Microsoft.Graph.Users')) {
+        if (-not (Get-Module -ListAvailable -Name $mod -ErrorAction SilentlyContinue)) {
+            Write-Host "ERROR: Module not installed: $mod"
+            Write-Host 'Install with: Install-Module Microsoft.Graph -Scope CurrentUser'
+            exit 1
+        }
+        Import-Module $mod -ErrorAction Stop
+    }
+
+    Write-Host 'Connecting to Microsoft Graph (device code)...'
+    Connect-MgGraph -Scopes 'User.ReadWrite.All' -UseDeviceCode -TenantId 'organizations' -NoWelcome -ErrorAction Stop
+    Write-Host 'Connected.'
+
+    Write-Host "Searching for users with UPN suffix @$old ..."
+    $users = @(Get-MgUser -All -Property Id,DisplayName,UserPrincipalName,OnPremisesSyncEnabled -ErrorAction Stop |
+        Where-Object { $_.UserPrincipalName -like "*@$old" })
+    Write-Host "Found $($users.Count) user(s)."
+
+    $cloudUsers = @($users | Where-Object { $_.OnPremisesSyncEnabled -ne $true })
+    $syncedCount = $users.Count - $cloudUsers.Count
+    if ($syncedCount -gt 0) {
+        Write-Host "Skipping $syncedCount on-premises synced user(s) — update their UPN in Active Directory instead."
+    }
+
+    if ($cloudUsers.Count -eq 0) {
+        Write-Host 'No cloud-only users to update.'
+    } else {
+        Write-Host "Updating $($cloudUsers.Count) cloud user(s)..."
+        $ok = 0; $fail = 0
+        foreach ($u in $cloudUsers) {
+            $current = $u.UserPrincipalName
+            $updated = $current -replace ([regex]::Escape("@$old") + '$'), "@$new"
+            try {
+                if ($WhatIf) {
+                    Write-Host "  WhatIf: $current  →  $updated  [$($u.DisplayName)]"
+                } else {
+                    Update-MgUser -UserId $u.Id -UserPrincipalName $updated -ErrorAction Stop
+                    Write-Host "  UPDATED: $current  →  $updated  [$($u.DisplayName)]"
+                }
+                $ok++
+            } catch {
+                Write-Host "  FAILED: $current — $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+                $fail++
+            }
+        }
+        Write-Host ""
+        Write-Host "=== Completed: updated $ok  |  failed $fail ==="
+    }
+
+    try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
+} else {
+    try {
+        Show-UpdateUpnUI
+    } catch {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+        [System.Windows.Forms.MessageBox]::Show("Failed to start: $($_.Exception.Message)", 'Launch Error', 'OK', 'Error') | Out-Null
+    }
 }

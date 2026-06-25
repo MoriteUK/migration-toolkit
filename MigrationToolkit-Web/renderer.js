@@ -61,10 +61,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('Migration Toolkit loaded');
   console.log('electronAPI available:', !!window.electronAPI);
 
-  // Test if clicks work at all
-  document.body.addEventListener('click', (e) => {
-    console.log('!!! BODY CLICK DETECTED !!!', e.target.tagName, e.target.className);
-  });
 
   if (!window.electronAPI) {
     console.error('FATAL: electronAPI not available! Preload script may not be working.');
@@ -2963,24 +2959,138 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const domainOnPremLaunchBtn = document.getElementById('domainOnPremLaunchBtn');
-  if (domainOnPremLaunchBtn) {
-    domainOnPremLaunchBtn.addEventListener('click', async () => {
-      await launchScript('Update-OnPremUPN.ps1', domainOnPremLaunchBtn);
+  // ── Update On-Prem UPNs ───────────────────────────────────────────────────
+  const onpremCsvBrowseBtn = document.getElementById('onpremCsvBrowseBtn');
+  if (onpremCsvBrowseBtn) {
+    onpremCsvBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (!result.canceled && result.filePaths.length > 0) {
+        document.getElementById('onpremCsvFolder').value = result.filePaths[0];
+      }
     });
   }
 
-  const domainCloudLaunchBtn = document.getElementById('domainCloudLaunchBtn');
-  if (domainCloudLaunchBtn) {
-    domainCloudLaunchBtn.addEventListener('click', async () => {
-      await launchScript('Update-UPN.ps1', domainCloudLaunchBtn);
+  const onpremRunBtn = document.getElementById('onpremRunBtn');
+  if (onpremRunBtn) {
+    onpremRunBtn.addEventListener('click', async () => {
+      const folder = document.getElementById('onpremCsvFolder').value.trim();
+      const src    = document.getElementById('onpremSourceDomain').value.trim();
+      const tgt    = document.getElementById('onpremTargetDomain').value.trim();
+      const whatIf = document.getElementById('onpremWhatIf').checked;
+
+      if (!folder) { alert('Please select a CSV folder.'); return; }
+      if (!src || !tgt) { alert('Please enter both source and target domains.'); return; }
+
+      const logSection = document.getElementById('onpremLog');
+      const logOutput  = document.getElementById('onpremLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      onpremRunBtn.disabled = true;
+      onpremRunBtn.textContent = 'Running…';
+
+      const args = ['-CSVFolder', folder, '-SourceDomain', src, '-TargetDomain', tgt];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Update-OnPremUPN.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        onpremRunBtn.disabled = false;
+        onpremRunBtn.textContent = '▶ Run';
+      }
     });
   }
 
-  const domainHideLaunchBtn = document.getElementById('domainHideLaunchBtn');
-  if (domainHideLaunchBtn) {
-    domainHideLaunchBtn.addEventListener('click', async () => {
-      await launchScript('Hide-AddressBook.ps1', domainHideLaunchBtn);
+  // ── Update Cloud UPNs ─────────────────────────────────────────────────────
+  const cloudRunBtn = document.getElementById('cloudRunBtn');
+  if (cloudRunBtn) {
+    cloudRunBtn.addEventListener('click', async () => {
+      const oldDomain = document.getElementById('cloudOldDomain').value.trim();
+      const newDomain = document.getElementById('cloudNewDomain').value.trim();
+      const whatIf    = document.getElementById('cloudWhatIf').checked;
+
+      if (!oldDomain || !newDomain) { alert('Please enter both old and new domains.'); return; }
+
+      const logSection = document.getElementById('cloudLog');
+      const logOutput  = document.getElementById('cloudLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      cloudRunBtn.disabled = true;
+      cloudRunBtn.textContent = 'Running…';
+
+      const args = ['-OldDomain', oldDomain, '-NewDomain', newDomain];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Update-UPN.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        cloudRunBtn.disabled = false;
+        cloudRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Hide from Address Book ────────────────────────────────────────────────
+  const hideBrowseBtn = document.getElementById('hideBrowseBtn');
+  if (hideBrowseBtn) {
+    hideBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (!result.canceled && result.filePaths.length > 0) {
+        document.getElementById('hideDiscoveryFolder').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const hideRunBtn = document.getElementById('hideRunBtn');
+  if (hideRunBtn) {
+    hideRunBtn.addEventListener('click', async () => {
+      const folder = document.getElementById('hideDiscoveryFolder').value.trim();
+      const whatIf = document.getElementById('hideWhatIf').checked;
+
+      if (!folder) { alert('Please select a discovery folder.'); return; }
+
+      const logSection = document.getElementById('hideLog');
+      const logOutput  = document.getElementById('hideLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      hideRunBtn.disabled = true;
+      hideRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Hide-AddressBook.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        hideRunBtn.disabled = false;
+        hideRunBtn.textContent = '▶ Run';
+      }
     });
   }
 

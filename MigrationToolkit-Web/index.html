@@ -914,13 +914,42 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Active Directory UPN Update</h3>
-          <p class="form-help">Updates user UPN suffixes in on-premises Active Directory from a mapping CSV (SamAccountName, NewUPN). Supports WhatIf preview. Select the CSV and options in the window.</p>
+          <p class="form-help">Reads CSVs from the selected folder, finds users with the source domain UPN, and updates their UPN, email, and proxy addresses in on-premises Active Directory.</p>
+
+          <div class="form-group">
+            <label class="form-label">CSV Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="onpremCsvFolder" placeholder="Folder containing discovery CSVs...">
+              <button type="button" class="btn btn-secondary btn-compact" id="onpremCsvBrowseBtn">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-row" style="margin-top:8px;">
+            <div class="form-group flex-1">
+              <label class="form-label">Source Domain</label>
+              <input type="text" class="form-input form-input-compact" id="onpremSourceDomain" placeholder="olddomain.com">
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">Target Domain</label>
+              <input type="text" class="form-input form-input-compact" id="onpremTargetDomain" placeholder="newdomain.com">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="onpremWhatIf">
+              <span>WhatIf — preview changes without applying them</span>
+            </label>
+          </div>
 
           <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
-            <button type="button" class="btn btn-primary btn-xs" id="domainOnPremLaunchBtn">
-              ▶ Open On-Prem UPN Update
-            </button>
+            <button type="button" class="btn btn-primary btn-xs" id="onpremRunBtn">▶ Run</button>
           </div>
+        </div>
+
+        <div class="log-section hidden" id="onpremLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="onpremLogOutput"></div>
         </div>
       </div>
 
@@ -930,13 +959,34 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Microsoft 365 UPN Update</h3>
-          <p class="form-help">Connects to Microsoft Graph and updates user UPN domain suffixes. Select the source domain, target domain, and optionally filter by a mapping CSV in the window.</p>
+          <p class="form-help">Connects to Microsoft Graph and updates cloud-only user UPN domain suffixes. On-premises synced users are skipped — update those in Active Directory instead. A device code sign-in prompt will appear in the log below.</p>
+
+          <div class="form-row" style="margin-top:4px;">
+            <div class="form-group flex-1">
+              <label class="form-label">Old Domain</label>
+              <input type="text" class="form-input form-input-compact" id="cloudOldDomain" placeholder="olddomain.com">
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">New Domain</label>
+              <input type="text" class="form-input form-input-compact" id="cloudNewDomain" placeholder="newdomain.com">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="cloudWhatIf">
+              <span>WhatIf — preview changes without applying them</span>
+            </label>
+          </div>
 
           <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
-            <button type="button" class="btn btn-primary btn-xs" id="domainCloudLaunchBtn">
-              ▶ Open Cloud UPN Update
-            </button>
+            <button type="button" class="btn btn-primary btn-xs" id="cloudRunBtn">▶ Run</button>
           </div>
+        </div>
+
+        <div class="log-section hidden" id="cloudLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="cloudLogOutput"></div>
         </div>
       </div>
 
@@ -946,13 +996,31 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Exchange Global Address List</h3>
-          <p class="form-help">Sets HiddenFromAddressListsEnabled on Exchange Online recipients from discovery CSVs (mailboxes, distribution groups, mail contacts, shared mailboxes). Select the discovery folder in the window.</p>
+          <p class="form-help">Sets HiddenFromAddressListsEnabled on Exchange Online recipients from discovery CSVs (mailboxes, distribution groups, mail contacts, shared mailboxes, M365 groups). A browser sign-in to Exchange Online will open when you click Run.</p>
+
+          <div class="form-group">
+            <label class="form-label">Discovery Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="hideDiscoveryFolder" placeholder="Folder containing discovery CSVs...">
+              <button type="button" class="btn btn-secondary btn-compact" id="hideBrowseBtn">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="hideWhatIf">
+              <span>WhatIf — preview changes without applying them</span>
+            </label>
+          </div>
 
           <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
-            <button type="button" class="btn btn-primary btn-xs" id="domainHideLaunchBtn">
-              ▶ Open Hide from Address Book
-            </button>
+            <button type="button" class="btn btn-primary btn-xs" id="hideRunBtn">▶ Run</button>
           </div>
+        </div>
+
+        <div class="log-section hidden" id="hideLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="hideLogOutput"></div>
         </div>
       </div>
 
@@ -1111,18 +1179,6 @@
   </div>
 
   <script src="renderer.js"></script>
-
-  <!-- Inline test to verify clicks work -->
-  <script>
-    console.log('Inline script loaded');
-    setTimeout(() => {
-      const tiles = document.querySelectorAll('.tile');
-      console.log('Found tiles:', tiles.length);
-      tiles.forEach((tile, index) => {
-        console.log(`Tile ${index}:`, tile.getAttribute('data-script'));
-      });
-    }, 1000);
-  </script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">

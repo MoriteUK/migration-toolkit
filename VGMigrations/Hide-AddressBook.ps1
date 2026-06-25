@@ -11,6 +11,13 @@
                05_SharedMailboxes, 06_M365Groups
 #>
 
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$DiscoveryFolder,
+
+    [switch]$WhatIf
+)
+
 $script:RootDir = $PSScriptRoot
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -698,9 +705,95 @@ function Show-HideAddressBookUI {
     [System.Windows.Forms.Application]::Run($form)
 }
 
-try {
-    Show-HideAddressBookUI
-} catch {
-    Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
-    [System.Windows.Forms.MessageBox]::Show("Failed to start: $($_.Exception.Message)", 'Launch Error', 'OK', 'Error') | Out-Null
+if ($DiscoveryFolder) {
+    # ── Headless mode ──────────────────────────────────────────────────────────
+    $discFolder = $DiscoveryFolder.Trim().Trim('"')
+    $candidate  = Join-Path $discFolder 'Discovery'
+    if ((Split-Path $discFolder -Leaf) -ne 'Discovery' -and (Test-Path $candidate)) {
+        $discFolder = $candidate
+    }
+
+    if (-not (Test-Path $discFolder)) {
+        Write-Host "ERROR: Discovery folder not found: $discFolder"
+        exit 1
+    }
+
+    Write-Host "=== Hide from Address Book$(if ($WhatIf) { ' [WhatIf]' }) ==="
+    Write-Host "Discovery folder: $discFolder"
+
+    $mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
+    if (-not $mod) {
+        Write-Host 'ERROR: ExchangeOnlineManagement module is not installed.'
+        Write-Host 'Install it with: Install-Module ExchangeOnlineManagement -Scope CurrentUser'
+        exit 1
+    }
+    Import-Module 'ExchangeOnlineManagement' -ErrorAction Stop
+    Write-Host 'ExchangeOnlineManagement module loaded.'
+
+    $exoConnected = $false
+
+    foreach ($sec in $script:SectionDefs) {
+        $csvPath = Join-Path $discFolder $sec.CsvName
+        if (-not (Test-Path $csvPath)) {
+            Write-Host "Skipped (not found): $($sec.CsvName)"
+            continue
+        }
+
+        $rows = @(Import-Csv -Path $csvPath -Encoding UTF8)
+        Write-Host "--- $($sec.Label): $($rows.Count) item(s) ---"
+
+        if ($rows.Count -eq 0) { continue }
+
+        if (-not $WhatIf -and -not $exoConnected) {
+            Write-Host 'Connecting to Exchange Online — sign in when the browser opens...'
+            try {
+                $cmds = @('Set-Mailbox','Set-MailContact','Set-DistributionGroup','Set-UnifiedGroup')
+                Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -ErrorAction Stop
+                $exoConnected = $true
+                Write-Host 'Exchange Online connected.'
+            } catch {
+                Write-Host "ERROR: Failed to connect to Exchange Online: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+                exit 1
+            }
+        }
+
+        $ok = 0; $fail = 0
+        foreach ($r in $rows) {
+            $identity = $r.($sec.KeyField)
+            if (-not $identity) { continue }
+
+            if ($WhatIf) {
+                Write-Host "  WhatIf: would hide $identity  [$($sec.Label)]"
+                $ok++
+            } else {
+                try {
+                    switch ($sec.CsvName) {
+                        '02_Mailboxes.csv'          { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                        '03_DistributionGroups.csv' { Set-DistributionGroup -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                        '04_MailContacts.csv'       { Set-MailContact       -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                        '05_SharedMailboxes.csv'    { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                        '06_M365Groups.csv'         { Set-UnifiedGroup     -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                    }
+                    Write-Host "  Hidden: $identity"
+                    $ok++
+                } catch {
+                    Write-Host "  FAILED: $identity — $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+                    $fail++
+                }
+            }
+        }
+        Write-Host "  $($sec.Label): $ok hidden  |  $fail failed"
+    }
+
+    if ($exoConnected) {
+        try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+    }
+    Write-Host '=== Done ==='
+} else {
+    try {
+        Show-HideAddressBookUI
+    } catch {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+        [System.Windows.Forms.MessageBox]::Show("Failed to start: $($_.Exception.Message)", 'Launch Error', 'OK', 'Error') | Out-Null
+    }
 }
