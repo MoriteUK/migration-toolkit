@@ -11,11 +11,11 @@
     Optional: restrict removal to addresses containing this domain (e.g. "olddomain.com").
     If omitted, all matching address types are removed regardless of domain.
 
-.PARAMETER RemoveAliases
-    Remove secondary SMTP alias addresses (smtp: prefix, lowercase). Default: $true.
+.PARAMETER SkipAliases
+    Skip removal of secondary SMTP alias addresses (smtp: prefix, lowercase).
 
-.PARAMETER RemoveSIP
-    Remove IM/SIP and EUM addresses (SIP: and EUM: prefixes). Default: $true.
+.PARAMETER SkipSIP
+    Skip removal of IM/SIP and EUM addresses (SIP: and EUM: prefixes).
 
 .PARAMETER WhatIf
     Preview which addresses would be removed without making changes.
@@ -33,9 +33,9 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$Domain,
 
-    [bool]$RemoveAliases = $true,
+    [switch]$SkipAliases,
 
-    [bool]$RemoveSIP = $true,
+    [switch]$SkipSIP,
 
     [switch]$WhatIf
 )
@@ -107,20 +107,20 @@ if (-not (Test-Path $discFolder)) {
     exit 1
 }
 
-if (-not $RemoveAliases -and -not $RemoveSIP) {
-    Write-Host 'ERROR: Nothing to remove — select at least one of RemoveAliases or RemoveSIP.'
+if ($SkipAliases -and $SkipSIP) {
+    Write-Host 'ERROR: Nothing to remove — both types are skipped.'
     exit 1
 }
 
 $typeList = @()
-if ($RemoveAliases) { $typeList += 'smtp: aliases' }
-if ($RemoveSIP)     { $typeList += 'SIP/EUM addresses' }
+if (-not $SkipAliases) { $typeList += 'smtp: aliases' }
+if (-not $SkipSIP)     { $typeList += 'SIP/EUM addresses' }
 $scopeMsg = ($typeList -join ' and ') + $(if ($Domain) { " matching @$Domain" } else { '' })
 
 Write-Host "=== Remove Alias Addresses$(if ($WhatIf) { ' [WhatIf]' }) ==="
 Write-Host "Discovery folder : $discFolder"
 Write-Host "Removing         : $scopeMsg"
-_RawLog "DiscoveryFolder=$discFolder  Domain=$Domain  RemoveAliases=$RemoveAliases  RemoveSIP=$RemoveSIP  WhatIf=$WhatIf"
+_RawLog "DiscoveryFolder=$discFolder  Domain=$Domain  SkipAliases=$SkipAliases  SkipSIP=$SkipSIP  WhatIf=$WhatIf"
 
 $mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
 if (-not $mod) {
@@ -167,7 +167,7 @@ foreach ($sec in $script:SectionDefs) {
         try {
             $obj     = & $sec.GetCmd -Identity $identity -ErrorAction Stop
             $current = @($obj.EmailAddresses | ForEach-Object { "$_" })
-            $split   = Split-Addresses -Addresses $current -FilterDomain $Domain -DoAliases $RemoveAliases -DoSIP $RemoveSIP
+            $split   = Split-Addresses -Addresses $current -FilterDomain $Domain -DoAliases (-not $SkipAliases) -DoSIP (-not $SkipSIP)
 
             if ($split.Remove.Count -eq 0) {
                 Write-Host "  No change : $identity"

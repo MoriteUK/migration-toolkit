@@ -3126,9 +3126,9 @@ document.addEventListener('DOMContentLoaded', () => {
       aliasRunBtn.disabled = true;
       aliasRunBtn.textContent = 'Running…';
 
-      const args = ['-DiscoveryFolder', folder,
-                    '-RemoveAliases', removeAliases ? 'true' : 'false',
-                    '-RemoveSIP',     removeSIP     ? 'true' : 'false'];
+      const args = ['-DiscoveryFolder', folder];
+      if (!removeAliases) args.push('-SkipAliases');
+      if (!removeSIP)     args.push('-SkipSIP');
       if (domain) args.push('-Domain', domain);
       if (whatIf) args.push('-WhatIf');
 
