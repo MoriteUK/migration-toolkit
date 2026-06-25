@@ -24,6 +24,12 @@
                 Error message from lib.ps1 load failure is now captured and logged.
 #>
 
+param(
+    [string]$DiscoveryFolder = '',  # reads 11_Devices.csv from this folder (headless mode)
+    [string]$CsvFile         = '',  # OR provide a direct CSV path (headless mode)
+    [switch]$WhatIf
+)
+
 $libPath      = Join-Path $PSScriptRoot 'lib.ps1'
 $settingsPath = Join-Path $PSScriptRoot 'settings.ps1'
 
@@ -402,9 +408,86 @@ function Show-RemoveDevicesUI {
     [System.Windows.Forms.Application]::Run($form)
 }
 
-Write-Log '=== Remove-devices.ps1 starting ==='
-try { Show-RemoveDevicesUI }
-catch {
-    Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
-    [System.Windows.Forms.MessageBox]::Show("Failed to start: $($_.Exception.Message)", 'Launch Error', 'OK', 'Error') | Out-Null
+function Invoke-RemoveDevicesHeadless {
+    # Resolve CSV path
+    $csvPath = ''
+    if ($CsvFile) {
+        $csvPath = $CsvFile.Trim().Trim('"')
+    } elseif ($DiscoveryFolder) {
+        $folder    = $DiscoveryFolder.Trim().Trim('"')
+        $candidate = Join-Path $folder 'Discovery'
+        if ((Split-Path $folder -Leaf) -ne 'Discovery' -and (Test-Path $candidate)) { $folder = $candidate }
+        $csvPath = Join-Path $folder '11_Devices.csv'
+    }
+
+    if (-not $csvPath -or -not (Test-Path $csvPath)) {
+        Write-Host "ERROR: Device CSV not found: $csvPath"
+        Write-Host 'Usage: Remove-devices.ps1 -DiscoveryFolder <path>  OR  -CsvFile <path>'
+        exit 1
+    }
+
+    $devices = @(Import-Csv -Path $csvPath -Encoding UTF8)
+    Write-Host "=== Remove Devices$(if ($WhatIf) { ' [WhatIf]' }) ==="
+    Write-Host "CSV          : $csvPath"
+    Write-Host "Device count : $($devices.Count)"
+
+    if ($devices.Count -eq 0) { Write-Host 'No devices in CSV.'; exit 0 }
+
+    # Detect ID column
+    $cols = @($devices[0].PSObject.Properties.Name)
+    $idCol = if ($cols -contains 'DeviceObjectId') { 'DeviceObjectId' }
+             elseif ($cols -contains 'DeviceId')   { 'DeviceId' }
+             else { Write-Host "ERROR: CSV must have a 'DeviceObjectId' or 'DeviceId' column. Found: $($cols -join ', ')"; exit 1 }
+    Write-Host "ID column    : $idCol"
+    Write-Host ''
+
+    Write-Host 'Connecting to Microsoft Graph...'
+    try {
+        Connect-MgGraph -Scopes 'Device.ReadWrite.All','Directory.ReadWrite.All' `
+            -NoWelcome -ErrorAction Stop
+        Write-Host 'Connected.'
+    } catch {
+        Write-Host "ERROR: Could not connect to Microsoft Graph: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+        exit 1
+    }
+
+    $ok = 0; $fail = 0; $i = 0
+    foreach ($d in $devices) {
+        $i++
+        $id    = $d.$idCol
+        $name  = $d.DeviceName
+        $owner = if ($d.PSObject.Properties['OwnerUPN']) { $d.OwnerUPN } else { '' }
+
+        if (-not $id) { Write-Host "  [$i/$($devices.Count)] SKIPPED — no ID: $name"; continue }
+
+        if ($WhatIf) {
+            Write-Host "  [$i/$($devices.Count)] WhatIf : $name  [$id]$(if ($owner) { "  (owner: $owner)" })"
+            $ok++
+        } else {
+            try {
+                Remove-MgDevice -DeviceId $id -Confirm:$false -ErrorAction Stop
+                Write-Host "  [$i/$($devices.Count)] Deleted : $name  [$id]$(if ($owner) { "  (owner: $owner)" })"
+                $ok++
+            } catch {
+                Write-Host "  [$i/$($devices.Count)] FAILED  : $name — $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+                $fail++
+            }
+        }
+    }
+
+    Write-Host ''
+    Write-Host "=== Complete: $ok deleted  |  $fail failed ==="
+
+    try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
+}
+
+if ($DiscoveryFolder -or $CsvFile) {
+    Invoke-RemoveDevicesHeadless
+} else {
+    Write-Log '=== Remove-devices.ps1 starting ==='
+    try { Show-RemoveDevicesUI }
+    catch {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+        [System.Windows.Forms.MessageBox]::Show("Failed to start: $($_.Exception.Message)", 'Launch Error', 'OK', 'Error') | Out-Null
+    }
 }

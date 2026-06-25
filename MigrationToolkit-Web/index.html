@@ -144,6 +144,9 @@
             <button type="button" class="sidebar-subitem" data-view="domain-sip">
               <span class="sidebar-sublabel">SIP / IM Addresses</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-devices">
+              <span class="sidebar-sublabel">Remove Devices</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="domain-entra-remove">
               <span class="sidebar-sublabel">Remove Entra Users ⚠</span>
             </button>
@@ -986,6 +989,52 @@
         <div class="log-section hidden" id="removeLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="removeLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Remove Devices -->
+      <div id="domainDevicesView" class="view-container hidden">
+        <h2 class="view-title">Remove Devices</h2>
+
+        <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+          </div>
+
+          <h3 class="form-card-title">Remove Entra ID Devices from Discovery CSV</h3>
+          <p class="form-help">Reads <code>11_Devices.csv</code> from the discovery folder (or a specific CSV file) and removes each device from Entra ID via Microsoft Graph. Optionally browse to an individual CSV instead of a discovery folder.</p>
+
+          <div class="form-group">
+            <label class="form-label">Discovery Folder <span style="font-weight:normal;color:var(--color-text-muted)">(reads 11_Devices.csv)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="devicesDiscoveryFolder" placeholder="Folder containing 11_Devices.csv...">
+              <button type="button" class="btn btn-secondary btn-compact" id="devicesFolderBrowseBtn">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-label">— or — Specific CSV file</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="devicesCsvFile" placeholder="Leave blank to use discovery folder above...">
+              <button type="button" class="btn btn-secondary btn-compact" id="devicesCsvBrowseBtn">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="devicesWhatIf" checked>
+              <span>WhatIf — list devices that would be removed without deleting them</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-danger btn-xs" id="devicesRunBtn">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="devicesLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="devicesLogOutput"></div>
         </div>
       </div>
 

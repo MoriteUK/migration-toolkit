@@ -1,7 +1,14 @@
 {
-  "version": "2.8.9",
+  "version": "2.9.0",
   "releaseDate": "2026-06-25",
   "changelog": [
+    {
+      "version": "2.9.0",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal: added 'Remove Devices' in-app tool — reads 11_Devices.csv from a discovery folder (or a specific CSV file) and removes devices from Entra ID via Microsoft Graph; WhatIf support; accepts DeviceObjectId or DeviceId column"
+      ]
+    },
     {
       "version": "2.8.9",
       "date": "2026-06-25",

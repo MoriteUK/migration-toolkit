@@ -1674,6 +1674,7 @@ function switchView(viewName) {
     'domain-hide': 'domainHideView',
     'domain-alias': 'domainAliasView',
     'domain-sip': 'domainSIPView',
+    'domain-devices': 'domainDevicesView',
     'domain-entra-remove': 'domainEntraRemoveView'
   };
 
@@ -3241,6 +3242,71 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         sipRunBtn.disabled = false;
         sipRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Remove Devices ────────────────────────────────────────────────────────
+  const devicesFolderBrowseBtn = document.getElementById('devicesFolderBrowseBtn');
+  if (devicesFolderBrowseBtn) {
+    devicesFolderBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('devicesDiscoveryFolder').value = result.filePaths[0];
+        document.getElementById('devicesCsvFile').value = '';
+      }
+    });
+  }
+
+  const devicesCsvBrowseBtn = document.getElementById('devicesCsvBrowseBtn');
+  if (devicesCsvBrowseBtn) {
+    devicesCsvBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({
+        properties: ['openFile'],
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }]
+      });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('devicesCsvFile').value = result.filePaths[0];
+        document.getElementById('devicesDiscoveryFolder').value = '';
+      }
+    });
+  }
+
+  const devicesRunBtn = document.getElementById('devicesRunBtn');
+  if (devicesRunBtn) {
+    devicesRunBtn.addEventListener('click', async () => {
+      const folder  = document.getElementById('devicesDiscoveryFolder').value.trim();
+      const csvFile = document.getElementById('devicesCsvFile').value.trim();
+      const whatIf  = document.getElementById('devicesWhatIf').checked;
+
+      if (!folder && !csvFile) { alert('Please select a discovery folder or a specific CSV file.'); return; }
+
+      const logSection = document.getElementById('devicesLog');
+      const logOutput  = document.getElementById('devicesLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      devicesRunBtn.disabled = true;
+      devicesRunBtn.textContent = 'Running…';
+
+      const args = [];
+      if (csvFile)  args.push('-CsvFile', csvFile);
+      else          args.push('-DiscoveryFolder', folder);
+      if (whatIf)   args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Remove-devices.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        devicesRunBtn.disabled = false;
+        devicesRunBtn.textContent = '▶ Run';
       }
     });
   }
