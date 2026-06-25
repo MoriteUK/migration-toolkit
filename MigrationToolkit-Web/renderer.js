@@ -1672,7 +1672,8 @@ function switchView(viewName) {
     'domain-onprem': 'domainOnPremView',
     'domain-cloud': 'domainCloudView',
     'domain-hide': 'domainHideView',
-    'domain-alias': 'domainAliasView'
+    'domain-alias': 'domainAliasView',
+    'domain-sip': 'domainSIPView'
   };
 
   const targetViewId = viewMap[viewName];
@@ -3145,6 +3146,44 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         aliasRunBtn.disabled = false;
         aliasRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Update SIP Domain ─────────────────────────────────────────────────────
+  const sipRunBtn = document.getElementById('sipRunBtn');
+  if (sipRunBtn) {
+    sipRunBtn.addEventListener('click', async () => {
+      const oldDomain = document.getElementById('sipOldDomain').value.trim();
+      const newDomain = document.getElementById('sipNewDomain').value.trim();
+      const whatIf    = document.getElementById('sipWhatIf').checked;
+
+      if (!oldDomain || !newDomain) { alert('Please enter both old and new domains.'); return; }
+
+      const logSection = document.getElementById('sipLog');
+      const logOutput  = document.getElementById('sipLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      sipRunBtn.disabled = true;
+      sipRunBtn.textContent = 'Running…';
+
+      const args = ['-OldDomain', oldDomain, '-NewDomain', newDomain];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Update-SIPDomain.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        sipRunBtn.disabled = false;
+        sipRunBtn.textContent = '▶ Run';
       }
     });
   }

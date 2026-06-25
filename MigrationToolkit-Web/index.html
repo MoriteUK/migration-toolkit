@@ -141,6 +141,9 @@
             <button type="button" class="sidebar-subitem" data-view="domain-alias">
               <span class="sidebar-sublabel">Remove Aliases</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-sip">
+              <span class="sidebar-sublabel">Update SIP Domain</span>
+            </button>
           </div>
         </nav>
 
@@ -1075,6 +1078,43 @@
         <div class="log-section hidden" id="aliasLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="aliasLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Update SIP Domain -->
+      <div id="domainSIPView" class="view-container hidden">
+        <h2 class="view-title">Update SIP Domain</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Replace SIP / IM Address Domain</h3>
+          <p class="form-help">Finds all Exchange Online recipients with <code>SIP:</code> or <code>EUM:</code> addresses on the old domain and replaces the domain suffix, preserving the local part. All other addresses are left untouched.</p>
+
+          <div class="form-row" style="margin-top:4px;">
+            <div class="form-group flex-1">
+              <label class="form-label">Old Domain</label>
+              <input type="text" class="form-input form-input-compact" id="sipOldDomain" value="tarantosystems.com">
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">New Domain</label>
+              <input type="text" class="form-input form-input-compact" id="sipNewDomain" value="ourvolaris.onmicrosoft.com">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="sipWhatIf" checked>
+              <span>WhatIf — preview changes without applying them</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="sipRunBtn">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="sipLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="sipLogOutput"></div>
         </div>
       </div>
 
