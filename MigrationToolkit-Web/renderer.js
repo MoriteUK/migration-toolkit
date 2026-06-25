@@ -3210,4 +3210,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── Workflow step navigation buttons ──────────────────────────────────────
+  document.querySelectorAll('.workflow-nav-btn[data-view]').forEach((btn) => {
+    btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
+  });
+
 });

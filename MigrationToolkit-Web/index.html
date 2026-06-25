@@ -877,19 +877,44 @@
         <h2 class="view-title">Domain Removal Workflow</h2>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Complete Domain Removal Process</h3>
-          <p class="form-help">Guided 3-step workflow: updates on-premises UPNs, triggers Entra Connect sync, then removes the domain from M365. Collects all inputs in its own window.</p>
+          <h3 class="form-card-title">Step-by-step Domain Cleanup</h3>
+          <p class="form-help">Complete these steps in order to fully remove a domain. Click <strong>Go →</strong> to open each tool.</p>
 
-          <div class="workflow-steps" style="margin:12px 0;">
-            <div class="workflow-step"><span class="step-number">1</span><span class="step-text">Update On-Premises UPNs</span></div>
-            <div class="workflow-step"><span class="step-number">2</span><span class="step-text">Sync to Cloud (Entra Connect)</span></div>
-            <div class="workflow-step"><span class="step-number">3</span><span class="step-text">Remove Domain from M365</span></div>
-          </div>
-
-          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
-            <button type="button" class="btn btn-danger btn-xs" id="domainWorkflowLaunchBtn">
-              ▶ Open Workflow
-            </button>
+          <div style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="step-number">1</span>
+              <span style="flex:1; font-size:13px;">Update On-Premises UPNs</span>
+              <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-onprem">Go →</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="step-number">2</span>
+              <span style="flex:1; font-size:13px;">Update Cloud UPNs (Entra / AAD)</span>
+              <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-cloud">Go →</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="step-number">3</span>
+              <span style="flex:1; font-size:13px;">Hide from Address Book</span>
+              <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-hide">Go →</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="step-number">4</span>
+              <span style="flex:1; font-size:13px;">Remove Alias Addresses (smtp: / SIP / EUM)</span>
+              <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-alias">Go →</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="step-number">5</span>
+              <span style="flex:1; font-size:13px;">SIP / IM Addresses — remove or replace</span>
+              <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-sip">Go →</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="step-number">6</span>
+              <span style="flex:1; font-size:13px; color:#6B7280;">Sync to Cloud — run <code>Start-ADSyncSyncCycle -PolicyType Delta</code> on the Entra Connect server</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="step-number">7</span>
+              <span style="flex:1; font-size:13px;">Remove Domain from M365</span>
+              <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-remove">Go →</button>
+            </div>
           </div>
         </div>
       </div>
