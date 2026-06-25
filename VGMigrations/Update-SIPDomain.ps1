@@ -66,6 +66,16 @@ Log 'Connected to Exchange Online.'
 
 # ── Connect Microsoft Graph (Remove mode only) ────────────────────────────────
 if ($Mode -eq 'Remove') {
+    $graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Users',
+                   'Microsoft.Graph.Identity.DirectoryManagement')
+    foreach ($m in $graphMods) {
+        if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
+            Log "ERROR: Required module not installed: $m"
+            Log "Install it with:  Install-Module Microsoft.Graph -Scope CurrentUser -Force"
+            exit 1
+        }
+        Import-Module $m -ErrorAction Stop
+    }
     Log 'Connecting to Microsoft Graph for license management...'
     Connect-MgGraph -Scopes 'User.ReadWrite.All','Organization.Read.All' -UseDeviceCode -NoWelcome -ErrorAction Stop
     Log 'Connected to Microsoft Graph.'

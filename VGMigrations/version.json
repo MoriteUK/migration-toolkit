@@ -1,7 +1,14 @@
 {
-  "version": "2.9.0",
+  "version": "2.9.1",
   "releaseDate": "2026-06-25",
   "changelog": [
+    {
+      "version": "2.9.1",
+      "date": "2026-06-25",
+      "changes": [
+        "Fix Remove Devices, Remove Entra Users, Update SIP Domain (Remove mode): now explicitly imports Microsoft.Graph modules before connecting — fixes 'Connect-MgGraph is not recognized' error when Graph module not auto-loaded"
+      ]
+    },
     {
       "version": "2.9.0",
       "date": "2026-06-25",

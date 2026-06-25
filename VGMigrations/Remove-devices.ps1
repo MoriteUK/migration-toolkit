@@ -441,6 +441,17 @@ function Invoke-RemoveDevicesHeadless {
     Write-Host "ID column    : $idCol"
     Write-Host ''
 
+    # Load Graph modules
+    $graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Identity.DirectoryManagement')
+    foreach ($m in $graphMods) {
+        if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
+            Write-Host "ERROR: Required module not installed: $m"
+            Write-Host "Install it with:  Install-Module Microsoft.Graph -Scope CurrentUser -Force"
+            exit 1
+        }
+        Import-Module $m -ErrorAction Stop
+    }
+
     Write-Host 'Connecting to Microsoft Graph...'
     try {
         Connect-MgGraph -Scopes 'Device.ReadWrite.All','Directory.ReadWrite.All' `
