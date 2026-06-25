@@ -29,6 +29,12 @@
                 Error message from lib.ps1 load failure is now captured and logged.
 #>
 
+param(
+    [string]$DiscoveryFolder = '',
+    [string]$Sections        = 'all',  # comma-separated CSV names or 'all'
+    [switch]$WhatIf
+)
+
 $script:RootDir = $PSScriptRoot
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -1065,9 +1071,212 @@ function Show-RemoveDomainUI {
     [System.Windows.Forms.Application]::Run($form)
 }
 
-try {
-    Show-RemoveDomainUI
-} catch {
-    Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
-    [System.Windows.Forms.MessageBox]::Show("Failed to start: $($_.Exception.Message)", 'Launch Error', 'OK', 'Error') | Out-Null
+function Invoke-RemoveDomainHeadless {
+    $discFolder = $DiscoveryFolder.Trim().Trim('"')
+    $candidate  = Join-Path $discFolder 'Discovery'
+    if ((Split-Path $discFolder -Leaf) -ne 'Discovery' -and (Test-Path $candidate)) { $discFolder = $candidate }
+    if (-not (Test-Path $discFolder)) { Write-Host "ERROR: Discovery folder not found: $discFolder"; exit 1 }
+
+    $allSections = $script:SectionDefs
+    $toProcess   = if ($Sections -eq 'all') {
+        $allSections
+    } else {
+        $filter = @($Sections -split ',') | ForEach-Object { $_.Trim() }
+        $allSections | Where-Object { $_.CsvName -in $filter }
+    }
+
+    Write-Host "=== Remove M365 Domain Objects$(if ($WhatIf) { ' [WhatIf]' }) ==="
+    Write-Host "Discovery folder : $discFolder"
+    Write-Host "Sections         : $($toProcess.Label -join ', ')"
+    Write-Host ''
+
+    $exoConnected   = $false
+    $graphConnected = $false
+
+    foreach ($sec in $toProcess) {
+        $csvPath = Join-Path $discFolder $sec.CsvName
+        if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): $($sec.CsvName)"; continue }
+        $rows = @(Import-Csv -Path $csvPath -Encoding UTF8)
+        Write-Host "--- $($sec.Label): $($rows.Count) item(s) ---"
+        if ($rows.Count -eq 0) { continue }
+
+        if ($sec.NeedsEXO -and -not $exoConnected -and -not $WhatIf) {
+            Write-Host 'Connecting to Exchange Online — sign in when the browser opens...'
+            $cmds = @('Remove-AcceptedDomain','Remove-DistributionGroup','Remove-MailContact',
+                      'Remove-Mailbox','Remove-UnifiedGroup','Set-Mailbox','Set-DistributionGroup',
+                      'Set-UnifiedGroup','Get-Recipient')
+            try {
+                Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -ErrorAction Stop
+                $exoConnected = $true; Write-Host 'Exchange Online connected.'
+            } catch {
+                Write-Host "ERROR: EXO connect failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+                continue
+            }
+        }
+        if ($sec.NeedsGraph -and -not $graphConnected -and -not $WhatIf) {
+            Write-Host 'Connecting to Microsoft Graph — sign in when prompted...'
+            $scopes = @('Application.ReadWrite.All','Device.ReadWrite.All','Directory.ReadWrite.All')
+            try {
+                Connect-MgGraph -Scopes $scopes -NoWelcome -ErrorAction Stop
+                $graphConnected = $true; Write-Host 'Microsoft Graph connected.'
+            } catch {
+                Write-Host "ERROR: Graph connect failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+                continue
+            }
+        }
+
+        $ok = 0; $fail = 0; $skip = 0
+
+        switch ($sec.CsvName) {
+            '01_AcceptedDomains.csv' {
+                $removable = @($rows | Where-Object { $_.IsDefault -ne 'True' })
+                $skipCount = $rows.Count - $removable.Count
+                if ($skipCount -gt 0) { Write-Host "  Skipping $skipCount default domain(s)"; $skip += $skipCount }
+                foreach ($r in $removable) {
+                    $name = $r.DomainName
+                    if ($WhatIf) { Write-Host "  WhatIf : $name"; $ok++ }
+                    else {
+                        try { Remove-AcceptedDomain -Identity $name -Confirm:$false -ErrorAction Stop; Write-Host "  Removed: $name"; $ok++ }
+                        catch { Write-Host "  FAILED : $name — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++ }
+                    }
+                }
+            }
+            { $_ -in '02_Mailboxes.csv','05_SharedMailboxes.csv' } {
+                foreach ($r in $rows) {
+                    $id = if ($r.UserPrincipalName) { $r.UserPrincipalName } else { $r.PrimarySmtpAddress }
+                    if ($WhatIf) { Write-Host "  WhatIf : $id"; $ok++ }
+                    else {
+                        try { Remove-Mailbox -Identity $id -Confirm:$false -ErrorAction Stop; Write-Host "  Removed: $id"; $ok++ }
+                        catch { Write-Host "  FAILED : $id — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++ }
+                    }
+                }
+            }
+            '03_DistributionGroups.csv' {
+                foreach ($r in $rows) {
+                    $addr = $r.PrimarySmtpAddress
+                    if ($WhatIf) { Write-Host "  WhatIf : $addr"; $ok++ }
+                    else {
+                        try { Remove-DistributionGroup -Identity $addr -Confirm:$false -ErrorAction Stop; Write-Host "  Removed: $addr"; $ok++ }
+                        catch { Write-Host "  FAILED : $addr — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++ }
+                    }
+                }
+            }
+            '04_MailContacts.csv' {
+                foreach ($r in $rows) {
+                    $addr = $r.ExternalEmailAddress; $dn = $r.DisplayName
+                    if ($WhatIf) { Write-Host "  WhatIf : $addr  [$dn]"; $ok++ }
+                    else {
+                        try { Remove-MailContact -Identity $addr -Confirm:$false -ErrorAction Stop; Write-Host "  Removed: $addr  [$dn]"; $ok++ }
+                        catch { Write-Host "  FAILED : $addr — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++ }
+                    }
+                }
+            }
+            '06_M365Groups.csv' {
+                foreach ($r in $rows) {
+                    $addr = $r.PrimarySmtpAddress; $dn = $r.DisplayName
+                    if ($WhatIf) { Write-Host "  WhatIf : $addr  [$dn]"; $ok++ }
+                    else {
+                        try { Remove-UnifiedGroup -Identity $addr -Confirm:$false -ErrorAction Stop; Write-Host "  Removed: $addr  [$dn]"; $ok++ }
+                        catch { Write-Host "  FAILED : $addr — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++ }
+                    }
+                }
+            }
+            '07_AppRegistrations.csv' {
+                foreach ($r in $rows) {
+                    $appId = $r.AppId; $dn = $r.DisplayName
+                    if ($WhatIf) { Write-Host "  WhatIf : $dn  [$appId]"; $ok++ }
+                    else {
+                        try { Remove-MgApplication -ApplicationId $appId -Confirm:$false -ErrorAction Stop; Write-Host "  Removed: $dn  [$appId]"; $ok++ }
+                        catch { Write-Host "  FAILED : $dn — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++ }
+                    }
+                }
+            }
+            '08_EnterpriseApps.csv' {
+                foreach ($r in $rows) {
+                    $spId = $r.ObjectId; $dn = $r.DisplayName
+                    if ($WhatIf) { Write-Host "  WhatIf : $dn  [$spId]"; $ok++ }
+                    else {
+                        try { Remove-MgServicePrincipal -ServicePrincipalId $spId -Confirm:$false -ErrorAction Stop; Write-Host "  Removed: $dn  [$spId]"; $ok++ }
+                        catch { Write-Host "  FAILED : $dn — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++ }
+                    }
+                }
+            }
+            '11_Devices.csv' {
+                foreach ($r in $rows) {
+                    $objId = $r.DeviceObjectId; $name = $r.DeviceName
+                    if ($WhatIf) { Write-Host "  WhatIf : $name  [$objId]"; $ok++ }
+                    else {
+                        try { Remove-MgDevice -DeviceId $objId -Confirm:$false -ErrorAction Stop; Write-Host "  Removed: $name  [$objId]"; $ok++ }
+                        catch { Write-Host "  FAILED : $name — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++ }
+                    }
+                }
+            }
+            '12_ProxyAddresses.csv' {
+                $primaries    = @($rows | Where-Object { $_.IsPrimary -eq 'True' })
+                $nonPrimaries = @($rows | Where-Object { $_.IsPrimary -ne 'True' })
+                if ($primaries.Count -gt 0) {
+                    Write-Host "  Skipping $($primaries.Count) primary SMTP address(es) — cannot remove primary addresses"
+                    $skip += $primaries.Count
+                }
+                $byRecipient = $nonPrimaries | Group-Object -Property PrimarySmtpAddress
+                foreach ($grp in $byRecipient) {
+                    $primaryAddr     = $grp.Name
+                    $addressesToDrop = @($grp.Group | ForEach-Object { "$($_.AddressType):$($_.ProxyAddress)" })
+                    if ($WhatIf) {
+                        foreach ($a in $addressesToDrop) { Write-Host "  WhatIf : remove proxy $a from $primaryAddr" }
+                        $ok += $addressesToDrop.Count
+                    } else {
+                        try {
+                            $recip = Get-Recipient -Identity $primaryAddr -ErrorAction Stop
+                            $currentProxies = @($recip.EmailAddresses | ForEach-Object { $_.ToString() })
+                            $newProxies = @($currentProxies | Where-Object { $a = $_; -not ($addressesToDrop | Where-Object { $_ -ieq $a }) })
+                            $removed = $currentProxies.Count - $newProxies.Count
+                            if ($removed -eq 0) { Write-Host "  No matching proxies on $primaryAddr"; $skip++ }
+                            else {
+                                switch ($recip.RecipientTypeDetails) {
+                                    { $_ -in 'UserMailbox','SharedMailbox','RoomMailbox','EquipmentMailbox' } {
+                                        Set-Mailbox -Identity $primaryAddr -EmailAddresses $newProxies -ErrorAction Stop
+                                    }
+                                    'MailUniversalDistributionGroup' {
+                                        Set-DistributionGroup -Identity $primaryAddr -EmailAddresses $newProxies -ErrorAction Stop
+                                    }
+                                    'GroupMailbox' {
+                                        Set-UnifiedGroup -Identity $primaryAddr -EmailAddresses $newProxies -ErrorAction Stop
+                                    }
+                                    default {
+                                        Write-Host "  SKIPPED $primaryAddr — unhandled type: $($recip.RecipientTypeDetails)"
+                                        $skip++
+                                    }
+                                }
+                                if ($skip -eq 0 -or $recip.RecipientTypeDetails -in 'UserMailbox','SharedMailbox','RoomMailbox','EquipmentMailbox','MailUniversalDistributionGroup','GroupMailbox') {
+                                    foreach ($dropped in $addressesToDrop) { Write-Host "  Removed proxy: $dropped  from: $primaryAddr" }
+                                    $ok += $removed
+                                }
+                            }
+                        } catch {
+                            Write-Host "  FAILED : $primaryAddr — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++
+                        }
+                    }
+                }
+            }
+        }
+
+        Write-Host "  $($sec.Label): $ok processed  |  $fail failed  |  $skip skipped"
+        Write-Host ''
+    }
+
+    if ($exoConnected) { try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue } catch {} }
+    if ($graphConnected) { try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {} }
+    Write-Host '=== Done ==='
+}
+
+if ($DiscoveryFolder) {
+    Invoke-RemoveDomainHeadless
+} else {
+    try {
+        Show-RemoveDomainUI
+    } catch {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+        [System.Windows.Forms.MessageBox]::Show("Failed to start: $($_.Exception.Message)", 'Launch Error', 'OK', 'Error') | Out-Null
+    }
 }

@@ -2946,18 +2946,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── Domain Removal launch buttons ─────────────────────────────────────────
-  const domainWorkflowLaunchBtn = document.getElementById('domainWorkflowLaunchBtn');
-  if (domainWorkflowLaunchBtn) {
-    domainWorkflowLaunchBtn.addEventListener('click', async () => {
-      await launchScript('Domain-Removal-Workflow.ps1', domainWorkflowLaunchBtn);
+  // ── Remove Domain — browse & run ──────────────────────────────────────────
+  const removeBrowseBtn = document.getElementById('removeBrowseBtn');
+  if (removeBrowseBtn) {
+    removeBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('removeDiscoveryFolder').value = result.filePaths[0];
+      }
     });
   }
 
-  const domainRemoveLaunchBtn = document.getElementById('domainRemoveLaunchBtn');
-  if (domainRemoveLaunchBtn) {
-    domainRemoveLaunchBtn.addEventListener('click', async () => {
-      await launchScript('remove-domain.ps1', domainRemoveLaunchBtn);
+  const removeRunBtn = document.getElementById('removeRunBtn');
+  if (removeRunBtn) {
+    removeRunBtn.addEventListener('click', async () => {
+      const folder  = document.getElementById('removeDiscoveryFolder').value.trim();
+      const whatIf  = document.getElementById('removeWhatIf').checked;
+      const checked = [...document.querySelectorAll('.remove-section:checked')].map(cb => cb.value);
+
+      if (!folder) { alert('Please select a Discovery folder.'); return; }
+      if (checked.length === 0) { alert('Please select at least one object type.'); return; }
+
+      const logSection = document.getElementById('removeLog');
+      const logOutput  = document.getElementById('removeLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      removeRunBtn.disabled = true;
+      removeRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder, '-Sections', checked.join(',')];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('remove-domain.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        removeRunBtn.disabled = false;
+        removeRunBtn.textContent = '▶ Run';
+      }
     });
   }
 

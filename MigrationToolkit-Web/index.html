@@ -924,18 +924,57 @@
         <h2 class="view-title">Remove Domain</h2>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Remove M365 Domain Objects</h3>
-          <p class="form-help">Reads discovery CSVs and removes the corresponding M365 objects (mailboxes, groups, contacts, apps, devices, proxy addresses) via Exchange Online and Microsoft Graph. Select the discovery folder and objects to remove in the window.</p>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <span style="font-size:11px; color:#6B7280;">Last step</span>
+          </div>
 
-          <div class="alert alert-warning" style="margin:10px 0;">
-            <strong>Warning:</strong> This permanently removes M365 objects. Ensure discovery CSVs are from the correct domain run.
+          <h3 class="form-card-title">Remove M365 Domain Objects</h3>
+          <p class="form-help">Reads discovery CSVs and permanently removes the selected M365 objects via Exchange Online and Microsoft Graph. Use WhatIf first to preview.</p>
+
+          <div class="alert alert-warning" style="margin:8px 0;">
+            <strong>Warning:</strong> This permanently removes M365 objects. Ensure the discovery CSVs are from the correct domain run.
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Discovery Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="removeDiscoveryFolder" placeholder="Folder containing discovery CSVs...">
+              <button type="button" class="btn btn-secondary btn-compact" id="removeBrowseBtn">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Object types to remove</label>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px 16px; margin-top:4px;">
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="01_AcceptedDomains.csv" checked><span>Accepted Domains</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="07_AppRegistrations.csv" checked><span>App Registrations</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="02_Mailboxes.csv" checked><span>Mailboxes</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="08_EnterpriseApps.csv" checked><span>Enterprise Apps</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="03_DistributionGroups.csv" checked><span>Distribution Groups</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="11_Devices.csv" checked><span>Devices</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="04_MailContacts.csv" checked><span>Mail Contacts</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="12_ProxyAddresses.csv" checked><span>Proxy Addresses</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="05_SharedMailboxes.csv" checked><span>Shared Mailboxes</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="06_M365Groups.csv" checked><span>M365 Groups + Teams</span></label>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="removeWhatIf" checked>
+              <span>WhatIf — preview what would be removed without making changes</span>
+            </label>
           </div>
 
           <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
-            <button type="button" class="btn btn-danger btn-xs" id="domainRemoveLaunchBtn">
-              ▶ Open Remove Domain
-            </button>
+            <button type="button" class="btn btn-danger btn-xs" id="removeRunBtn">▶ Run</button>
           </div>
+        </div>
+
+        <div class="log-section hidden" id="removeLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="removeLogOutput"></div>
         </div>
       </div>
 
@@ -944,6 +983,11 @@
         <h2 class="view-title">Update On-Prem UPNs</h2>
 
         <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-cloud">Next: Update Cloud UPNs →</button>
+          </div>
+
           <h3 class="form-card-title">Active Directory UPN Update</h3>
           <p class="form-help">Reads CSVs from the selected folder, finds users with the source domain UPN, and updates their UPN, email, and proxy addresses in on-premises Active Directory.</p>
 
@@ -989,6 +1033,11 @@
         <h2 class="view-title">Update Cloud UPNs</h2>
 
         <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-hide">Next: Hide from Address Book →</button>
+          </div>
+
           <h3 class="form-card-title">Microsoft 365 UPN Update</h3>
           <p class="form-help">Connects to Microsoft Graph and updates cloud-only user UPN domain suffixes. On-premises synced users are skipped — update those in Active Directory instead. A device code sign-in prompt will appear in the log below.</p>
 
@@ -1026,6 +1075,11 @@
         <h2 class="view-title">Hide from Address Book</h2>
 
         <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-alias">Next: Remove Aliases →</button>
+          </div>
+
           <h3 class="form-card-title">Exchange Global Address List</h3>
           <p class="form-help">Sets HiddenFromAddressListsEnabled on Exchange Online recipients from discovery CSVs (mailboxes, distribution groups, mail contacts, shared mailboxes, M365 groups). A browser sign-in to Exchange Online will open when you click Run.</p>
 
@@ -1060,6 +1114,11 @@
         <h2 class="view-title">Remove Aliases</h2>
 
         <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-sip">Next: SIP / IM Addresses →</button>
+          </div>
+
           <h3 class="form-card-title">Remove Alias &amp; IM Addresses</h3>
           <p class="form-help">Strips selected address types from Exchange Online recipients in discovery CSVs. The primary <code>SMTP:</code> address is always preserved. Optionally filter by domain to target only addresses from a specific domain.</p>
 
@@ -1111,6 +1170,11 @@
         <h2 class="view-title">SIP / IM Addresses</h2>
 
         <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-remove">Next: Remove Domain →</button>
+          </div>
+
           <h3 class="form-card-title">Remove or Replace SIP / IM Addresses</h3>
 
           <div class="form-group" style="margin-top:4px;">
