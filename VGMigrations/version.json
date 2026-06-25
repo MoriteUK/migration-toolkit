@@ -1,7 +1,14 @@
 {
-  "version": "2.9.1",
+  "version": "2.9.2",
   "releaseDate": "2026-06-25",
   "changelog": [
+    {
+      "version": "2.9.2",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal Workflow: added Remove Devices as step 7 (after AD sync, before Remove Domain)"
+      ]
+    },
     {
       "version": "2.9.1",
       "date": "2026-06-25",
