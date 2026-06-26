@@ -1,7 +1,16 @@
 {
-  "version": "2.9.3",
-  "releaseDate": "2026-06-25",
+  "version": "2.9.4",
+  "releaseDate": "2026-06-26",
   "changelog": [
+    {
+      "version": "2.9.4",
+      "date": "2026-06-26",
+      "changes": [
+        "Domain Removal workflow step 7: replaced 'Remove Devices' with 'Retire Devices' — disables devices in Entra ID (AccountEnabled = false) rather than permanently deleting them; device records are preserved",
+        "New Retire-Devices.ps1: reads 11_Devices.csv, disables each device via Update-MgDevice, same CSV format and Graph modules as Remove-devices.ps1",
+        "Misc Scripts: added 'Remove Entra Devices' (permanent delete) — moved from Domain Removal section; now a separate tool for when full deletion is required"
+      ]
+    },
     {
       "version": "2.9.3",
       "date": "2026-06-25",
