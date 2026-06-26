@@ -2962,11 +2962,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const removeRunBtn = document.getElementById('removeRunBtn');
   if (removeRunBtn) {
     removeRunBtn.addEventListener('click', async () => {
-      const folder  = document.getElementById('removeDiscoveryFolder').value.trim();
-      const whatIf  = document.getElementById('removeWhatIf').checked;
-      const checked = [...document.querySelectorAll('.remove-section:checked')].map(cb => cb.value);
+      const folder    = document.getElementById('removeDiscoveryFolder').value.trim();
+      const oldDomain = document.getElementById('removeOldDomain').value.trim();
+      const newDomain = document.getElementById('removeNewDomain').value.trim();
+      const whatIf    = document.getElementById('removeWhatIf').checked;
+      const checked   = [...document.querySelectorAll('.remove-section:checked')].map(cb => cb.value);
 
-      if (!folder) { alert('Please select a Discovery folder.'); return; }
+      if (!folder)    { alert('Please select a Discovery folder.'); return; }
+      if (!oldDomain) { alert('Please enter the Old Domain (rename from).'); return; }
+      if (!newDomain) { alert('Please enter the New Domain (rename to).'); return; }
       if (checked.length === 0) { alert('Please select at least one object type.'); return; }
 
       const logSection = document.getElementById('removeLog');
@@ -2977,7 +2981,8 @@ document.addEventListener('DOMContentLoaded', () => {
       removeRunBtn.disabled = true;
       removeRunBtn.textContent = 'Running…';
 
-      const args = ['-DiscoveryFolder', folder, '-Sections', checked.join(',')];
+      const args = ['-DiscoveryFolder', folder, '-OldDomain', oldDomain, '-NewDomain', newDomain,
+                    '-Sections', checked.join(',')];
       if (whatIf) args.push('-WhatIf');
 
       window.electronAPI.onPsOutput((text) => {
@@ -2992,7 +2997,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } finally {
         window.electronAPI.offPsOutput();
         removeRunBtn.disabled = false;
-        removeRunBtn.textContent = '▶ Run';
+        removeRunBtn.textContent = '▶ Rename Domain';
       }
     });
   }

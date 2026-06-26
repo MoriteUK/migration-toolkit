@@ -127,7 +127,7 @@
               <span class="sidebar-sublabel">Removal Workflow</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="domain-remove">
-              <span class="sidebar-sublabel">Remove Domain</span>
+              <span class="sidebar-sublabel">Rename Domain</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="domain-onprem">
               <span class="sidebar-sublabel">Update On-Prem UPNs</span>
@@ -923,7 +923,7 @@
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <span class="step-number">8</span>
-              <span style="flex:1; font-size:13px;">Remove Domain from M365</span>
+              <span style="flex:1; font-size:13px;">Rename Domain Objects + Remove from Tenant</span>
               <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-remove">Go →</button>
             </div>
           </div>
@@ -938,9 +938,9 @@
         </div>
       </div>
 
-      <!-- Domain Removal - Remove Domain -->
+      <!-- Domain Removal - Rename Domain Objects -->
       <div id="domainRemoveView" class="view-container hidden">
-        <h2 class="view-title">Remove Domain</h2>
+        <h2 class="view-title">Rename Domain Objects</h2>
 
         <div class="form-card form-card-compact">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -948,14 +948,21 @@
             <span style="font-size:11px; color:#6B7280;">Last step</span>
           </div>
 
-          <h3 class="form-card-title">Remove M365 Domain Objects</h3>
-          <p class="form-help">Reads discovery CSVs and permanently removes the selected M365 objects via Exchange Online and Microsoft Graph. Use WhatIf first to preview.</p>
+          <h3 class="form-card-title">Rename M365 Domain References</h3>
+          <p class="form-help">Reads discovery CSVs and renames email addresses from the old domain to the new domain on all M365 objects. Then removes the old domain name from the tenant. Objects themselves are <strong>not deleted</strong> — only their email domain is updated.</p>
 
-          <div class="alert alert-warning" style="margin:8px 0;">
-            <strong>Warning:</strong> This permanently removes M365 objects. Ensure the discovery CSVs are from the correct domain run.
+          <div class="form-row" style="margin-top:6px; gap:12px;">
+            <div class="form-group flex-1">
+              <label class="form-label">Old Domain <span style="font-weight:normal;color:var(--color-text-muted)">(rename from)</span></label>
+              <input type="text" class="form-input form-input-compact" id="removeOldDomain" placeholder="e.g. olddomain.com">
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">New Domain <span style="font-weight:normal;color:var(--color-text-muted)">(rename to)</span></label>
+              <input type="text" class="form-input form-input-compact" id="removeNewDomain" placeholder="e.g. ourvolaris.onmicrosoft.com">
+            </div>
           </div>
 
-          <div class="form-group">
+          <div class="form-group" style="margin-top:8px;">
             <label class="form-label">Discovery Folder</label>
             <div class="input-with-button">
               <input type="text" class="form-input form-input-compact" id="removeDiscoveryFolder" placeholder="Folder containing discovery CSVs...">
@@ -964,30 +971,34 @@
           </div>
 
           <div class="form-group" style="margin-top:8px;">
-            <label class="form-label">Object types to remove</label>
+            <label class="form-label">Object types to rename</label>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px 16px; margin-top:4px;">
-              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="01_AcceptedDomains.csv" checked><span>Accepted Domains</span></label>
-              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="07_AppRegistrations.csv" checked><span>App Registrations</span></label>
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="02_Mailboxes.csv" checked><span>Mailboxes</span></label>
-              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="08_EnterpriseApps.csv" checked><span>Enterprise Apps</span></label>
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="03_DistributionGroups.csv" checked><span>Distribution Groups</span></label>
-              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="11_Devices.csv" checked><span>Devices</span></label>
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="04_MailContacts.csv" checked><span>Mail Contacts</span></label>
-              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="12_ProxyAddresses.csv" checked><span>Proxy Addresses</span></label>
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="05_SharedMailboxes.csv" checked><span>Shared Mailboxes</span></label>
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="06_M365Groups.csv" checked><span>M365 Groups + Teams</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="12_ProxyAddresses.csv" checked><span>Proxy Addresses</span></label>
             </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px; padding:8px 10px; background:#FEF3C7; border:1px solid #FCD34D; border-radius:6px;">
+            <label class="form-checkbox">
+              <input type="checkbox" class="remove-section" value="01_AcceptedDomains.csv" checked>
+              <span style="font-weight:600;">Remove domain name from tenant</span>
+            </label>
+            <p style="margin:4px 0 0 22px; font-size:11px; color:#92400E;">Removes the old domain registration from M365 — do this after all objects are renamed above.</p>
           </div>
 
           <div class="form-group" style="margin-top:8px;">
             <label class="form-checkbox">
               <input type="checkbox" id="removeWhatIf" checked>
-              <span>WhatIf — preview what would be removed without making changes</span>
+              <span>WhatIf — preview what would be renamed without making changes</span>
             </label>
           </div>
 
           <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
-            <button type="button" class="btn btn-danger btn-xs" id="removeRunBtn">▶ Run</button>
+            <button type="button" class="btn btn-primary btn-xs" id="removeRunBtn">▶ Rename Domain</button>
           </div>
         </div>
 
@@ -1287,7 +1298,7 @@
         <div class="form-card form-card-compact">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
-            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-remove">Next: Remove Domain →</button>
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-remove">Next: Rename Domain →</button>
           </div>
 
           <h3 class="form-card-title">Remove or Replace SIP / IM Addresses</h3>

@@ -1,7 +1,17 @@
 {
-  "version": "2.9.2",
+  "version": "2.9.3",
   "releaseDate": "2026-06-25",
   "changelog": [
+    {
+      "version": "2.9.3",
+      "date": "2026-06-25",
+      "changes": [
+        "Rename Domain Objects: completely rewritten — no longer deletes M365 objects; renames email domain on mailboxes, shared mailboxes, distribution groups, mail contacts, M365 groups/Teams, and proxy addresses using Set-Mailbox/Set-DistributionGroup/Set-UnifiedGroup/Set-MailContact",
+        "Rename Domain Objects: only the Accepted Domain entry is removed from the tenant (domain registration); all M365 objects are preserved",
+        "UI: view renamed from 'Remove Domain' to 'Rename Domain Objects'; added Old Domain and New Domain fields; removed App Registrations, Enterprise Apps, Devices from checkboxes; button changed from red to blue",
+        "Workflow step 8: relabelled 'Rename Domain Objects + Remove from Tenant'"
+      ]
+    },
     {
       "version": "2.9.2",
       "date": "2026-06-25",
