@@ -1,7 +1,16 @@
 {
-  "version": "2.9.5",
+  "version": "2.9.6",
   "releaseDate": "2026-06-26",
   "changelog": [
+    {
+      "version": "2.9.6",
+      "date": "2026-06-26",
+      "changes": [
+        "App Registration: after creating the app, Notepad opens automatically with Tenant ID, App ID, and Client Secret — file saved to Desktop as AppReg_<tenant>_<id>.txt",
+        "App Registration: credentials section now uses Write-Output (guaranteed stdout) so the secret is visible in the log; credential block clearly separated with markers",
+        "Added open-file IPC handler in main.js + preload.js; PS scripts can signal ##OPEN_FILE:<path>## to open any file via Electron shell.openPath instead of spawning from a child process"
+      ]
+    },
     {
       "version": "2.9.5",
       "date": "2026-06-26",

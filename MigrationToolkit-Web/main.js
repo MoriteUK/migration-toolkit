@@ -397,6 +397,16 @@ function registerIPCHandlers() {
     }
   });
 
+  ipcMain.handle('open-file', async (event, filePath) => {
+    try {
+      const { shell } = require('electron');
+      await shell.openPath(filePath);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('read-vbu-csv', async (event, filePath) => {
     try {
       const fs = require('fs');

@@ -142,29 +142,30 @@ try {
     Write-Host "✓ Client secret created" -ForegroundColor Green
     Write-Host "  Expires: $($passwordCred.EndDateTime)" -ForegroundColor Gray
 
-    # Display results
-    Write-Host "`n╔══════════════════════════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "║    App Registration Created Successfully                 ║" -ForegroundColor Green
-    Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    # Display results — use Write-Output so the secret is guaranteed on stdout
+    Write-Output ""
+    Write-Output "========================================================"
+    Write-Output "  App Registration Created Successfully"
+    Write-Output "========================================================"
+    Write-Output ""
+    Write-Output "IMPORTANT: Copy these credentials — the secret is only shown once."
+    Write-Output "--------------------------------------------------------"
+    Write-Output ""
+    Write-Output "Tenant ID:"
+    Write-Output "  $TenantId"
+    Write-Output ""
+    Write-Output "Application (Client) ID:"
+    Write-Output "  $($app.AppId)"
+    Write-Output ""
+    Write-Output "Client Secret:"
+    Write-Output "  $($passwordCred.SecretText)"
+    Write-Output ""
+    Write-Output "Secret Expiry:"
+    Write-Output "  $($passwordCred.EndDateTime)"
+    Write-Output ""
+    Write-Output "--------------------------------------------------------"
 
-    Write-Host "`n📋 IMPORTANT: Save these credentials securely!" -ForegroundColor Yellow
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
-
-    Write-Host "`nTenant ID:" -ForegroundColor Cyan
-    Write-Host "  $TenantId" -ForegroundColor White
-
-    Write-Host "`nApplication (Client) ID:" -ForegroundColor Cyan
-    Write-Host "  $($app.AppId)" -ForegroundColor White
-
-    Write-Host "`nClient Secret:" -ForegroundColor Cyan
-    Write-Host "  $($passwordCred.SecretText)" -ForegroundColor White
-
-    Write-Host "`nSecret Expiry:" -ForegroundColor Cyan
-    Write-Host "  $($passwordCred.EndDateTime)" -ForegroundColor White
-
-    Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
-
-    # Save credentials to a Notepad file and open it
+    # Save credentials to a file and signal Electron to open it
     $safeTenantName = $tenantName -replace '[\\/:*?"<>|]', '_'
     $notepadPath = Join-Path $env:USERPROFILE "Desktop\AppReg_${safeTenantName}_$($app.AppId.Substring(0,8)).txt"
     $notepadContent = @"
@@ -196,10 +197,10 @@ NEXT STEPS:
 IMPORTANT: Delete this file once you have saved the credentials securely.
 "@
     Set-Content -Path $notepadPath -Value $notepadContent -Encoding UTF8
-    Write-Host "`n📄 Credentials saved to: $notepadPath" -ForegroundColor Cyan
-    $notepadProc = Start-Process notepad.exe $notepadPath -PassThru
-    Start-Sleep -Milliseconds 800
-    (New-Object -ComObject WScript.Shell).AppActivate($notepadProc.Id) | Out-Null
+    Write-Output "Credentials file: $notepadPath"
+    Write-Output ""
+    # Signal the Electron app to open the file — do not remove this line
+    Write-Output "##OPEN_FILE:$notepadPath##"
 
     # Save to config
     $save = if ($SkipSavePrompt) { 'N' } else {

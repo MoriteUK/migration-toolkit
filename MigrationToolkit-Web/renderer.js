@@ -2486,8 +2486,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function appendAppRegLog(text) {
     if (!appRegLogPre) return;
-    // Strip ANSI colour codes that PowerShell emits
-    appRegLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    const clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+    // Detect ##OPEN_FILE:<path>## signal from the PS script and open via Electron
+    const fileMarker = clean.match(/##OPEN_FILE:(.+?)##/);
+    if (fileMarker) {
+      window.electronAPI.openFile(fileMarker[1].trim());
+      appRegLogPre.textContent += clean.replace(/##OPEN_FILE:.+?##/g, '').replace(/^\n/, '');
+    } else {
+      appRegLogPre.textContent += clean;
+    }
     appRegLogPre.scrollTop = appRegLogPre.scrollHeight;
   }
 

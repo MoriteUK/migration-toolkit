@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Open logs folder
   openLogs: () => ipcRenderer.invoke('open-logs'),
 
+  // Open a file with the default application (e.g. Notepad for .txt)
+  openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
+
   // Get real migration data
   getMigrationData: (projectPrefix) => ipcRenderer.invoke('get-migration-data', projectPrefix),
 
