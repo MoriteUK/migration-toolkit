@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Teams Chat Archive Viewer</title>
+<style>
+  :root{
+    --purple:#464775; --purple-dark:#33344a; --bg:#f5f5f5; --panel:#ffffff;
+    --border:#e1e1e1; --text:#252423; --subtext:#616161; --bubble:#f0f0f2;
+    --accent:#6264a7; --highlight:#fff3b0;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;}
+  #app{display:flex;height:100vh;}
+
+  /* Sidebar */
+  #sidebar{width:320px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;}
+  #sidebar-header{background:var(--purple);color:#fff;padding:14px 16px;font-size:16px;font-weight:600;}
+  #upload-area{padding:10px 12px;border-bottom:1px solid var(--border);}
+  #file-input{display:none;}
+  #folder-label{display:block;text-align:center;background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:9px 10px;border-radius:4px;cursor:pointer;}
+  #folder-label:hover{background:var(--purple-dark);}
+  #upload-hint{font-size:11px;color:var(--subtext);margin-top:8px;line-height:1.4;}
+  #upload-hint code{background:#f0f0f2;padding:1px 4px;border-radius:3px;}
+  #chat-list{flex:1;overflow-y:auto;}
+  .chat-item{padding:12px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;display:flex;flex-direction:column;gap:2px;}
+  .chat-item:hover{background:#f5f5fa;}
+  .chat-item.active{background:#e8e8f5;border-left:3px solid var(--accent);}
+  .chat-item .title{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chat-item .meta{font-size:11px;color:var(--subtext);}
+  .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:6px;}
+  .badge.ok{background:#dff6dd;color:#0e5c13;}
+  .badge.raw{background:#fde7e9;color:#a80000;}
+
+  /* Main */
+  #main{flex:1;display:flex;flex-direction:column;min-width:0;}
+  #topbar{background:var(--panel);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:16px;}
+  #chat-title{font-size:16px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #search-box{flex:0 0 320px;position:relative;}
+  #search-input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:4px;font-size:13px;}
+  #search-scope{font-size:12px;color:var(--subtext);}
+  #search-results-count{font-size:12px;color:var(--subtext);margin-left:8px;white-space:nowrap;}
+
+  #messages{flex:1;overflow-y:auto;padding:20px 30px;background:var(--bg);}
+  .day-divider{text-align:center;margin:18px 0 10px;}
+  .day-divider span{background:#e1e1e1;color:var(--subtext);font-size:11px;padding:3px 12px;border-radius:10px;}
+  .msg-row{display:flex;gap:10px;margin-bottom:14px;max-width:720px;}
+  .avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;}
+  .msg-body{flex:1;min-width:0;}
+  .msg-head{display:flex;align-items:baseline;gap:8px;margin-bottom:2px;}
+  .msg-sender{font-size:13px;font-weight:600;color:var(--purple-dark);}
+  .msg-time{font-size:11px;color:var(--subtext);}
+  .msg-bubble{background:var(--bubble);padding:8px 12px;border-radius:0 6px 6px 6px;font-size:14px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;}
+  .msg-bubble a{color:var(--accent);}
+  mark{background:var(--highlight);padding:0 1px;border-radius:2px;}
+
+  #empty-state, #raw-state{display:flex;align-items:center;justify-content:center;height:100%;color:var(--subtext);text-align:center;flex-direction:column;gap:10px;padding:40px;}
+  #raw-frame{width:100%;height:100%;border:none;background:#fff;}
+  #raw-wrap{flex:1;display:flex;flex-direction:column;}
+  #raw-banner{background:#fde7e9;color:#a80000;font-size:12px;padding:8px 20px;border-bottom:1px solid var(--border);}
+
+  button.small{font-size:11px;padding:4px 8px;border:1px solid var(--border);background:#fff;border-radius:4px;cursor:pointer;}
+  button.small:hover{background:#f0f0f2;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div id="sidebar-header">Chat Archives</div>
+    <div id="upload-area">
+      <label id="folder-label" for="file-input">📁 Select Archive Folder</label>
+      <input type="file" id="file-input" webkitdirectory directory multiple accept=".html,.htm">
+      <div id="upload-hint">Point this at your <code>Microsoft Teams Chat_Archived</code> OneDrive folder (or a local copy of it) — every .html file inside will be listed on the left. Nothing leaves your browser.</div>
+    </div>
+    <div id="chat-filter-wrap" style="padding:8px 12px;border-bottom:1px solid var(--border);">
+      <input type="text" id="chat-filter-input" placeholder="Filter chats by name / participant..." style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;">
+    </div>
+    <div id="chat-list"></div>
+  </div>
+  <div id="main">
+    <div id="topbar">
+      <div id="chat-title">No chat selected</div>
+      <div id="search-box">
+        <input type="text" id="search-input" placeholder="Search across all loaded chats...">
+      </div>
+      <div id="search-results-count"></div>
+    </div>
+    <div id="messages">
+      <div id="empty-state">
+        <div style="font-size:40px;">💬</div>
+        <div>Load one or more AvePoint Fly HTML exports to get started.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   PARSER
+   Since exact AvePoint Fly markup wasn't available, this tries
+   several strategies in order of confidence. If none produce a
+   clean, sane result, the file falls back to "raw" mode: the
+   original HTML is shown as-is in an iframe, and search falls
+   back to plain-text matching within it.
+   ============================================================ */
+
+function stripTags(html){
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  return d.textContent || '';
+}
+
+// Broad timestamp matcher: covers "3/14/2024 10:32 AM", "2024-03-14 10:32",
+// "14 March 2024 10:32", "10:32 AM" alone, etc.
+const TIME_RE = /\b(\d{1,2}[:.]\d{2}(?::\d{2})?\s?(?:AM|PM|am|pm)?)\b/;
+const DATE_RE = /\b(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/i;
+
+function tryTableParse(doc){
+  const rows = doc.querySelectorAll('table tr');
+  if (rows.length < 2) return null;
+  const msgs = [];
+  rows.forEach(row => {
+    const cells = Array.from(row.querySelectorAll('td,th'));
+    if (cells.length < 2) return;
+    const texts = cells.map(c => c.textContent.trim());
+    // heuristic: find a cell that looks like a timestamp, a cell that looks like a short name, and the rest as body
+    let timeIdx = texts.findIndex(t => TIME_RE.test(t) || DATE_RE.test(t));
+    if (timeIdx === -1) return;
+    let senderIdx = texts.findIndex((t,i) => i !== timeIdx && t.length > 0 && t.length < 40 && !TIME_RE.test(t));
+    let bodyIdx = texts.findIndex((t,i) => i !== timeIdx && i !== senderIdx && t.length > 0);
+    if (bodyIdx === -1) return;
+    msgs.push({
+      sender: senderIdx > -1 ? texts[senderIdx] : 'Unknown',
+      time: texts[timeIdx],
+      body: texts[bodyIdx]
+    });
+  });
+  return msgs.length >= 2 ? msgs : null;
+}
+
+function tryDivParse(doc){
+  // Look for repeated sibling blocks that each contain a short "name-like" line
+  // and a timestamp-like line and a longer text line.
+  const candidates = doc.querySelectorAll('div, li, p');
+  const msgs = [];
+  let buffer = { sender: null, time: null, bodyLines: [] };
+
+  function flush(){
+    if (buffer.sender && buffer.bodyLines.length){
+      msgs.push({sender: buffer.sender, time: buffer.time || '', body: buffer.bodyLines.join(' ').trim()});
+    }
+    buffer = { sender: null, time: null, bodyLines: [] };
+  }
+
+  const blocks = Array.from(candidates).filter(el => el.children.length === 0 && el.textContent.trim().length > 0);
+  blocks.forEach(el => {
+    const t = el.textContent.trim();
+    const isTime = TIME_RE.test(t) && t.length < 60;
+    const isNameLike = t.length > 0 && t.length < 40 && /^[A-Z][a-zA-Z .'-]+$/.test(t) && !TIME_RE.test(t);
+    if (isNameLike && (isTime === false)){
+      flush();
+      buffer.sender = t;
+    } else if (isTime){
+      buffer.time = t;
+    } else if (buffer.sender){
+      buffer.bodyLines.push(t);
+    }
+  });
+  flush();
+  return msgs.length >= 2 ? msgs : null;
+}
+
+function tryPlainTextPatternParse(doc){
+  // Fallback: scan raw text for lines matching "Name<sep>timestamp" followed by message text.
+  const text = doc.body ? doc.body.textContent : '';
+  const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const msgs = [];
+  let current = null;
+  const headerRe = /^([A-Za-z][A-Za-z .'\-]{1,40})\s{1,}(?:[-–—|]\s*)?(\d{1,2}[:.]\d{2}(?:\s?[AP]M)?|\d{1,2}\/\d{1,2}\/\d{2,4}.*)$/i;
+  lines.forEach(line => {
+    const m = line.match(headerRe);
+    if (m){
+      if (current) msgs.push(current);
+      current = { sender: m[1].trim(), time: m[2].trim(), body: '' };
+    } else if (current) {
+      current.body += (current.body ? ' ' : '') + line;
+    }
+  });
+  if (current) msgs.push(current);
+  return msgs.filter(m => m.body).length >= 2 ? msgs.filter(m => m.body) : null;
+}
+
+function parseChatFile(name, htmlText){
+  const meta = parseChatFilename(name);
+  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+  let msgs = tryTableParse(doc) || tryDivParse(doc) || tryPlainTextPatternParse(doc);
+  if (msgs && msgs.length){
+    // normalize: guess dates if only time present, by just using index order (no reliable date -> group as single day "Unknown date")
+    msgs = msgs.map(m => ({
+      sender: (m.sender || 'Unknown').trim(),
+      time: (m.time || '').trim(),
+      dateLabel: DATE_RE.test(m.time) ? m.time.match(DATE_RE)[0] : null,
+      body: m.body.trim()
+    }));
+    return { name, meta, mode: 'parsed', messages: msgs, rawHtml: htmlText };
+  }
+  return { name, meta, mode: 'raw', messages: [], rawHtml: htmlText };
+}
+
+/* ============================================================
+   APP STATE + RENDERING
+   ============================================================ */
+const state = { chats: [], activeIndex: -1 };
+
+function initials(name){
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+}
+
+function colorFor(name){
+  let hash = 0;
+  for (let i=0;i<name.length;i++) hash = name.charCodeAt(i) + ((hash<<5)-hash);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue},45%,45%)`;
+}
+
+/* Parse AvePoint Fly export filenames:
+   ChatHistory_<member1>, <member2>_ArchivedChat_<id>.html        -> 1:1 chat
+   ChatHistory_<chat name>_ArchivedChat_<id>.html                 -> named group chat
+   ChatHistory_<m1>, <m2>, <m3>[, ...]_ArchivedChat_<id>.html      -> unnamed group chat */
+function parseChatFilename(filename){
+  const base = filename.replace(/\.html?$/i, '');
+  const m = base.match(/^ChatHistory_(.+)_ArchivedChat_([^_]+)$/i);
+  if (!m){
+    return { type: 'unknown', title: filename, members: [], chatId: null };
+  }
+  const label = m[1].trim();
+  const chatId = m[2].trim();
+  const members = label.split(',').map(s => s.trim()).filter(Boolean);
+  if (members.length === 2){
+    return { type: '1:1', title: label, members, chatId };
+  }
+  if (members.length > 2){
+    return { type: 'group-unnamed', title: label, members, chatId };
+  }
+  return { type: 'group-named', title: label, members: [], chatId };
+}
+
+function chatTypeIcon(type){
+  if (type === '1:1') return '👤';
+  if (type === 'group-unnamed') return '👥';
+  if (type === 'group-named') return '#';
+  return '💬';
+}
+
+function chatSubtitle(meta){
+  if (meta.type === '1:1') return meta.members.join(' & ');
+  if (meta.type === 'group-unnamed') return meta.members.length + ' participants';
+  if (meta.type === 'group-named') return 'Group chat';
+  return '';
+}
+
+function renderChatList(){
+  const list = document.getElementById('chat-list');
+  const filterTerm = (document.getElementById('chat-filter-input').value || '').trim().toLowerCase();
+  list.innerHTML = '';
+  state.chats.forEach((chat, i) => {
+    if (filterTerm){
+      const haystack = (chat.meta.title + ' ' + chat.meta.members.join(' ')).toLowerCase();
+      if (!haystack.includes(filterTerm)) return;
+    }
+    const div = document.createElement('div');
+    div.className = 'chat-item' + (i === state.activeIndex ? ' active' : '');
+    const msgCount = chat.mode === 'parsed' ? chat.messages.length : 0;
+    const meta = chat.meta;
+    div.title = chat.name; // original filename, on hover
+    div.innerHTML = `<div class="title">${chatTypeIcon(meta.type)} ${escapeHtml(meta.title)}
+        <span class="badge ${chat.mode === 'parsed' ? 'ok' : 'raw'}">${chat.mode === 'parsed' ? 'parsed' : 'raw view'}</span></div>
+      <div class="meta">${escapeHtml(chatSubtitle(meta))}${chat.mode === 'parsed' ? ' · ' + msgCount + ' messages' : ' · structure not recognized'}</div>`;
+    div.onclick = () => { state.activeIndex = i; renderChatList(); renderMain(); };
+    list.appendChild(div);
+  });
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function highlightText(text, term){
+  if (!term) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return escaped.replace(new RegExp('('+safeTerm+')','ig'), '<mark>$1</mark>');
+}
+
+function renderMain(){
+  const container = document.getElementById('messages');
+  const titleEl = document.getElementById('chat-title');
+  const term = document.getElementById('search-input').value.trim();
+
+  if (state.activeIndex === -1){
+    titleEl.textContent = 'No chat selected';
+    container.innerHTML = `<div id="empty-state"><div style="font-size:40px;">💬</div><div>Select a chat on the left, or load new files.</div></div>`;
+    return;
+  }
+
+  const chat = state.chats[state.activeIndex];
+  titleEl.textContent = `${chatTypeIcon(chat.meta.type)} ${chat.meta.title}`;
+
+  if (chat.mode === 'raw'){
+    container.innerHTML = `<div id="raw-wrap" style="height:100%;">
+        <div id="raw-banner">This file's layout wasn't auto-recognized, so it's shown in its original form below. Ctrl/Cmd+F within the frame still works for search. Tell me what looks off and I'll refine the parser.</div>
+        <iframe id="raw-frame" srcdoc="${escapeHtml(chat.rawHtml)}"></iframe>
+      </div>`;
+    return;
+  }
+
+  let msgs = chat.messages;
+  if (term){
+    msgs = msgs.filter(m => m.sender.toLowerCase().includes(term.toLowerCase()) || m.body.toLowerCase().includes(term.toLowerCase()));
+  }
+
+  if (!msgs.length){
+    container.innerHTML = `<div id="empty-state"><div>No messages match "${escapeHtml(term)}" in this chat.</div></div>`;
+    return;
+  }
+
+  let html = '';
+  let lastDate = null;
+  msgs.forEach(m => {
+    const dateLabel = m.dateLabel || 'Date unknown';
+    if (dateLabel !== lastDate){
+      html += `<div class="day-divider"><span>${escapeHtml(dateLabel)}</span></div>`;
+      lastDate = dateLabel;
+    }
+    html += `<div class="msg-row">
+      <div class="avatar" style="background:${colorFor(m.sender)};">${initials(m.sender)}</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-sender">${highlightText(m.sender, term)}</span>
+          <span class="msg-time">${escapeHtml(m.time)}</span>
+        </div>
+        <div class="msg-bubble">${highlightText(m.body, term)}</div>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function renderSearchCount(){
+  const term = document.getElementById('search-input').value.trim();
+  const countEl = document.getElementById('search-results-count');
+  if (!term){ countEl.textContent=''; return; }
+  let total = 0;
+  state.chats.forEach(c => {
+    if (c.mode === 'parsed'){
+      total += c.messages.filter(m => m.sender.toLowerCase().includes(term.toLowerCase()) || m.body.toLowerCase().includes(term.toLowerCase())).length;
+    }
+  });
+  countEl.textContent = total + ' match' + (total===1?'':'es') + ' across loaded chats';
+}
+
+/* ============================================================
+   FILE LOADING
+   ============================================================ */
+function loadFiles(fileList){
+  const files = Array.from(fileList).filter(f => /\.html?$/i.test(f.name));
+  if (!files.length) return;
+  let remaining = files.length;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const parsed = parseChatFile(file.name, e.target.result);
+      state.chats.push(parsed);
+      remaining--;
+      if (remaining === 0){
+        if (state.activeIndex === -1) state.activeIndex = 0;
+        renderChatList();
+        renderMain();
+      }
+    };
+    reader.readAsText(file);
+  });
+}
+
+document.getElementById('file-input').addEventListener('change', e => loadFiles(e.target.files));
+
+document.getElementById('search-input').addEventListener('input', () => {
+  renderMain();
+  renderSearchCount();
+});
+
+document.getElementById('chat-filter-input').addEventListener('input', renderChatList);
+</script>
+</body>
+</html>
