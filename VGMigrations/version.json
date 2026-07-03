@@ -1,7 +1,16 @@
 {
-  "version": "2.9.4",
+  "version": "2.9.5",
   "releaseDate": "2026-06-26",
   "changelog": [
+    {
+      "version": "2.9.5",
+      "date": "2026-06-26",
+      "changes": [
+        "AOS Setup: added Step 1 — Assign Exchange Administrator role; enter the consent account UPN and click Assign Role before anything else; required for the Fly Exchange consent to succeed",
+        "New Add-ExchangeAdmin.ps1: connects to Microsoft Graph, looks up Exchange Administrator role definition, checks for existing assignment, and permanently assigns the role to the specified account; idempotent (no error if already assigned)",
+        "AOS Setup view restructured as 3 numbered steps: (1) Assign Exchange Admin, (2) Sign in to AOS, (3) Create App Profile and Grant Consent"
+      ]
+    },
     {
       "version": "2.9.4",
       "date": "2026-06-26",

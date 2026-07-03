@@ -436,14 +436,41 @@
       <div id="avepointAosView" class="view-container hidden">
         <h2 class="view-title">AOS Setup</h2>
 
-        <p class="form-help" style="margin-bottom: 20px;">
-          Enter your tenant details below. Sign in to AOS first, then click
-          <strong>Create App Profile &amp; Grant Consent</strong> — the automation
-          handles the rest.
+        <p class="form-help" style="margin-bottom: 12px;">
+          Complete the three steps below in order. Step 1 must finish before the Fly consent
+          in Step 3 will succeed.
         </p>
 
+        <!-- Step 1: Exchange Administrator role -->
+        <div class="form-card form-card-compact" style="margin-bottom:12px;">
+          <h3 class="form-card-title" style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--color-accent);color:#fff;font-size:11px;font-weight:700;flex-shrink:0;">1</span>
+            Assign Exchange Administrator Role
+          </h3>
+          <p class="form-help" style="margin-bottom:8px;">Required before granting consent — the Fly Exchange consent will fail if the account doesn't already hold this role. Sign in with a <strong>Global Administrator</strong> account when prompted.</p>
+
+          <div class="form-row" style="align-items:flex-end; gap:10px;">
+            <div class="form-group flex-1" style="margin:0;">
+              <label class="form-label">Account UPN <span style="font-weight:normal;color:var(--color-text-muted)">(the account that will approve the consent)</span></label>
+              <input type="text" class="form-input form-input-compact" id="aosExchangeAdminUpn" placeholder="e.g. admin@ourvolaris.onmicrosoft.com">
+            </div>
+            <button type="button" class="btn btn-primary btn-compact" id="aosAddExchangeAdminBtn" style="white-space:nowrap;">
+              Assign Role
+            </button>
+          </div>
+
+          <div id="aosExchangeAdminLog" style="display:none; margin-top:10px;">
+            <pre id="aosExchangeAdminLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:200px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0;"></pre>
+          </div>
+        </div>
+
+        <!-- Step 2 & 3: Tenant details + AOS sign-in + profile setup -->
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Tenant Details</h3>
+          <h3 class="form-card-title" style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--color-accent);color:#fff;font-size:11px;font-weight:700;flex-shrink:0;">2</span>
+            Sign In to AOS
+          </h3>
+          <p class="form-help" style="margin-bottom:8px;">Enter tenant details, then sign in to AOS to save a browser session for the automation.</p>
 
           <div class="form-row">
             <div class="form-group flex-1">
@@ -464,10 +491,18 @@
                    placeholder="e.g. OurVolaris App">
           </div>
 
-          <div class="form-actions" style="margin-top: 20px;">
+          <div class="form-actions" style="margin-top:12px;">
             <button type="button" class="btn btn-secondary" id="aosSignInBtn">
               🔐 Sign in to AOS
             </button>
+          </div>
+
+          <div style="border-top:1px solid #E5E7EB; margin-top:16px; padding-top:16px;">
+            <h3 class="form-card-title" style="display:flex;align-items:center;gap:8px; margin-bottom:6px;">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--color-accent);color:#fff;font-size:11px;font-weight:700;flex-shrink:0;">3</span>
+              Create App Profile &amp; Grant Consent
+            </h3>
+            <p class="form-help" style="margin-bottom:10px;">Browser automation creates the app profile and walks through the consent flows. Approve any prompts that appear.</p>
             <button type="button" class="btn btn-primary btn-large" id="aosRunSetupBtn">
               🚀 Create App Profile &amp; Grant Consent
             </button>

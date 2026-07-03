@@ -2585,6 +2585,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── Step 1: Assign Exchange Administrator role ────────────────────────────
+  const aosAddExchangeAdminBtn = document.getElementById('aosAddExchangeAdminBtn');
+  if (aosAddExchangeAdminBtn) {
+    aosAddExchangeAdminBtn.addEventListener('click', async () => {
+      const upn = (document.getElementById('aosExchangeAdminUpn') || {}).value?.trim();
+      if (!upn) { alert('Enter the UPN of the account to assign the Exchange Administrator role to.'); return; }
+
+      const logDiv = document.getElementById('aosExchangeAdminLog');
+      const logPre = document.getElementById('aosExchangeAdminLogPre');
+      if (logDiv) logDiv.style.display = 'block';
+      if (logPre) logPre.textContent = '';
+
+      aosAddExchangeAdminBtn.disabled = true;
+      aosAddExchangeAdminBtn.textContent = 'Assigning…';
+
+      window.electronAPI.onPsOutput((data) => {
+        if (logPre) {
+          logPre.textContent += data.replace(/\x1b\[[0-9;]*m/g, '');
+          logPre.scrollTop = logPre.scrollHeight;
+        }
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Add-ExchangeAdmin.ps1', ['-UPN', upn]);
+        if (logPre) logPre.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        if (logPre) logPre.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        aosAddExchangeAdminBtn.disabled = false;
+        aosAddExchangeAdminBtn.textContent = 'Assign Role';
+      }
+    });
+  }
+
   const aosLog    = document.getElementById('aosLog');
   const aosLogPre = document.getElementById('aosLogPre');
 
