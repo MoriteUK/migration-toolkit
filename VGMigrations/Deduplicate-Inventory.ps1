@@ -26,7 +26,8 @@ Add-Type -AssemblyName System.Windows.Forms
 # ============================================================
 
 Write-Host "Connecting to SharePoint Online..." -ForegroundColor Cyan
-Connect-SPOService -Url $TenantAdminUrl
+Write-Host "(A browser sign-in tab will open — authenticate and then return here)" -ForegroundColor Yellow
+Connect-SPOService -Url $TenantAdminUrl -UseWebLogin
 Write-Host "Connected." -ForegroundColor Green
 
 # ============================================================

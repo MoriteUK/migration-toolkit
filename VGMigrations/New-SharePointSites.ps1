@@ -83,7 +83,7 @@ Write-Host ""
 Write-Host "Connecting to destination SharePoint Online..." -ForegroundColor Cyan
 Write-Host "(A browser sign-in window will open — authenticate as a SharePoint Administrator of the destination tenant)" -ForegroundColor Yellow
 try {
-    Connect-SPOService -Url $destAdminUrl -ErrorAction Stop
+    Connect-SPOService -Url $destAdminUrl -UseWebLogin -ErrorAction Stop
     Write-Host "Connected" -ForegroundColor Green
 } catch {
     Write-Error "Connection failed: $_"

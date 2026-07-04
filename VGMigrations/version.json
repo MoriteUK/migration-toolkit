@@ -1,7 +1,14 @@
 {
-  "version": "2.9.6",
-  "releaseDate": "2026-06-26",
+  "version": "2.9.7",
+  "releaseDate": "2026-07-04",
   "changelog": [
+    {
+      "version": "2.9.7",
+      "date": "2026-07-04",
+      "changes": [
+        "Fix SharePoint Online sign-in for all in-app scripts: added -UseWebLogin to Connect-SPOService in Provision-OneDrives.ps1, Check-OneDriveStatus.ps1, New-SharePointSites.ps1, Remove-DeletedSharePointSites.ps1, Deduplicate-Inventory.ps1 — the interactive popup dialog does not appear when spawned from Electron; -UseWebLogin opens the OS default browser instead, which works correctly"
+      ]
+    },
     {
       "version": "2.9.6",
       "date": "2026-06-26",

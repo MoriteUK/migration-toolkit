@@ -80,8 +80,8 @@ Write-Host "SPO module $($mod.Version) loaded." -ForegroundColor Green
 
 # Connect
 Write-Host "Connecting to $AdminUrl..." -ForegroundColor Cyan
-Write-Host "(A sign-in window will open — please authenticate)" -ForegroundColor Yellow
-Connect-SPOService -Url $AdminUrl.TrimEnd('/') -ErrorAction Stop
+Write-Host "(A browser sign-in tab will open — authenticate and then return here)" -ForegroundColor Yellow
+Connect-SPOService -Url $AdminUrl.TrimEnd('/') -UseWebLogin -ErrorAction Stop
 Write-Host "Connected to SharePoint Online." -ForegroundColor Green
 
 # Fetch all personal sites in one call
