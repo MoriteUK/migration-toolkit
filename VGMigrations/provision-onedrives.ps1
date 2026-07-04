@@ -82,10 +82,11 @@ if (-not $mod) {
 Import-Module 'Microsoft.Online.SharePoint.PowerShell' -DisableNameChecking -ErrorAction Stop
 Write-Host "SPO module $($mod.Version) loaded." -ForegroundColor Green
 
-# Connect
+# Connect — use -UseWebLogin so the OS default browser handles auth
+# (avoids the embedded popup that fails when spawned from a non-interactive process)
 Write-Host "Connecting to $AdminUrl..." -ForegroundColor Cyan
-Write-Host "(A sign-in window will open — please authenticate)" -ForegroundColor Yellow
-Connect-SPOService -Url $AdminUrl.TrimEnd('/') -ErrorAction Stop
+Write-Host "(A browser sign-in tab will open — authenticate and then return here)" -ForegroundColor Yellow
+Connect-SPOService -Url $AdminUrl.TrimEnd('/') -UseWebLogin -ErrorAction Stop
 Write-Host "Connected to SharePoint Online." -ForegroundColor Green
 
 # Submit in batches of 200
