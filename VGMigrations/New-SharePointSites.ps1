@@ -81,68 +81,61 @@ Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop -WarningA
 
 Write-Host ""
 Write-Host "Connecting to destination SharePoint Online..." -ForegroundColor Cyan
-Write-Host "(A browser sign-in window will open — authenticate as a SharePoint Administrator of the destination tenant)" -ForegroundColor Yellow
-try {
-    Connect-SPOService -Url $destAdminUrl -UseWebLogin -ErrorAction Stop
-    Write-Host "Connected" -ForegroundColor Green
-} catch {
-    Write-Error "Connection failed: $_"
-    exit 1
+
+# Prefer PnP PowerShell (device code — works from non-interactive process); fall back to SPO module
+$pnpName = @('PnP.PowerShell','SharePointPnPPowerShellOnline') |
+    Where-Object { Get-Module -Name $_ -ListAvailable -ErrorAction SilentlyContinue } |
+    Select-Object -First 1
+$usePnp = $false
+
+if ($pnpName) {
+    Import-Module $pnpName -ErrorAction Stop -WarningAction SilentlyContinue
+    Write-Host ">>> Visit https://microsoft.com/devicelogin and enter the code shown below <<<" -ForegroundColor Yellow
+    try {
+        Connect-PnPOnline -Url $destAdminUrl -DeviceLogin -ErrorAction Stop
+        Write-Host "Connected via $pnpName" -ForegroundColor Green
+        $usePnp = $true
+    } catch {
+        Write-Warning "PnP connection failed: $_"
+    }
 }
 
-# Enable subsite creation — try SPO module first, fall back to PnP PowerShell
+if (-not $usePnp) {
+    if (-not (Get-Module -Name Microsoft.Online.SharePoint.PowerShell -ListAvailable)) {
+        Write-Error "Neither PnP.PowerShell nor Microsoft.Online.SharePoint.PowerShell is installed."
+        exit 1
+    }
+    Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop -WarningAction SilentlyContinue
+    Write-Host "(A sign-in window will open — authenticate as SharePoint Administrator)" -ForegroundColor Yellow
+    try {
+        Connect-SPOService -Url $destAdminUrl -ErrorAction Stop
+        Write-Host "Connected via SPO module" -ForegroundColor Green
+    } catch {
+        Write-Error "Connection failed: $_"
+        exit 1
+    }
+}
+
+# Enable subsite creation
 Write-Host ""
 Write-Host "Enabling subsite creation on destination tenant..." -ForegroundColor Cyan
 $subSiteEnabled = $false
 
-try {
-    Set-SPOTenant -DisableSubSiteCreation $false -ErrorAction Stop
-    Write-Host "  Enabled (SPO module)" -ForegroundColor Green
-    $subSiteEnabled = $true
-} catch {
-    if ($_.Exception.Message -notmatch 'parameter cannot be found') {
-        Write-Warning "  SPO module error: $_"
+if ($usePnp) {
+    try {
+        Set-PnPTenant -DisableSubSiteCreation $false -ErrorAction Stop
+        Write-Host "  Enabled (PnP)" -ForegroundColor Green
+        $subSiteEnabled = $true
+    } catch {
+        Write-Warning "  Could not enable subsite creation: $_"
     }
-}
-
-if (-not $subSiteEnabled) {
-    $pnpName = @('PnP.PowerShell', 'SharePointPnPPowerShellOnline') |
-        Where-Object { Get-Module -Name $_ -ListAvailable -ErrorAction SilentlyContinue } |
-        Select-Object -First 1
-
-    if ($pnpName) {
-        Write-Host "  SPO module too old — running $pnpName in isolated process..." -ForegroundColor Yellow
-        Write-Host "  (A browser sign-in window will open for the PnP connection)" -ForegroundColor Yellow
-
-        $tmpScript = [System.IO.Path]::GetTempFileName() + '.ps1'
-        $tmpResult = [System.IO.Path]::GetTempFileName()
-        try {
-            @"
-try {
-    Import-Module $pnpName -ErrorAction Stop -WarningAction SilentlyContinue
-    Connect-PnPOnline -Url '$destAdminUrl' -Interactive -ErrorAction Stop
-    Set-PnPTenant -DisableSubSiteCreation `$false -ErrorAction Stop
-    Disconnect-PnPOnline -ErrorAction SilentlyContinue
-    [System.IO.File]::WriteAllText('$($tmpResult -replace "\\","/")', 'OK')
-} catch {
-    [System.IO.File]::WriteAllText('$($tmpResult -replace "\\","/")', "FAILED: `$_")
-}
-"@ | Set-Content $tmpScript -Encoding UTF8
-
-            $proc = Start-Process pwsh `
-                -ArgumentList @('-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Minimized', '-File', $tmpScript) `
-                -Wait -PassThru
-            $resultText = if (Test-Path $tmpResult) { (Get-Content $tmpResult -Raw -ErrorAction SilentlyContinue).Trim() } else { "FAILED: no result (exit $($proc.ExitCode))" }
-
-            if ($resultText -eq 'OK') {
-                Write-Host "  Enabled ($pnpName)" -ForegroundColor Green
-                $subSiteEnabled = $true
-            } else {
-                Write-Warning "  $resultText"
-            }
-        } finally {
-            Remove-Item $tmpScript, $tmpResult -Force -ErrorAction SilentlyContinue
-        }
+} else {
+    try {
+        Set-SPOTenant -DisableSubSiteCreation $false -ErrorAction Stop
+        Write-Host "  Enabled (SPO module)" -ForegroundColor Green
+        $subSiteEnabled = $true
+    } catch {
+        Write-Warning "  SPO module error: $_"
     }
 }
 
@@ -171,10 +164,11 @@ foreach ($url in $destUrls) {
 
     $site = $null
     try {
-        $site = Get-SPOSite -Identity $url -ErrorAction Stop
+        if ($usePnp) { $site = Get-PnPTenantSite -Url $url -ErrorAction Stop }
+        else         { $site = Get-SPOSite -Identity $url -ErrorAction Stop }
     } catch { }
 
-    # A deleted site sits in the SPO recycle bin — Get-SPOSite still returns it with Status = Recycled
+    # A deleted site sits in the recycle bin — status = Recycled
     if ($site -and $site.Status -ne 'Recycled') {
         Write-Host "  Already exists ($($site.Status)) — skipping" -ForegroundColor Gray
         $existed++
@@ -184,7 +178,8 @@ foreach ($url in $destUrls) {
     if ($site -and $site.Status -eq 'Recycled') {
         Write-Host "  Found in recycle bin — removing before recreating..." -ForegroundColor Yellow
         try {
-            Remove-SPODeletedSite -Identity $url -Confirm:$false -ErrorAction Stop
+            if ($usePnp) { Remove-PnPTenantDeletedSite -Url $url -Force -ErrorAction Stop }
+            else         { Remove-SPODeletedSite -Identity $url -Confirm:$false -ErrorAction Stop }
             Write-Host "  Removed from recycle bin" -ForegroundColor Gray
         } catch {
             Write-Warning "  Could not remove from recycle bin: $_"
@@ -194,13 +189,11 @@ foreach ($url in $destUrls) {
     $title = ($url -split '/')[-1] -replace '[_-]+', ' '
     Write-Host "  Creating '$title'..." -ForegroundColor Yellow
     try {
-        New-SPOSite `
-            -Url          $url `
-            -Owner        $SiteOwner `
-            -StorageQuota 1024 `
-            -Title        $title `
-            -Template     'STS#3' `
-            -ErrorAction  Stop
+        if ($usePnp) {
+            New-PnPSite -Type CommunicationSite -Url $url -Owner $SiteOwner -Title $title -ErrorAction Stop
+        } else {
+            New-SPOSite -Url $url -Owner $SiteOwner -StorageQuota 1024 -Title $title -Template 'STS#3' -ErrorAction Stop
+        }
         Write-Host "  Created OK" -ForegroundColor Green
         $created++
     } catch {
@@ -213,4 +206,4 @@ Write-Host ""
 $colour = if ($failed -gt 0) { 'Yellow' } else { 'Green' }
 Write-Host "=== Done — $created created, $existed already existed, $failed failed ===" -ForegroundColor $colour
 
-try { Disconnect-SPOService -ErrorAction SilentlyContinue } catch {}
+try { if ($usePnp) { Disconnect-PnPOnline -ErrorAction SilentlyContinue } else { Disconnect-SPOService -ErrorAction SilentlyContinue } } catch {}

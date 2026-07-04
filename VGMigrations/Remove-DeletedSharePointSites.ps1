@@ -51,21 +51,40 @@ $destAdminUrl = "$($uri.Scheme)://$($uri.Host -replace '\.sharepoint\.com$', '-a
 Write-Host ""
 Write-Host "Destination admin URL: $destAdminUrl" -ForegroundColor Cyan
 
-if (-not (Get-Module -Name Microsoft.Online.SharePoint.PowerShell -ListAvailable)) {
-    Write-Error "Microsoft.Online.SharePoint.PowerShell is not installed."
-    exit 1
-}
-Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop -WarningAction SilentlyContinue
-
 Write-Host ""
 Write-Host "Connecting..." -ForegroundColor Cyan
-Write-Host "(Browser sign-in window will open — authenticate as a SharePoint Administrator of the destination tenant)" -ForegroundColor Yellow
-try {
-    Connect-SPOService -Url $destAdminUrl -UseWebLogin -ErrorAction Stop
-    Write-Host "Connected" -ForegroundColor Green
-} catch {
-    Write-Error "Connection failed: $_"
-    exit 1
+
+$pnpName = @('PnP.PowerShell','SharePointPnPPowerShellOnline') |
+    Where-Object { Get-Module -Name $_ -ListAvailable -ErrorAction SilentlyContinue } |
+    Select-Object -First 1
+$usePnp = $false
+
+if ($pnpName) {
+    Import-Module $pnpName -ErrorAction Stop -WarningAction SilentlyContinue
+    Write-Host ">>> Visit https://microsoft.com/devicelogin and enter the code shown below <<<" -ForegroundColor Yellow
+    try {
+        Connect-PnPOnline -Url $destAdminUrl -DeviceLogin -ErrorAction Stop
+        Write-Host "Connected via $pnpName" -ForegroundColor Green
+        $usePnp = $true
+    } catch {
+        Write-Warning "PnP connection failed: $_"
+    }
+}
+
+if (-not $usePnp) {
+    if (-not (Get-Module -Name Microsoft.Online.SharePoint.PowerShell -ListAvailable)) {
+        Write-Error "Neither PnP.PowerShell nor Microsoft.Online.SharePoint.PowerShell is installed."
+        exit 1
+    }
+    Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop -WarningAction SilentlyContinue
+    Write-Host "(A sign-in window will open — authenticate as SharePoint Administrator)" -ForegroundColor Yellow
+    try {
+        Connect-SPOService -Url $destAdminUrl -ErrorAction Stop
+        Write-Host "Connected via SPO module" -ForegroundColor Green
+    } catch {
+        Write-Error "Connection failed: $_"
+        exit 1
+    }
 }
 
 $purged  = 0
@@ -78,7 +97,10 @@ foreach ($url in $destUrls) {
 
     # Check active sites first
     $site = $null
-    try { $site = Get-SPOSite -Identity $url -ErrorAction Stop } catch { }
+    try {
+        if ($usePnp) { $site = Get-PnPTenantSite -Url $url -ErrorAction Stop }
+        else         { $site = Get-SPOSite -Identity $url -ErrorAction Stop }
+    } catch { }
 
     if ($site -and $site.Status -ne 'Recycled') {
         Write-Host "  Site is active (Status=$($site.Status)) — skipping" -ForegroundColor Gray
@@ -88,7 +110,10 @@ foreach ($url in $destUrls) {
 
     # Look for it in the deleted sites recycle bin
     $deleted = $null
-    try { $deleted = Get-SPODeletedSite -Identity $url -ErrorAction Stop } catch { }
+    try {
+        if ($usePnp) { $deleted = Get-PnPTenantDeletedSite -Url $url -ErrorAction Stop }
+        else         { $deleted = Get-SPODeletedSite -Identity $url -ErrorAction Stop }
+    } catch { }
 
     if (-not $deleted) {
         Write-Host "  Not found in recycle bin — nothing to purge" -ForegroundColor Gray
@@ -98,7 +123,8 @@ foreach ($url in $destUrls) {
 
     Write-Host "  Found in recycle bin — purging permanently..." -ForegroundColor Yellow
     try {
-        Remove-SPODeletedSite -Identity $url -Confirm:$false -ErrorAction Stop
+        if ($usePnp) { Remove-PnPTenantDeletedSite -Url $url -Force -ErrorAction Stop }
+        else         { Remove-SPODeletedSite -Identity $url -Confirm:$false -ErrorAction Stop }
         Write-Host "  Purged" -ForegroundColor Green
         $purged++
     } catch {
@@ -111,4 +137,4 @@ Write-Host ""
 $colour = if ($failed -gt 0) { 'Yellow' } else { 'Green' }
 Write-Host "=== Done — $purged purged, $skipped skipped, $failed failed ===" -ForegroundColor $colour
 
-try { Disconnect-SPOService -ErrorAction SilentlyContinue } catch {}
+try { if ($usePnp) { Disconnect-PnPOnline -ErrorAction SilentlyContinue } else { Disconnect-SPOService -ErrorAction SilentlyContinue } } catch {}

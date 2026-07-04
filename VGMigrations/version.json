@@ -1,7 +1,17 @@
 {
-  "version": "2.9.7",
+  "version": "2.9.8",
   "releaseDate": "2026-07-04",
   "changelog": [
+    {
+      "version": "2.9.8",
+      "date": "2026-07-04",
+      "changes": [
+        "Fix Provision-OneDrives.ps1: replaced SPO module (Connect-SPOService + Request-SPOPersonalSite) with Microsoft Graph; authenticates via device code (code appears in log panel); triggers provisioning by calling Get-MgUserDrive per user — no browser popup required",
+        "Fix Check-OneDriveStatus.ps1: same Graph migration; checks drive existence via Get-MgUserDrive per user instead of Get-SPOSite bulk query",
+        "Fix New-SharePointSites.ps1, Remove-DeletedSharePointSites.ps1, Deduplicate-Inventory.ps1: now prefer PnP.PowerShell with -DeviceLogin (device code appears in log, no popup); fall back to SPO module if PnP not installed",
+        "Root cause: -UseWebLogin removed in SPO module v16.0.27313.12000; default Connect-SPOService MSAL browser popup is invisible when spawned as Electron child process"
+      ]
+    },
     {
       "version": "2.9.7",
       "date": "2026-07-04",

@@ -1,5 +1,4 @@
 #Requires -Modules ImportExcel
-#Requires -Modules Microsoft.Online.SharePoint.PowerShell
 
 [CmdletBinding()]
 param(
@@ -26,9 +25,34 @@ Add-Type -AssemblyName System.Windows.Forms
 # ============================================================
 
 Write-Host "Connecting to SharePoint Online..." -ForegroundColor Cyan
-Write-Host "(A browser sign-in tab will open — authenticate and then return here)" -ForegroundColor Yellow
-Connect-SPOService -Url $TenantAdminUrl -UseWebLogin
-Write-Host "Connected." -ForegroundColor Green
+
+$pnpName = @('PnP.PowerShell','SharePointPnPPowerShellOnline') |
+    Where-Object { Get-Module -Name $_ -ListAvailable -ErrorAction SilentlyContinue } |
+    Select-Object -First 1
+$usePnp = $false
+
+if ($pnpName) {
+    Import-Module $pnpName -ErrorAction Stop -WarningAction SilentlyContinue
+    Write-Host ">>> Visit https://microsoft.com/devicelogin and enter the code shown below <<<" -ForegroundColor Yellow
+    try {
+        Connect-PnPOnline -Url $TenantAdminUrl -DeviceLogin -ErrorAction Stop
+        Write-Host "Connected via $pnpName" -ForegroundColor Green
+        $usePnp = $true
+    } catch {
+        Write-Warning "PnP connection failed: $_"
+    }
+}
+
+if (-not $usePnp) {
+    if (-not (Get-Module -Name Microsoft.Online.SharePoint.PowerShell -ListAvailable)) {
+        Write-Error "Neither PnP.PowerShell nor Microsoft.Online.SharePoint.PowerShell is installed."
+        exit 1
+    }
+    Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop -WarningAction SilentlyContinue
+    Write-Host "(A sign-in window will open — authenticate as SharePoint Administrator)" -ForegroundColor Yellow
+    Connect-SPOService -Url $TenantAdminUrl -ErrorAction Stop
+    Write-Host "Connected via SPO module." -ForegroundColor Green
+}
 
 # ============================================================
 # IMPORT WORKBOOK
@@ -166,7 +190,8 @@ foreach ($Site in $Sites)
     # SPO Validation
     try
     {
-        $SpoSite = Get-SPOSite -Identity $SiteUrl -Detailed -ErrorAction Stop
+        if ($usePnp) { $SpoSite = Get-PnPTenantSite -Url $SiteUrl -ErrorAction Stop }
+        else         { $SpoSite = Get-SPOSite -Identity $SiteUrl -Detailed -ErrorAction Stop }
     }
     catch
     {
@@ -275,3 +300,5 @@ Write-Host "Teams         : $($TeamsOutput.Count)"
 Write-Host "Groups        : $($GroupsOutput.Count)"
 Write-Host "SharePoint    : $($SharePointOutput.Count)"
 Write-Host "ExcludedSites : $($ExcludedSites.Count)"
+
+try { if ($usePnp) { Disconnect-PnPOnline -ErrorAction SilentlyContinue } else { Disconnect-SPOService -ErrorAction SilentlyContinue } } catch {}

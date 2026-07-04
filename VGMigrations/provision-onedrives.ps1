@@ -5,7 +5,7 @@
 .PARAMETER MappingFile
     Path to CSV containing destination UPNs.
 .PARAMETER AdminUrl
-    SharePoint Online admin URL (e.g. https://tenant-admin.sharepoint.com).
+    SharePoint Online admin URL — kept for UI compatibility, not used for auth.
 .PARAMETER Column
     Column name to read UPNs from. Auto-detected if omitted.
 .PARAMETER WhatIf
@@ -13,7 +13,7 @@
 #>
 param(
     [Parameter(Mandatory=$true)]  [string]$MappingFile,
-    [Parameter(Mandatory=$true)]  [string]$AdminUrl,
+    [Parameter(Mandatory=$false)] [string]$AdminUrl = "",
     [Parameter(Mandatory=$false)] [string]$Column = "",
     [Parameter(Mandatory=$false)] [switch]$WhatIf
 )
@@ -21,9 +21,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 Write-Host "=== Provision OneDrives ===" -ForegroundColor Cyan
-Write-Host "File:      $MappingFile"
-Write-Host "Admin URL: $AdminUrl"
-if ($WhatIf) { Write-Host "Mode:      WhatIf (no changes will be made)" -ForegroundColor Yellow }
+Write-Host "File: $MappingFile"
+if ($WhatIf) { Write-Host "Mode: WhatIf (no changes will be made)" -ForegroundColor Yellow }
 
 # Read mapping file
 if (-not (Test-Path $MappingFile)) { Write-Error "Mapping file not found: $MappingFile"; exit 1 }
@@ -66,53 +65,52 @@ if ($upns.Count -eq 0) { Write-Error "No valid UPNs found."; exit 1 }
 Write-Host "$($upns.Count) unique UPN(s) ready." -ForegroundColor Green
 
 if ($WhatIf) {
-    Write-Host "`nWhatIf — would submit $($upns.Count) UPN(s) to: $AdminUrl"
+    Write-Host "`nWhatIf — would provision OneDrive for $($upns.Count) UPN(s):"
     $upns | ForEach-Object { Write-Host "  $_" }
     Write-Host "`n=== WhatIf complete — no changes made ===" -ForegroundColor Yellow
     exit 0
 }
 
-# Load SPO module
-Write-Host "`nLoading SharePoint Online module..." -ForegroundColor Cyan
-$mod = Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell' -ErrorAction SilentlyContinue
-if (-not $mod) {
-    Write-Error "Microsoft.Online.SharePoint.PowerShell is not installed.`nRun: Install-Module Microsoft.Online.SharePoint.PowerShell -Scope CurrentUser"
-    exit 1
+# Load Microsoft Graph modules
+Write-Host "`nLoading Microsoft Graph modules..." -ForegroundColor Cyan
+$graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Files')
+foreach ($m in $graphMods) {
+    if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
+        Write-Error "Required module not installed: $m`nRun: Install-Module Microsoft.Graph -Scope CurrentUser -Force"
+        exit 1
+    }
+    Import-Module $m -ErrorAction Stop
 }
-Import-Module 'Microsoft.Online.SharePoint.PowerShell' -DisableNameChecking -ErrorAction Stop
-Write-Host "SPO module $($mod.Version) loaded." -ForegroundColor Green
+Write-Host "Graph modules loaded." -ForegroundColor Green
 
-# Connect — use -UseWebLogin so the OS default browser handles auth
-# (avoids the embedded popup that fails when spawned from a non-interactive process)
-Write-Host "Connecting to $AdminUrl..." -ForegroundColor Cyan
-Write-Host "(A browser sign-in tab will open — authenticate and then return here)" -ForegroundColor Yellow
-Connect-SPOService -Url $AdminUrl.TrimEnd('/') -UseWebLogin -ErrorAction Stop
-Write-Host "Connected to SharePoint Online." -ForegroundColor Green
+# Connect via device code — works from any process without a browser popup
+Write-Host "`nConnecting to Microsoft Graph..." -ForegroundColor Cyan
+Write-Host ">>> Visit https://microsoft.com/devicelogin and enter the code shown below <<<" -ForegroundColor Yellow
+Connect-MgGraph -Scopes 'Sites.ReadWrite.All','User.Read.All' -UseDeviceCode -NoWelcome -ErrorAction Stop
+Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
 
-# Submit in batches of 200
-$batchSize  = 200
-$submitted  = 0
-$failed     = 0
-$totalBatch = [math]::Ceiling($upns.Count / $batchSize)
+# Accessing each user's drive triggers OneDrive provisioning if not yet provisioned
+Write-Host "`nProvisioning $($upns.Count) OneDrive(s)..." -ForegroundColor Cyan
+$ok   = 0
+$fail = 0
 
-for ($i = 0; $i -lt $upns.Count; $i += $batchSize) {
-    $end   = [math]::Min($i + $batchSize, $upns.Count)
-    $chunk = $upns[$i..($end - 1)]
-    $batch = [math]::Floor($i / $batchSize) + 1
-    Write-Host "Batch $batch/${totalBatch}: submitting $($chunk.Count) UPN(s)..." -ForegroundColor Cyan
+foreach ($upn in $upns) {
     try {
-        Request-SPOPersonalSite -UserEmails $chunk -ErrorAction Stop
-        $submitted += $chunk.Count
-        Write-Host "  Batch $batch accepted." -ForegroundColor Green
+        $drive = Get-MgUserDrive -UserId $upn -ErrorAction Stop
+        Write-Host "  OK  $upn  ($($drive.DriveType))" -ForegroundColor Green
+        $ok++
     } catch {
-        $failed += $chunk.Count
-        Write-Warning "  Batch $batch failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+        $msg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+        Write-Host "  FAIL $upn — $msg" -ForegroundColor Red
+        $fail++
     }
 }
 
+try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
+
 Write-Host "`n=== Provisioning complete ===" -ForegroundColor Green
-Write-Host "Submitted: $submitted   Failed: $failed"
-if ($failed -gt 0) {
-    Write-Warning "$failed UPN(s) were in failed batches."
+Write-Host "Provisioned: $ok   Failed: $fail"
+if ($fail -gt 0) {
+    Write-Warning "$fail UPN(s) could not be provisioned."
     exit 1
 }

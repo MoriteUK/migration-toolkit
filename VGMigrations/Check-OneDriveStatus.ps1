@@ -5,7 +5,7 @@
 .PARAMETER MappingFile
     Path to CSV containing destination UPNs.
 .PARAMETER AdminUrl
-    SharePoint Online admin URL (e.g. https://tenant-admin.sharepoint.com).
+    SharePoint Online admin URL — kept for UI compatibility, not used for auth.
 .PARAMETER Column
     Column name to read UPNs from. Auto-detected if omitted.
 .PARAMETER ExportCleanCsv
@@ -13,7 +13,7 @@
 #>
 param(
     [Parameter(Mandatory=$true)]  [string]$MappingFile,
-    [Parameter(Mandatory=$true)]  [string]$AdminUrl,
+    [Parameter(Mandatory=$false)] [string]$AdminUrl = "",
     [Parameter(Mandatory=$false)] [string]$Column = "",
     [Parameter(Mandatory=$false)] [string]$ExportCleanCsv = ""
 )
@@ -21,8 +21,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 Write-Host "=== Check OneDrive Status ===" -ForegroundColor Cyan
-Write-Host "File:      $MappingFile"
-Write-Host "Admin URL: $AdminUrl"
+Write-Host "File: $MappingFile"
 if ($ExportCleanCsv) { Write-Host "Export to: $ExportCleanCsv" }
 
 # Read mapping file
@@ -68,66 +67,52 @@ if ($dropped -gt 0) { Write-Warning "$dropped row(s) skipped — blank, invalid,
 if ($orderedUpns.Count -eq 0) { Write-Error "No valid UPNs found."; exit 1 }
 Write-Host "$($orderedUpns.Count) unique UPN(s) to check." -ForegroundColor Green
 
-# Load SPO module
-Write-Host "`nLoading SharePoint Online module..." -ForegroundColor Cyan
-$mod = Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell' -ErrorAction SilentlyContinue
-if (-not $mod) {
-    Write-Error "Microsoft.Online.SharePoint.PowerShell is not installed.`nRun: Install-Module Microsoft.Online.SharePoint.PowerShell -Scope CurrentUser"
-    exit 1
+# Load Microsoft Graph modules
+Write-Host "`nLoading Microsoft Graph modules..." -ForegroundColor Cyan
+$graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Files')
+foreach ($m in $graphMods) {
+    if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
+        Write-Error "Required module not installed: $m`nRun: Install-Module Microsoft.Graph -Scope CurrentUser -Force"
+        exit 1
+    }
+    Import-Module $m -ErrorAction Stop
 }
-Import-Module 'Microsoft.Online.SharePoint.PowerShell' -DisableNameChecking -ErrorAction Stop
-Write-Host "SPO module $($mod.Version) loaded." -ForegroundColor Green
+Write-Host "Graph modules loaded." -ForegroundColor Green
 
-# Connect
-Write-Host "Connecting to $AdminUrl..." -ForegroundColor Cyan
-Write-Host "(A browser sign-in tab will open — authenticate and then return here)" -ForegroundColor Yellow
-Connect-SPOService -Url $AdminUrl.TrimEnd('/') -UseWebLogin -ErrorAction Stop
-Write-Host "Connected to SharePoint Online." -ForegroundColor Green
+# Connect via device code — works from any process without a browser popup
+Write-Host "`nConnecting to Microsoft Graph..." -ForegroundColor Cyan
+Write-Host ">>> Visit https://microsoft.com/devicelogin and enter the code shown below <<<" -ForegroundColor Yellow
+Connect-MgGraph -Scopes 'Sites.ReadWrite.All','User.Read.All' -UseDeviceCode -NoWelcome -ErrorAction Stop
+Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
 
-# Fetch all personal sites in one call
-$tenantName = $AdminUrl -replace 'https://', '' -replace '-admin\.sharepoint\.com.*', ''
-Write-Host "`nFetching all OneDrive sites in tenant..." -ForegroundColor Cyan
-$allOdbSites = Get-SPOSite -IncludePersonalSite $true -Limit All `
-    -Filter "Url -like 'https://$tenantName-my.sharepoint.com/personal/%'" -ErrorAction Stop
-Write-Host "  $($allOdbSites.Count) OneDrive site(s) found in tenant." -ForegroundColor Green
-
-# Build lookup: normalized URL tail → site URL
-# SPO encodes UPN by lowercasing and replacing '.' and '@' with '_'
-$siteIndex = @{}
-foreach ($site in $allOdbSites) {
-    $tail = ($site.Url -split '/personal/')[-1].ToLower()
-    $siteIndex[$tail] = $site.Url
-}
-
-# Check each UPN
+# Check each UPN for OneDrive
 Write-Host "`nChecking $($orderedUpns.Count) UPN(s)..." -ForegroundColor Cyan
 $withOdb    = [System.Collections.Generic.List[string]]::new()
 $withoutOdb = [System.Collections.Generic.List[string]]::new()
 
 foreach ($upn in $orderedUpns) {
-    # Primary encoding: replace '.' and '@' with '_'
-    $tail = $upn.ToLower() -replace '[.@]', '_'
-    if ($siteIndex.ContainsKey($tail)) {
-        $withOdb.Add($upn)
-    } else {
-        # Fallback: also replace '-' (some tenants encode hyphens)
-        $tailAlt = $upn.ToLower() -replace '[.@\-]', '_'
-        if ($siteIndex.ContainsKey($tailAlt)) {
+    try {
+        $drive = Get-MgUserDrive -UserId $upn -ErrorAction Stop
+        if ($drive -and $drive.Id) {
             $withOdb.Add($upn)
         } else {
             $withoutOdb.Add($upn)
         }
+    } catch {
+        $withoutOdb.Add($upn)
     }
 }
 
+try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
+
 # Output results
-Write-Host "`n─── Has OneDrive ($($withOdb.Count)) " + ('─' * 40) -ForegroundColor Green
+Write-Host "`n--- Has OneDrive ($($withOdb.Count)) ---" -ForegroundColor Green
 foreach ($u in $withOdb) { Write-Host "  v $u" -ForegroundColor Green }
 
-Write-Host "`n─── No OneDrive ($($withoutOdb.Count)) " + ('─' * 40) -ForegroundColor Yellow
+Write-Host "`n--- No OneDrive ($($withoutOdb.Count)) ---" -ForegroundColor Yellow
 foreach ($u in $withoutOdb) { Write-Host "  x $u" -ForegroundColor Yellow }
 
-Write-Host "`n─── Summary " + ('─' * 50) -ForegroundColor Cyan
+Write-Host "`n--- Summary ---" -ForegroundColor Cyan
 Write-Host "  Checked:       $($orderedUpns.Count)"
 Write-Host ("  Has OneDrive:  " + $withOdb.Count) -ForegroundColor Green
 Write-Host ("  No OneDrive:   " + $withoutOdb.Count) -ForegroundColor Yellow
