@@ -1,7 +1,16 @@
 {
-  "version": "2.9.8",
-  "releaseDate": "2026-07-04",
+  "version": "2.9.9",
+  "releaseDate": "2026-07-06",
   "changelog": [
+    {
+      "version": "2.9.9",
+      "date": "2026-07-06",
+      "changes": [
+        "New Rename-DomainObjects.ps1: clean standalone script containing only the rename logic — no WinForms GUI, no delete commands",
+        "App now calls Rename-DomainObjects.ps1 instead of remove-domain.ps1 for the in-app Rename Domain Objects view",
+        "remove-domain.ps1 retained as-is for the legacy standalone GUI window (launched without -DiscoveryFolder)"
+      ]
+    },
     {
       "version": "2.9.8",
       "date": "2026-07-04",

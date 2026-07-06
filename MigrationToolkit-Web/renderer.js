@@ -3032,7 +3032,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('remove-domain.ps1', args);
+        const result = await window.electronAPI.streamPowerShell('Rename-DomainObjects.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
