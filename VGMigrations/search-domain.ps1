@@ -205,7 +205,8 @@ param (
     [switch]$Hybrid,
     [string]$BusinessUnitId,
     [switch]$SkipPowerPlatform,      # When set, the upfront Power Platform scan is bypassed (useful for unattended/overnight runs and batch orchestration)
-    [string]$OutputPath              # Base directory for output; overrides (Get-Location) when passed from the Electron UI
+    [string]$OutputPath,             # Base directory for output; overrides (Get-Location) when passed from the Electron UI
+    [string]$SharePointAdminUrl      # SPO admin URL (e.g. https://tenant-admin.sharepoint.com); overrides shared config and the hardcoded default
 )
 
 Set-StrictMode -Version Latest
@@ -1163,24 +1164,28 @@ if ($true) {
             Write-Log "Microsoft.Online.SharePoint.PowerShell not installed — skipping. Install: Install-Module Microsoft.Online.SharePoint.PowerShell -Scope CurrentUser" -Level WARN
         } else {
             # ── Resolve the SPO admin URL ─────────────────────────────────────────
-            # Default is the Volaris tenant admin site.
-            # Override per-tenant via Settings > Customer > SharePoint Admin URL.
+            # Priority: -SharePointAdminUrl param → shared-config.json → hardcoded default
             $adminUrl = 'https://ourvolaris-admin.sharepoint.com'
 
-            $sharedCfgPath = Join-Path $env:LOCALAPPDATA 'FlyMigration\shared-config.json'
-            try {
-                if (Test-Path $sharedCfgPath) {
-                    $sharedCfg = Get-Content $sharedCfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
-                    $cfgVal = if ($sharedCfg.SharePointAdminUrl) { $sharedCfg.SharePointAdminUrl.Trim().TrimEnd('/') } else { $null }
-                    if ($cfgVal) {
-                        $adminUrl = $cfgVal
-                        Write-Log "SPO admin URL overridden from shared config: $adminUrl" -Level SUCCESS
-                    } else {
-                        Write-Log "SPO admin URL: using default ($adminUrl)"
+            if (-not [string]::IsNullOrWhiteSpace($SharePointAdminUrl)) {
+                $adminUrl = $SharePointAdminUrl.Trim().TrimEnd('/')
+                Write-Log "SPO admin URL from parameter: $adminUrl" -Level SUCCESS
+            } else {
+                $sharedCfgPath = Join-Path $env:LOCALAPPDATA 'FlyMigration\shared-config.json'
+                try {
+                    if (Test-Path $sharedCfgPath) {
+                        $sharedCfg = Get-Content $sharedCfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                        $cfgVal = if ($sharedCfg.SharePointAdminUrl) { $sharedCfg.SharePointAdminUrl.Trim().TrimEnd('/') } else { $null }
+                        if ($cfgVal) {
+                            $adminUrl = $cfgVal
+                            Write-Log "SPO admin URL overridden from shared config: $adminUrl" -Level SUCCESS
+                        } else {
+                            Write-Log "SPO admin URL: using default ($adminUrl)"
+                        }
                     }
+                } catch {
+                    Write-Log "Could not read shared config for SPO admin URL ($($_.Exception.Message)) — using default $adminUrl" -Level WARN
                 }
-            } catch {
-                Write-Log "Could not read shared config for SPO admin URL ($($_.Exception.Message)) — using default $adminUrl" -Level WARN
             }
 
             if ($adminUrl) {

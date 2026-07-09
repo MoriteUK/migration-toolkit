@@ -1,7 +1,15 @@
 {
-  "version": "2.9.9",
-  "releaseDate": "2026-07-06",
+  "version": "2.9.10",
+  "releaseDate": "2026-07-09",
   "changelog": [
+    {
+      "version": "2.9.10",
+      "date": "2026-07-09",
+      "changes": [
+        "discovery-menu.ps1: added SharePoint Admin URL field — enter the destination tenant's admin URL (https://tenant-admin.sharepoint.com) to override the saved config; leave blank to use the saved value",
+        "search-domain.ps1: added -SharePointAdminUrl parameter; takes priority over shared-config.json and the hardcoded default"
+      ]
+    },
     {
       "version": "2.9.9",
       "date": "2026-07-06",

@@ -410,6 +410,19 @@ function Show-DiscoveryMenu {
 
     $y += 32
 
+    # ── SharePoint Admin URL ──────────────────────────────────────────────────
+    $null = MkLabel 'SPO Admin URL:' $lx ($y+4) $true
+
+    $txtSpoUrl = New-Object System.Windows.Forms.TextBox
+    $txtSpoUrl.Location    = [System.Drawing.Point]::new($lx + 105, $y + 1)
+    $txtSpoUrl.Size        = [System.Drawing.Size]::new(490, 24)
+    $txtSpoUrl.Font        = $FontBody
+    $txtSpoUrl.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    try { $txtSpoUrl.PlaceholderText = 'https://tenant-admin.sharepoint.com  (leave blank to use saved config)' } catch {}
+    $form.Controls.Add($txtSpoUrl)
+
+    $y += 32
+
     # ── Run / Stop buttons ────────────────────────────────────────────────────
     $btnRun = New-Object System.Windows.Forms.Button
     $btnRun.Text = 'Run Discovery'; $btnRun.Location = [System.Drawing.Point]::new($lx,$y)
@@ -479,6 +492,7 @@ function Show-DiscoveryMenu {
             foreach ($ctrl in @($sep1Ctrl, $lblOptions,
                                 $chkSkipPP, $chkHybrid, $chkMembers, $chkContinue,
                                 $sep2Ctrl, $lbOutDir, $txtOutDir, $btnBrowseOut,
+                                $txtSpoUrl,
                                 $btnRun, $btnStop, $btnClearLog, $rtbLog)) {
                 $ctrl.Top += $delta
             }
@@ -655,6 +669,8 @@ function Show-DiscoveryMenu {
         $buid   = $txtBuid.Text.Trim()
         $escOut = $txtOutDir.Text.Trim() -replace "'","''"
 
+        $spoUrl = $txtSpoUrl.Text.Trim()
+
         if ($radSingle.Checked) {
             $domain = $cmbDomain.Text.Trim().ToLower().TrimStart('@')
             if ([string]::IsNullOrWhiteSpace($domain)) {
@@ -663,13 +679,14 @@ function Show-DiscoveryMenu {
             if (-not (Test-Path $SingleScript)) {
                 [System.Windows.Forms.MessageBox]::Show("Script not found:`n$SingleScript",'Not Found','OK','Error') | Out-Null; return
             }
-            Write-Log "Run (single): domain=$domain  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  BUID='$buid'"
+            Write-Log "Run (single): domain=$domain  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  BUID='$buid'  SPOAdmin='$spoUrl'"
             $escS = $SingleScript -replace "'","''"
             $cmd  = "Set-Location '$escOut'; & '$escS' -Domain '$domain'"
             if ($chkHybrid.Checked)  { $cmd += ' -Hybrid' }
             if ($chkMembers.Checked) { $cmd += ' -IncludeMembers' }
             if ($chkSkipPP.Checked)  { $cmd += ' -SkipPowerPlatform' }
             if ($buid)               { $cmd += " -BusinessUnitId '$buid'" }
+            if ($spoUrl)             { $cmd += " -SharePointAdminUrl '$($spoUrl -replace "'","''")'" }
             $watchDir = Join-Path $txtOutDir.Text.Trim() ($domain -replace '[\\/:*?"<>|]', '_')
             & $buildAndLaunch $cmd "Single: $domain" $watchDir
 
@@ -687,7 +704,7 @@ function Show-DiscoveryMenu {
                 [System.Windows.Forms.MessageBox]::Show("Script not found:`n$MultiScript",'Not Found','OK','Error') | Out-Null; return
             }
             # Build @('d1','d2',...) literal for the encoded command
-            Write-Log "Run (multi): $($domains.Count) domains=[$($domains -join ',')]  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  Continue=$($chkContinue.Checked)  BUID='$buid'"
+            Write-Log "Run (multi): $($domains.Count) domains=[$($domains -join ',')]  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  Continue=$($chkContinue.Checked)  BUID='$buid'  SPOAdmin='$spoUrl'"
             $arrayLiteral = "@('" + ($domains -join "','") + "')"
             $escM = $MultiScript -replace "'","''"
             $cmd  = "Set-Location '$escOut'; & '$escM' -Domains $arrayLiteral"
@@ -696,6 +713,7 @@ function Show-DiscoveryMenu {
             if ($chkSkipPP.Checked)   { $cmd += ' -SkipPowerPlatform' }
             if ($chkContinue.Checked) { $cmd += ' -ContinueOnError' }
             if ($buid)                { $cmd += " -BusinessUnitId '$buid'" }
+            if ($spoUrl)              { $cmd += " -SharePointAdminUrl '$($spoUrl -replace "'","''")'" }
             & $buildAndLaunch $cmd "Multi: $($domains.Count) domain(s) - $($domains -join ', ')" ''
         }
     }.GetNewClosure())
