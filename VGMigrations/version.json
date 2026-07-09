@@ -1,7 +1,15 @@
 {
-  "version": "2.9.10",
+  "version": "2.9.11",
   "releaseDate": "2026-07-09",
   "changelog": [
+    {
+      "version": "2.9.11",
+      "date": "2026-07-09",
+      "changes": [
+        "New Connect-MicrosoftGraph.ps1: authenticates to Graph once via device code with Sites.ReadWrite.All and User.Read.All scopes; shows existing session if already connected",
+        "New Provision-OneDrive-User.ps1: provisions OneDrive for one or more UPNs passed as parameters; reuses the existing Graph session without re-authenticating — run Connect-MicrosoftGraph.ps1 once, then call this script as many times as needed"
+      ]
+    },
     {
       "version": "2.9.10",
       "date": "2026-07-09",
