@@ -626,7 +626,10 @@ try {
 # =========================================================================
 Write-Host "`n=== Step 11: Deploy Conditional Access Policies ===" -ForegroundColor Cyan
 try {
-    $trustedCountries = @("CA", "US", "GB")
+    # GB is included for UK-based admins/users, but UK ISP traffic sometimes geolocates
+    # to Dublin (IE) at the Microsoft/Azure network edge, so IE is trusted too — otherwise
+    # genuine GB sign-ins can get blocked by this policy with AADSTS53003.
+    $trustedCountries = @("CA", "US", "GB", "IE")
     $locationMap = @{}
     $existingLocations = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations").value
 

@@ -1,7 +1,15 @@
 {
-  "version": "2.9.13",
+  "version": "2.9.14",
   "releaseDate": "2026-07-13",
   "changelog": [
+    {
+      "version": "2.9.14",
+      "date": "2026-07-13",
+      "changes": [
+        "Invoke-TenantBaseline.ps1: Step 11's 'Block Access Outside Approved Countries' Conditional Access policy now trusts Ireland (IE) in addition to CA/US/GB — UK ISP traffic can geolocate to Dublin at the Microsoft/Azure network edge, which was blocking genuine GB sign-ins with AADSTS53003",
+        "If a tenant was already baselined before this fix, add a Trusted Country - IE named location and exclude it on that policy manually via the Entra admin portal (Conditional Access > Named locations)"
+      ]
+    },
     {
       "version": "2.9.13",
       "date": "2026-07-13",
