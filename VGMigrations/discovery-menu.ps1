@@ -560,17 +560,22 @@ function Show-DiscoveryMenu {
 
         try {
             $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($Cmd))
-            Write-Log "Launching pwsh.exe (UseShellExecute, minimized)"
+            Write-Log "Launching pwsh.exe (UseShellExecute, normal window)"
 
             # UseShellExecute = $true gives the child its own console window so MSAL
             # uses that process's HWND for OAuth instead of finding this form's HWND.
+            # WindowStyle must stay Normal (not Minimized) — a minimized window has no
+            # visible HWND for the WAM broker to parent its sign-in dialog to, which made
+            # Connect-MgGraph silently fail over to device-code auth on every run. That
+            # fallback now gets blocked outright on tenants whose Conditional Access
+            # baseline denies the Device Code Flow authentication transfer method.
             # Output is captured by tailing the _Search-M365Domain_*.log file that
             # search-domain.ps1 writes to the output folder.
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName        = 'pwsh.exe'
             $psi.Arguments       = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
             $psi.UseShellExecute = $true
-            $psi.WindowStyle     = [System.Diagnostics.ProcessWindowStyle]::Minimized
+            $psi.WindowStyle     = [System.Diagnostics.ProcessWindowStyle]::Normal
 
             $proc = [System.Diagnostics.Process]::Start($psi)
             $script:discProcess = $proc

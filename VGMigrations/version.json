@@ -1,7 +1,15 @@
 {
-  "version": "2.9.11",
-  "releaseDate": "2026-07-09",
+  "version": "2.9.12",
+  "releaseDate": "2026-07-13",
   "changelog": [
+    {
+      "version": "2.9.12",
+      "date": "2026-07-13",
+      "changes": [
+        "Fix discovery-menu.ps1: child pwsh process now launches with a Normal window instead of Minimized — a minimized window has no HWND for the WAM broker to parent its sign-in dialog to, which silently forced Connect-MgGraph to fall back to device-code auth on every discovery run",
+        "Root cause: device-code auth is now blocked outright (AADSTS53003) on tenants whose Conditional Access baseline denies the Device Code Flow authentication transfer method, so discovery could no longer sign in on newly-baselined tenants"
+      ]
+    },
     {
       "version": "2.9.11",
       "date": "2026-07-09",
