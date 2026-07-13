@@ -1,7 +1,16 @@
 {
-  "version": "2.9.12",
+  "version": "2.9.13",
   "releaseDate": "2026-07-13",
   "changelog": [
+    {
+      "version": "2.9.13",
+      "date": "2026-07-13",
+      "changes": [
+        "Misc Scripts: added 'Tenant Baseline Config' — runs the full Entra ID/Intune/Exchange baseline pass in-app with a streaming log panel, same as the other Misc Scripts tools",
+        "New Invoke-TenantBaseline.ps1 (copy of the Jolera all-in-one baseline script): always invoked with -Restarted so it never kills other pwsh/powershell sessions or relaunches itself in a new window when run from the app; admin UPN is collected from the form instead of a Read-Host prompt",
+        "Invoke-TenantBaseline.ps1 writes its run log and Exchange audit log to %APPDATA%\\FlyMigration\\Logs instead of the script folder (read-only in a perMachine install)"
+      ]
+    },
     {
       "version": "2.9.12",
       "date": "2026-07-13",

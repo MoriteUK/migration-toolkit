@@ -99,6 +99,9 @@
             <span class="sidebar-arrow">›</span>
           </button>
           <div class="sidebar-submenu" id="submenu-misc">
+            <button type="button" class="sidebar-subitem" data-view="misc-baseline">
+              <span class="sidebar-sublabel">Tenant Baseline Config</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="misc-onedrive">
               <span class="sidebar-sublabel">Provision OneDrives</span>
             </button>
@@ -733,6 +736,32 @@
           <div class="monitor-connection" id="monitorConnection">
             <span class="connection-dot connection-checking"></span>
             <span>Checking connection...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Tenant Baseline Config -->
+      <div id="miscBaselineView" class="view-container hidden">
+        <h2 class="view-title">Tenant Baseline Config</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Run All Baseline Steps (Entra ID / Intune / Exchange)</h3>
+          <p class="form-help">Runs the full baseline configuration pass (Entra ID user settings, admin consent workflow, Intune MDM scope, dynamic device groups, enrollment restrictions, compliance policies, app protection policies, Conditional Access, EOP/Defender presets, Exchange org settings, LAPS) against the connected tenant. Safe to re-run — every step checks whether it already exists before creating anything. You'll be prompted to sign in twice: once for Microsoft Graph, once for Exchange Online (using the admin UPN below).</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">Exchange Online Admin UPN</label>
+            <input type="text" class="form-input form-input-compact" id="baselineAdminUpn" placeholder="admin@contoso.com">
+            <small class="form-help">Required — used for the Exchange Online sign-in prompt (steps 12-13).</small>
+          </div>
+
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-success btn-xs" id="baselineRunBtn">
+              ▶ Run Baseline Config
+            </button>
+          </div>
+
+          <div id="baselineLog" style="margin-top:12px;">
+            <pre id="baselineLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
         </div>
       </div>

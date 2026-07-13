@@ -1661,6 +1661,7 @@ function switchView(viewName) {
     'avepoint-reports': 'avepointReportsView',
     'avepoint-monitor': 'avepointMonitorView',
     // Misc Scripts sub-views
+    'misc-baseline': 'miscBaselineView',
     'misc-onedrive': 'miscOneDriveView',
     'misc-teams': 'miscTeamsView',
     'misc-deduplicate': 'miscDeduplicateView',
@@ -2855,6 +2856,44 @@ document.addEventListener('DOMContentLoaded', () => {
         checkOneDriveStatusBtn.disabled = false;
         provisionOneDriveBtn.disabled   = false;
         checkOneDriveStatusBtn.textContent = 'Check Status';
+      }
+    });
+  }
+
+  // ── Tenant Baseline Config ────────────────────────────────────────────────
+  const baselineRunBtn   = document.getElementById('baselineRunBtn');
+  const baselineAdminUpn = document.getElementById('baselineAdminUpn');
+  const baselineLogPre   = document.getElementById('baselineLogPre');
+
+  function appendBaselineLog(text) {
+    if (!baselineLogPre) return;
+    baselineLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    baselineLogPre.scrollTop = baselineLogPre.scrollHeight;
+  }
+
+  if (baselineRunBtn) {
+    baselineRunBtn.addEventListener('click', async () => {
+      const adminUpn = baselineAdminUpn?.value?.trim();
+      if (!adminUpn) { alert('Please enter the Exchange Online admin UPN.'); return; }
+
+      baselineRunBtn.disabled = true;
+      baselineRunBtn.textContent = 'Running…';
+      if (baselineLogPre) baselineLogPre.textContent = '';
+
+      // -Restarted skips the script's self-relaunch/process-kill logic so it
+      // runs inline in this already-clean pwsh child process and streams here.
+      const args = ['-Restarted', '-AdminUPN', adminUpn];
+
+      window.electronAPI.onPsOutput(appendBaselineLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Invoke-TenantBaseline.ps1', args);
+        appendBaselineLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendBaselineLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        baselineRunBtn.disabled = false;
+        baselineRunBtn.textContent = '▶ Run Baseline Config';
       }
     });
   }
