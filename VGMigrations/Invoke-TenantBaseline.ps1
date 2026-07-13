@@ -164,6 +164,13 @@ $AllScopes = @(
     "Policy.Read.All"
 )
 
+# Disables the WAM broker (SDK >= 2.34 default) in favour of a normal browser popup. WAM's own
+# broker failures are what used to trigger the device-code fallback below, and device-code flow
+# can now be blocked tenant-wide by a Conditional Access "Authentication flows" policy — so
+# avoiding WAM in the first place is more reliable than falling back to it. No-op on module
+# versions that predate this cmdlet.
+try { Set-MgGraphOption -DisableLoginByWAM $true -ErrorAction Stop } catch {}
+
 Write-Host "`nConnecting to Microsoft Graph ($($AllScopes.Count) scopes)..." -ForegroundColor Cyan
 try {
     Connect-MgGraph -Scopes $AllScopes -NoWelcome -ErrorAction Stop
@@ -173,7 +180,12 @@ try {
         try {
             Connect-MgGraph -Scopes $AllScopes -NoWelcome -UseDeviceAuthentication -ErrorAction Stop
         } catch {
-            Write-Log "[ERROR] Device code auth also failed: $($_.Exception.Message)" "ERROR"
+            $deviceMsg = $_.Exception.Message
+            if ($deviceMsg -match 'AADSTS1000104|AADSTS53003|blocked|Conditional Access') {
+                Write-Log "[ERROR] Device code auth also failed — this tenant's Conditional Access policy blocks device-code sign-in. Neither WAM nor device-code auth will work here; ask the tenant admin for an exception." "ERROR"
+            } else {
+                Write-Log "[ERROR] Device code auth also failed: $deviceMsg" "ERROR"
+            }
             $global:logContent -join "`n" | Out-File -FilePath $LogPath -Encoding utf8
             return
         }
@@ -712,12 +724,25 @@ try {
     if (-not $AdminUPN) { $AdminUPN = Read-Host "Enter admin UPN for Exchange Online (e.g. admin@contoso.com)" }
 
     try {
-        Connect-ExchangeOnline -UserPrincipalName $AdminUPN -ShowBanner:$false -ErrorAction Stop
+        # -DisableWAM (ExchangeOnlineManagement >= 3.7.2) skips the broker in favour of a normal
+        # browser popup — avoids the WAM failures below and their device-code fallback, which can
+        # now be blocked tenant-wide by a Conditional Access "Authentication flows" policy.
+        Connect-ExchangeOnline -UserPrincipalName $AdminUPN -ShowBanner:$false -DisableWAM -ErrorAction Stop
         Write-Log "[OK] Connected to Exchange Online as $AdminUPN" "OK"
     } catch [System.NullReferenceException] {
         Write-Log "[WARN] WAM broker unavailable, retrying with device code..." "WARN"
-        Connect-ExchangeOnline -UserPrincipalName $AdminUPN -Device -ShowBanner:$false -ErrorAction Stop
-        Write-Log "[OK] Connected to Exchange Online as $AdminUPN (device code)" "OK"
+        try {
+            Connect-ExchangeOnline -UserPrincipalName $AdminUPN -Device -ShowBanner:$false -ErrorAction Stop
+            Write-Log "[OK] Connected to Exchange Online as $AdminUPN (device code)" "OK"
+        } catch {
+            $deviceExoMsg = $_.Exception.Message
+            if ($deviceExoMsg -match 'AADSTS1000104|AADSTS53003|blocked|Conditional Access') {
+                Write-Log "[ERROR] Device code auth also failed — this tenant's Conditional Access policy blocks device-code sign-in. Neither WAM nor device-code auth will work here; ask the tenant admin for an exception." "ERROR"
+            } else {
+                Write-Log "[ERROR] Device code auth also failed: $deviceExoMsg" "ERROR"
+            }
+            throw
+        }
     }
 } catch {
     Write-Log "[ERROR] Could not connect to Exchange Online: $($_.Exception.Message). Steps 12 & 13 will be skipped." "ERROR"

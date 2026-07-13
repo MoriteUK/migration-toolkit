@@ -69,12 +69,23 @@
     don't fail.
 
 .NOTES
-    Version    : 2.11.4
-    Last edit  : 2026-05-11
+    Version    : 2.12.0
+    Last edit  : 2026-07-13
     Author     : Andrew White / Claude (Anthropic)
     Repository : internal — Volaris M365 migration tooling
 
     Version history:
+      2.12.0 Stop relying on WAM broker + device-code fallback for interactive sign-in — a
+             Conditional Access "Authentication flows" policy can now block device-code flow
+             tenant-wide, and WAM's own well-documented breakage (see 2.11.3, 2.9.3, 2.8.1
+             below) is what kept triggering that fallback in the first place. Graph: calls
+             `Set-MgGraphOption -DisableLoginByWAM $true` once before connecting (persists
+             across runs; SDK >= 2.34 default is WAM-first, this reverts to a browser popup).
+             Exchange Online: added `-DisableWAM` directly to the primary Connect-ExchangeOnline
+             call (available since ExchangeOnlineManagement 3.7.2). Device-code fallback paths
+             are unchanged (still attempted as a last resort on older module versions where WAM
+             can't be disabled this way) but now give a clear "blocked by tenant CA policy"
+             message instead of a raw AADSTS error when that's what actually failed.
       2.11.4 The "argument 'SkuPartNumber'" error reappeared after v2.11.2's Sort-Object
              fix, but from somewhere new — the section 22 catch block was collapsing the
              failure to a single line of text with no location info. Two changes:
@@ -1001,6 +1012,19 @@ Write-Detail "================================================"
 if ($GraphModuleOk) {
     Write-Log "[1/4] Connecting to Microsoft Graph (tenant: $Domain)..."
     $graphScopes = @('Directory.Read.All','Group.Read.All','Sites.Read.All','Application.Read.All','User.Read.All','Device.Read.All','DeviceManagementManagedDevices.Read.All','Tasks.Read','Policy.Read.All')
+
+    # Since SDK v2.34, Connect-MgGraph defaults to the WAM (Web Account Manager) broker for
+    # interactive sign-in on Windows, which is the actual source of the long-standing "window
+    # handle"/RuntimeBroker/NullReferenceException failures this script has been working around
+    # for over a year (see version history). WAM failing used to just mean falling back to
+    # device-code — but tenants can now block device-code flow outright via a Conditional Access
+    # "Authentication flows" policy, so that fallback is no longer reliable. Disabling WAM makes
+    # Connect-MgGraph use a normal browser popup instead, which isn't classified as device code
+    # and doesn't depend on the console having a broker-parentable window handle. One-time,
+    # persists across runs (stored in the user's MgGraph settings), so this is cheap to call
+    # every run. Older module versions (pre-2.34) don't have this cmdlet — harmless no-op there.
+    try { Set-MgGraphOption -DisableLoginByWAM $true -ErrorAction Stop } catch { Write-Detail "Set-MgGraphOption -DisableLoginByWAM not available on this module version — skipping." }
+
     # Suppress WAM broker noise from [Console]::Out — same pattern as the EXO block below.
     $consoleSwallowG = New-Object System.IO.StringWriter
     $origOutG  = [Console]::Out
@@ -1029,7 +1053,12 @@ if ($GraphModuleOk) {
                 Write-Log "Connected to Microsoft Graph via device-code." -Level SUCCESS
             } catch {
                 $GraphAvailable = $false
-                Write-Log "Graph device-code connection failed: $($_.Exception.Message)" -Level ERROR
+                $deviceMsg = $_.Exception.Message
+                if ($deviceMsg -match 'AADSTS1000104|AADSTS53003|blocked|Conditional Access') {
+                    Write-Log "Graph device-code connection failed — this tenant's Conditional Access policy blocks device-code sign-in. Ask the tenant admin for the exact CA policy/exception needed, since neither WAM nor device-code auth will work here." -Level ERROR
+                } else {
+                    Write-Log "Graph device-code connection failed: $deviceMsg" -Level ERROR
+                }
             }
         } else {
             $GraphAvailable = $false
@@ -1068,14 +1097,20 @@ $exoCmds = @(
     'Get-TransportRule',
     'Get-UnifiedGroup','Get-UnifiedGroupLinks'
 )
-# Try WAM silently first — on healthy hosts this succeeds in seconds; on broken WAM hosts
-# MSAL writes a long NullReferenceException stack trace ("Error Acquiring Token: ...
-# Microsoft.Identity.Client.Platforms.Features.RuntimeBroker.RuntimeBroker..ctor") DIRECTLY
-# to .NET's Console — bypassing every PowerShell stream. Plain `*>$null` does not catch
-# that because it only covers PS streams (success/error/warning/verbose/debug/information).
+# -DisableWAM (available since ExchangeOnlineManagement 3.7.2) skips the WAM broker entirely and
+# uses a normal browser popup instead — WAM is the actual source of the long-standing
+# NullReferenceException/RuntimeBroker failures below, and its device-code fallback can now be
+# blocked outright by a tenant's Conditional Access "Authentication flows" policy. Kept the
+# console-swallow machinery below as a safety net in case WAM still gets attempted on older
+# module versions that don't recognise -DisableWAM.
+#
+# MSAL (when WAM is attempted) writes a long NullReferenceException stack trace ("Error
+# Acquiring Token: ... Microsoft.Identity.Client.Platforms.Features.RuntimeBroker.RuntimeBroker
+# ..ctor") DIRECTLY to .NET's Console — bypassing every PowerShell stream. Plain `*>$null` does
+# not catch that because it only covers PS streams (success/error/warning/verbose/debug/info).
 #
 # To suppress the screen flood, we temporarily redirect [Console]::Out and [Console]::Error
-# to a StringWriter for the duration of the broker attempt. Anything MSAL writes lands in
+# to a StringWriter for the duration of the connect attempt. Anything MSAL writes lands in
 # the StringWriter (which we discard, or optionally log at DEBUG level for diagnostics).
 # The actual thrown exception is still caught normally via try/catch.
 $consoleSwallow = New-Object System.IO.StringWriter
@@ -1085,7 +1120,7 @@ $origStdErr = [Console]::Error
 [Console]::SetError($consoleSwallow)
 try {
     # -Organization directs the connection to the source company's Exchange Online tenant.
-    Connect-ExchangeOnline -ShowBanner:$false -Organization $Domain -CommandName $exoCmds -ErrorAction Stop *>$null
+    Connect-ExchangeOnline -ShowBanner:$false -Organization $Domain -CommandName $exoCmds -DisableWAM -ErrorAction Stop *>$null
     [Console]::SetOut($origStdOut)
     [Console]::SetError($origStdErr)
     Write-Log "Connected to Exchange Online (org: $Domain)." -Level SUCCESS
@@ -1110,7 +1145,12 @@ try {
             Connect-ExchangeOnline -ShowBanner:$false -Organization $Domain -CommandName $exoCmds -Device -ErrorAction Stop
                     Write-Log "Connected to Exchange Online via device-code (org: $Domain)." -Level SUCCESS
         } catch {
-            Write-Log "Device-code retry also failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -Level ERROR
+            $deviceExoMsg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+            if ($deviceExoMsg -match 'AADSTS1000104|AADSTS53003|blocked|Conditional Access') {
+                Write-Log "Device-code retry also failed — this tenant's Conditional Access policy blocks device-code sign-in. Ask the tenant admin for the exact CA policy/exception needed, since neither WAM nor device-code auth will work here." -Level ERROR
+            } else {
+                Write-Log "Device-code retry also failed: $deviceExoMsg" -Level ERROR
+            }
             throw
         }
     } else {

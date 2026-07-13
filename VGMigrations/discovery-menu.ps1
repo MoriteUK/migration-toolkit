@@ -565,10 +565,14 @@ function Show-DiscoveryMenu {
             # UseShellExecute = $true gives the child its own console window so MSAL
             # uses that process's HWND for OAuth instead of finding this form's HWND.
             # WindowStyle must stay Normal (not Minimized) — a minimized window has no
-            # visible HWND for the WAM broker to parent its sign-in dialog to, which made
-            # Connect-MgGraph silently fail over to device-code auth on every run. That
-            # fallback now gets blocked outright on tenants whose Conditional Access
-            # baseline denies the Device Code Flow authentication transfer method.
+            # visible HWND for the WAM broker to parent its sign-in dialog to.
+            # NOTE: as of search-domain.ps1 v2.12.0, WAM is disabled outright before Graph/EXO
+            # connect (Set-MgGraphOption -DisableLoginByWAM / Connect-ExchangeOnline -DisableWAM)
+            # rather than relying on this window being parentable, because the device-code
+            # fallback that WAM failures used to trigger can now be blocked tenant-wide by a
+            # Conditional Access "Authentication flows" policy. This window is still kept
+            # Normal/visible since the plain browser popup Connect-MgGraph falls back to also
+            # needs somewhere to parent from, and it's harmless either way.
             # Output is captured by tailing the _Search-M365Domain_*.log file that
             # search-domain.ps1 writes to the output folder.
             $psi = New-Object System.Diagnostics.ProcessStartInfo

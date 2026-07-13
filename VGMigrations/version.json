@@ -1,7 +1,16 @@
 {
-  "version": "2.9.14",
+  "version": "2.9.15",
   "releaseDate": "2026-07-13",
   "changelog": [
+    {
+      "version": "2.9.15",
+      "date": "2026-07-13",
+      "changes": [
+        "search-domain.ps1 (v2.12.0), Invoke-TenantBaseline.ps1: interactive Graph/Exchange Online sign-in now disables the WAM broker upfront (Set-MgGraphOption -DisableLoginByWAM / Connect-ExchangeOnline -DisableWAM) instead of relying on WAM to work and falling back to device code when it doesn't",
+        "Root cause: some tenants now block device-code flow tenant-wide via a Conditional Access 'Authentication flows' policy, so the long-standing WAM-fails-fall-back-to-device-code pattern in this codebase no longer has a working fallback on those tenants — avoiding WAM in the first place (browser popup instead) sidesteps both the WAM breakage and the device-code block",
+        "Device-code fallback paths are kept for older module versions that predate -DisableLoginByWAM/-DisableWAM, but now surface a clear 'blocked by tenant Conditional Access policy' message instead of a raw AADSTS error"
+      ]
+    },
     {
       "version": "2.9.14",
       "date": "2026-07-13",
