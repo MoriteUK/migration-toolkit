@@ -128,6 +128,30 @@ Ensure-Module -ModuleName "Microsoft.Graph.Beta" -MinVersion "2.28.0"
 Ensure-Module -ModuleName "ExchangeOnlineManagement" -MinVersion "3.0.0"
 Write-Log "[OK] All modules verified." "OK"
 
+# Microsoft.Graph SDK >= 2.34.0 makes the WAM broker mandatory for interactive sign-in on
+# Windows. Set-MgGraphOption -DisableLoginByWAM (used below) is a documented no-op unless paired
+# with a custom app registration (github.com/microsoftgraph/msgraph-sdk-powershell/issues/3518) —
+# it does NOT actually stop WAM from being tried. The Ensure-Module calls above only guarantee
+# "at least 2.28.0" and will happily leave a newer, WAM-mandatory version loaded. Pin the exact
+# submodules this script calls to 2.33.0 — the last version before WAM became mandatory — so
+# interactive sign-in goes through a normal browser popup instead. Installs side-by-side if
+# missing; does not remove or affect any newer version already on the machine.
+$GraphPinnedVersion = '2.33.0'
+foreach ($graphSubmodule in @('Microsoft.Graph.Authentication','Microsoft.Graph.Groups','Microsoft.Graph.DeviceManagement.Enrollment','Microsoft.Graph.DeviceManagement')) {
+    try {
+        if (-not (Get-Module -ListAvailable -Name $graphSubmodule | Where-Object { $_.Version -eq $GraphPinnedVersion })) {
+            Write-Log "[INFO] Installing $graphSubmodule $GraphPinnedVersion (pinned — avoids the SDK's mandatory-WAM regression in >= 2.34.0)..." "INFO"
+            Install-Module -Name $graphSubmodule -RequiredVersion $GraphPinnedVersion -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+        }
+        Import-Module -Name $graphSubmodule -RequiredVersion $GraphPinnedVersion -Force -ErrorAction Stop
+    } catch {
+        Write-Log "[ERROR] Could not load pinned ${graphSubmodule} ${GraphPinnedVersion}: $($_.Exception.Message)" "ERROR"
+        $global:logContent -join "`n" | Out-File -FilePath $LogPath -Encoding utf8
+        return
+    }
+}
+Write-Log "[OK] Microsoft.Graph submodules pinned to $GraphPinnedVersion (WAM-safe)." "OK"
+
 # --- Single Graph connection for the whole run ---
 $AllScopes = @(
     "DeviceManagementConfiguration.ReadWrite.All"
@@ -164,11 +188,9 @@ $AllScopes = @(
     "Policy.Read.All"
 )
 
-# Disables the WAM broker (SDK >= 2.34 default) in favour of a normal browser popup. WAM's own
-# broker failures are what used to trigger the device-code fallback below, and device-code flow
-# can now be blocked tenant-wide by a Conditional Access "Authentication flows" policy — so
-# avoiding WAM in the first place is more reliable than falling back to it. No-op on module
-# versions that predate this cmdlet.
+# This is a documented no-op on its own (see the pinned-version comment above the MODULE LOAD
+# block) — the real WAM avoidance comes from pinning Microsoft.Graph.Authentication to 2.33.0.
+# Kept as a harmless belt-and-braces call in case a future module version fixes it.
 try { Set-MgGraphOption -DisableLoginByWAM $true -ErrorAction Stop } catch {}
 
 Write-Host "`nConnecting to Microsoft Graph ($($AllScopes.Count) scopes)..." -ForegroundColor Cyan

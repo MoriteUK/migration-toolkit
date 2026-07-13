@@ -1,14 +1,24 @@
 {
-  "version": "2.9.15",
+  "version": "2.9.16",
   "releaseDate": "2026-07-13",
   "changelog": [
+    {
+      "version": "2.9.16",
+      "date": "2026-07-13",
+      "changes": [
+        "CORRECTION to v2.9.15: confirmed live against celcat.com that Set-MgGraphOption -DisableLoginByWAM does NOT actually stop WAM being used — it's a documented Microsoft SDK bug/limitation (only works if paired with a custom app registration, which this toolkit doesn't have)",
+        "search-domain.ps1 (v2.12.1), Invoke-TenantBaseline.ps1: now pin Microsoft.Graph.Authentication (and, for the baseline script, Groups/DeviceManagement/DeviceManagement.Enrollment) to 2.33.0 — the last SDK version before WAM became mandatory in 2.34.0 — installed side-by-side, doesn't touch any newer version already on a machine",
+        "This actually restores plain browser-popup interactive sign-in with no new app registration or per-tenant admin consent needed; device-code fallback paths are kept as a last resort but should no longer be needed"
+      ]
+    },
     {
       "version": "2.9.15",
       "date": "2026-07-13",
       "changes": [
         "search-domain.ps1 (v2.12.0), Invoke-TenantBaseline.ps1: interactive Graph/Exchange Online sign-in now disables the WAM broker upfront (Set-MgGraphOption -DisableLoginByWAM / Connect-ExchangeOnline -DisableWAM) instead of relying on WAM to work and falling back to device code when it doesn't",
         "Root cause: some tenants now block device-code flow tenant-wide via a Conditional Access 'Authentication flows' policy, so the long-standing WAM-fails-fall-back-to-device-code pattern in this codebase no longer has a working fallback on those tenants — avoiding WAM in the first place (browser popup instead) sidesteps both the WAM breakage and the device-code block",
-        "Device-code fallback paths are kept for older module versions that predate -DisableLoginByWAM/-DisableWAM, but now surface a clear 'blocked by tenant Conditional Access policy' message instead of a raw AADSTS error"
+        "Device-code fallback paths are kept for older module versions that predate -DisableLoginByWAM/-DisableWAM, but now surface a clear 'blocked by tenant Conditional Access policy' message instead of a raw AADSTS error",
+        "This entry's fix turned out not to work — see v2.9.16"
       ]
     },
     {

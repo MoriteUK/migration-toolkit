@@ -69,12 +69,25 @@
     don't fail.
 
 .NOTES
-    Version    : 2.12.0
+    Version    : 2.12.1
     Last edit  : 2026-07-13
     Author     : Andrew White / Claude (Anthropic)
     Repository : internal — Volaris M365 migration tooling
 
     Version history:
+      2.12.1 v2.12.0's Graph fix didn't work — confirmed live against celcat.com: WAM was still
+             attempted and still fell back to device-code, which then got blocked as expected.
+             Set-MgGraphOption -DisableLoginByWAM $true is a documented no-op on Windows unless
+             paired with a custom app registration (-ClientId) — Microsoft made WAM mandatory
+             for the SDK's default client starting 2.34.0
+             (github.com/microsoftgraph/msgraph-sdk-powershell/issues/3518). Rather than stand
+             up a custom app registration + per-tenant admin consent, the MODULE LOAD section now
+             pins Microsoft.Graph.Authentication to 2.33.0 — the last version before WAM became
+             mandatory — installed side-by-side, doesn't touch any newer version already present.
+             This actually restores plain browser-popup sign-in. The now-ineffective
+             Set-MgGraphOption call in the connect block was removed. Exchange Online's
+             -DisableWAM (from 2.12.0) is untested live but unrelated to this bug — ORDER OF
+             VERIFICATION: confirm EXO sign-in too on the next real run.
       2.12.0 Stop relying on WAM broker + device-code fallback for interactive sign-in — a
              Conditional Access "Authentication flows" policy can now block device-code flow
              tenant-wide, and WAM's own well-documented breakage (see 2.11.3, 2.9.3, 2.8.1
@@ -86,6 +99,7 @@
              are unchanged (still attempted as a last resort on older module versions where WAM
              can't be disabled this way) but now give a clear "blocked by tenant CA policy"
              message instead of a raw AADSTS error when that's what actually failed.
+             CORRECTION (see 2.12.1): the Graph half of this didn't actually work.
       2.11.4 The "argument 'SkuPartNumber'" error reappeared after v2.11.2's Sort-Object
              fix, but from somewhere new — the section 22 catch block was collapsing the
              failure to a single line of text with no location info. Two changes:
@@ -873,7 +887,29 @@ function Merge-CsvFolderToExcel {
 # MODULE LOAD
 # ─────────────────────────────────────────────────────────────
 Ensure-Module -Name 'ExchangeOnlineManagement' | Out-Null
-$GraphModuleOk = Ensure-Module -Name 'Microsoft.Graph.Authentication' -Optional
+
+# Microsoft.Graph SDK >= 2.34.0 makes the WAM broker mandatory for interactive sign-in on
+# Windows. Set-MgGraphOption -DisableLoginByWAM is a documented no-op unless paired with a
+# custom app registration (github.com/microsoftgraph/msgraph-sdk-powershell/issues/3518) — it
+# does NOT actually stop WAM from being tried, so it can't rescue us from WAM's failures or the
+# device-code fallback those failures used to trigger (now blocked tenant-wide on tenants with a
+# Conditional Access "Authentication flows" policy). Pinning to 2.33.0 — the last version before
+# WAM became mandatory — restores plain browser-popup sign-in with no new app registration or
+# per-tenant admin consent needed. Installs side-by-side if missing; does not remove or affect
+# any newer version already on the machine.
+$GraphAuthPinnedVersion = '2.33.0'
+try {
+    if (-not (Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication' | Where-Object { $_.Version -eq $GraphAuthPinnedVersion })) {
+        Write-Log "Installing Microsoft.Graph.Authentication $GraphAuthPinnedVersion (pinned — avoids the SDK's mandatory-WAM regression in >= 2.34.0)..." -Level INFO
+        Install-Module -Name 'Microsoft.Graph.Authentication' -RequiredVersion $GraphAuthPinnedVersion -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+    }
+    Import-Module -Name 'Microsoft.Graph.Authentication' -RequiredVersion $GraphAuthPinnedVersion -Force -ErrorAction Stop
+    Write-Log "Loaded module: Microsoft.Graph.Authentication $GraphAuthPinnedVersion" -Level INFO
+    $GraphModuleOk = $true
+} catch {
+    Write-Log "Could not load pinned Microsoft.Graph.Authentication ${GraphAuthPinnedVersion}: $($_.Exception.Message) — Graph sections will be skipped." -Level WARN
+    $GraphModuleOk = $false
+}
 
 # ─────────────────────────────────────────────────────────────
 # DOMAIN INPUT
@@ -1013,17 +1049,9 @@ if ($GraphModuleOk) {
     Write-Log "[1/4] Connecting to Microsoft Graph (tenant: $Domain)..."
     $graphScopes = @('Directory.Read.All','Group.Read.All','Sites.Read.All','Application.Read.All','User.Read.All','Device.Read.All','DeviceManagementManagedDevices.Read.All','Tasks.Read','Policy.Read.All')
 
-    # Since SDK v2.34, Connect-MgGraph defaults to the WAM (Web Account Manager) broker for
-    # interactive sign-in on Windows, which is the actual source of the long-standing "window
-    # handle"/RuntimeBroker/NullReferenceException failures this script has been working around
-    # for over a year (see version history). WAM failing used to just mean falling back to
-    # device-code — but tenants can now block device-code flow outright via a Conditional Access
-    # "Authentication flows" policy, so that fallback is no longer reliable. Disabling WAM makes
-    # Connect-MgGraph use a normal browser popup instead, which isn't classified as device code
-    # and doesn't depend on the console having a broker-parentable window handle. One-time,
-    # persists across runs (stored in the user's MgGraph settings), so this is cheap to call
-    # every run. Older module versions (pre-2.34) don't have this cmdlet — harmless no-op there.
-    try { Set-MgGraphOption -DisableLoginByWAM $true -ErrorAction Stop } catch { Write-Detail "Set-MgGraphOption -DisableLoginByWAM not available on this module version — skipping." }
+    # NOTE: WAM avoidance now happens via the pinned Microsoft.Graph.Authentication 2.33.0 load
+    # above (MODULE LOAD section) rather than Set-MgGraphOption -DisableLoginByWAM, which turned
+    # out to be a documented no-op on its own — see the comment there for why.
 
     # Suppress WAM broker noise from [Console]::Out — same pattern as the EXO block below.
     $consoleSwallowG = New-Object System.IO.StringWriter
