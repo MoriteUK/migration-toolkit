@@ -117,9 +117,6 @@
             <button type="button" class="sidebar-subitem" data-view="misc-domain-devices">
               <span class="sidebar-sublabel">Get Domain Devices</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-view="misc-clear-employeeid">
-              <span class="sidebar-sublabel">Clear Employee ID (On-Prem)</span>
-            </button>
             <button type="button" class="sidebar-subitem" data-view="domain-devices">
               <span class="sidebar-sublabel">Remove Entra Devices</span>
             </button>
@@ -146,6 +143,9 @@
             </button>
             <button type="button" class="sidebar-subitem" data-view="domain-hide">
               <span class="sidebar-sublabel">Hide from Address Book</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-clear-employeeid">
+              <span class="sidebar-sublabel">Clear Employee ID (On-Prem)</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="domain-alias">
               <span class="sidebar-sublabel">Remove Aliases</span>
@@ -948,42 +948,6 @@
         </div>
       </div>
 
-      <!-- Misc Scripts - Clear Employee ID (On-Prem AD) -->
-      <div id="miscClearEmployeeIdView" class="view-container hidden">
-        <h2 class="view-title">Clear Employee ID (On-Prem)</h2>
-
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Clear On-Premise AD EmployeeID Attribute</h3>
-          <p class="form-help">Reads the <strong>Source</strong> identity column from an AvePoint mapping CSV, looks each user up in on-premise Active Directory, and clears their <code>EmployeeID</code> attribute. This is an <strong>on-premise AD</strong> operation (not Entra ID / cloud) — run it on a Domain Controller or a machine with the ActiveDirectory RSAT module installed.</p>
-
-          <div class="form-group-tight">
-            <label class="form-label">AvePoint Mapping CSV</label>
-            <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" id="clearEmployeeIdCsvFile" placeholder="C:\mappings\exchange.csv" readonly>
-              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
-            </div>
-            <small class="form-help">Must have a column starting with "Source" (e.g. "Source email address")</small>
-          </div>
-
-          <div class="form-group-tight">
-            <label class="form-checkbox">
-              <input type="checkbox" id="clearEmployeeIdWhatIf" checked>
-              <span style="font-size:12px;">WhatIf — preview only, no changes made</span>
-            </label>
-          </div>
-
-          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
-            <button type="button" class="btn btn-success btn-xs" id="clearEmployeeIdRunBtn">
-              ▶ Clear Employee ID
-            </button>
-          </div>
-
-          <div id="clearEmployeeIdLog" style="margin-top:12px;">
-            <pre id="clearEmployeeIdLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:360px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
-          </div>
-        </div>
-      </div>
-
       <!-- Domain Removal - Workflow -->
       <div id="domainWorkflowView" class="view-container hidden">
         <h2 class="view-title">Domain Removal Workflow</h2>
@@ -1381,6 +1345,46 @@
         <div class="log-section hidden" id="hideLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="hideLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Clear Employee ID (On-Prem AD) -->
+      <div id="domainClearEmployeeIdView" class="view-container hidden">
+        <h2 class="view-title">Clear Employee ID (On-Prem)</h2>
+
+        <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+          </div>
+
+          <h3 class="form-card-title">Clear On-Premise AD EmployeeID Attribute</h3>
+          <p class="form-help">Reads the <strong>Source</strong> identity column from an AvePoint mapping CSV, looks each user up in on-premise Active Directory, and clears their <code>EmployeeID</code> attribute. This is an <strong>on-premise AD</strong> operation (not Entra ID / cloud) — run it on a Domain Controller or a machine with the ActiveDirectory RSAT module installed.</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">AvePoint Mapping CSV</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="clearEmployeeIdCsvFile" placeholder="C:\mappings\exchange.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact">Browse</button>
+            </div>
+            <small class="form-help">Must have a column starting with "Source" (e.g. "Source email address")</small>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-checkbox">
+              <input type="checkbox" id="clearEmployeeIdWhatIf" checked>
+              <span style="font-size:12px;">WhatIf — preview only, no changes made</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-success btn-xs" id="clearEmployeeIdRunBtn">
+              ▶ Clear Employee ID
+            </button>
+          </div>
+
+          <div id="clearEmployeeIdLog" style="margin-top:12px;">
+            <pre id="clearEmployeeIdLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:360px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
         </div>
       </div>
 

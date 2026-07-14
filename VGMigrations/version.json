@@ -1,7 +1,15 @@
 {
-  "version": "2.9.18",
+  "version": "2.9.19",
   "releaseDate": "2026-07-13",
   "changelog": [
+    {
+      "version": "2.9.19",
+      "date": "2026-07-13",
+      "changes": [
+        "Moved 'Clear Employee ID (On-Prem)' from Misc Scripts to Domain Removal, positioned right after 'Hide from Address Book' — it's an on-prem AD cleanup step used during domain removal, not a general-purpose misc tool",
+        "View renamed from miscClearEmployeeIdView to domainClearEmployeeIdView and gained the '← Workflow' back button to match its Domain Removal siblings; no changes to Clear-EmployeeId.ps1 itself"
+      ]
+    },
     {
       "version": "2.9.18",
       "date": "2026-07-13",
