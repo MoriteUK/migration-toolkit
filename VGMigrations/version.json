@@ -1,7 +1,15 @@
 {
-  "version": "2.9.17",
+  "version": "2.9.18",
   "releaseDate": "2026-07-13",
   "changelog": [
+    {
+      "version": "2.9.18",
+      "date": "2026-07-13",
+      "changes": [
+        "Misc Scripts: added 'Clear Employee ID (On-Prem)' — reads the Source identity column from an AvePoint mapping CSV and clears the EmployeeID attribute for each matching user in on-premise Active Directory",
+        "New Clear-EmployeeId.ps1: auto-detects the Source column (same convention as Import-FlyMappings.ps1), looks users up by UserPrincipalName or mail, WhatIf preview checked by default. Requires the ActiveDirectory RSAT module — this is an on-prem AD operation, not Entra ID/cloud"
+      ]
+    },
     {
       "version": "2.9.17",
       "date": "2026-07-13",

@@ -1667,6 +1667,7 @@ function switchView(viewName) {
     'misc-deduplicate': 'miscDeduplicateView',
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-domain-devices': 'miscDomainDevicesView',
+    'misc-clear-employeeid': 'miscClearEmployeeIdView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -3018,6 +3019,44 @@ document.addEventListener('DOMContentLoaded', () => {
   if (getDomainDevicesBtn) {
     getDomainDevicesBtn.addEventListener('click', async () => {
       await launchScript('Get-DomainDevices.ps1', getDomainDevicesBtn);
+    });
+  }
+
+  // ── Clear Employee ID (On-Prem AD) ────────────────────────────────────────
+  const clearEmployeeIdRunBtn = document.getElementById('clearEmployeeIdRunBtn');
+  const clearEmployeeIdCsvFile = document.getElementById('clearEmployeeIdCsvFile');
+  const clearEmployeeIdWhatIf = document.getElementById('clearEmployeeIdWhatIf');
+  const clearEmployeeIdLogPre = document.getElementById('clearEmployeeIdLogPre');
+
+  function appendClearEmployeeIdLog(text) {
+    if (!clearEmployeeIdLogPre) return;
+    clearEmployeeIdLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    clearEmployeeIdLogPre.scrollTop = clearEmployeeIdLogPre.scrollHeight;
+  }
+
+  if (clearEmployeeIdRunBtn) {
+    clearEmployeeIdRunBtn.addEventListener('click', async () => {
+      const csvFile = clearEmployeeIdCsvFile?.value?.trim();
+      if (!csvFile) { alert('Please browse for the AvePoint mapping CSV file.'); return; }
+
+      clearEmployeeIdRunBtn.disabled = true;
+      clearEmployeeIdRunBtn.textContent = 'Running…';
+      if (clearEmployeeIdLogPre) clearEmployeeIdLogPre.textContent = '';
+
+      const args = ['-MappingFile', csvFile];
+      if (clearEmployeeIdWhatIf?.checked) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput(appendClearEmployeeIdLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Clear-EmployeeId.ps1', args);
+        appendClearEmployeeIdLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendClearEmployeeIdLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        clearEmployeeIdRunBtn.disabled = false;
+        clearEmployeeIdRunBtn.textContent = '▶ Clear Employee ID';
+      }
     });
   }
 
