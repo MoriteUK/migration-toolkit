@@ -73,20 +73,11 @@ if ($WhatIf) {
 
 # Load Microsoft Graph modules
 Write-Host "`nLoading Microsoft Graph modules..." -ForegroundColor Cyan
-$graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Files')
-foreach ($m in $graphMods) {
-    if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
-        Write-Error "Required module not installed: $m`nRun: Install-Module Microsoft.Graph -Scope CurrentUser -Force"
-        exit 1
-    }
-    Import-Module $m -ErrorAction Stop
-}
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Files')
 Write-Host "Graph modules loaded." -ForegroundColor Green
 
-# Connect via device code — works from any process without a browser popup
-Write-Host "`nConnecting to Microsoft Graph..." -ForegroundColor Cyan
-Write-Host ">>> Visit https://microsoft.com/devicelogin and enter the code shown below <<<" -ForegroundColor Yellow
-Connect-MgGraph -Scopes 'Sites.ReadWrite.All','User.Read.All' -UseDeviceCode -NoWelcome -ErrorAction Stop
+Write-Host "`nConnecting to Microsoft Graph — sign in with the browser window that opens..." -ForegroundColor Cyan
+Connect-MgGraph -Scopes 'Sites.ReadWrite.All','User.Read.All' -NoWelcome -ErrorAction Stop
 Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
 
 # Accessing each user's drive triggers OneDrive provisioning if not yet provisioned

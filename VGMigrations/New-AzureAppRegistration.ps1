@@ -34,43 +34,14 @@ Write-Host "╚═════════════════════�
 Write-Host "`nTenant ID: $TenantId" -ForegroundColor White
 Write-Host "App Name: $AppName" -ForegroundColor White
 
-# Check if Microsoft.Graph module is installed
-$graphModule = Get-Module -Name Microsoft.Graph.Applications -ListAvailable
-if (-not $graphModule) {
-    Write-Host "`n❌ Microsoft.Graph.Applications module not found" -ForegroundColor Red
-    Write-Host "`nInstalling Microsoft Graph PowerShell SDK..." -ForegroundColor Yellow
-    Write-Host "This may take a few minutes..." -ForegroundColor Gray
-
-    try {
-        Install-Module -Name Microsoft.Graph -Scope CurrentUser -Force -AllowClobber
-        Write-Host "✓ Microsoft Graph module installed" -ForegroundColor Green
-    } catch {
-        Write-Error "Failed to install Microsoft Graph module: $_"
-        Write-Host "`nManual installation:" -ForegroundColor Yellow
-        Write-Host "  Install-Module -Name Microsoft.Graph -Scope CurrentUser" -ForegroundColor Gray
-        exit 1
-    }
-}
-
-# Import required modules
-try {
-    Import-Module Microsoft.Graph.Applications -ErrorAction Stop
-    Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
-    Write-Host "✓ Microsoft Graph modules loaded" -ForegroundColor Green
-} catch {
-    Write-Error "Failed to import Microsoft Graph modules: $_"
-    exit 1
-}
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Applications')
+Write-Host "✓ Microsoft Graph modules loaded" -ForegroundColor Green
 
 # Connect to Microsoft Graph
-Write-Host "`n📡 Connecting to Microsoft Graph..." -ForegroundColor Cyan
-Write-Host "`n⚠️  DEVICE CODE AUTHENTICATION" -ForegroundColor Yellow
-Write-Host "A code will appear below. Copy it and visit https://microsoft.com/devicelogin" -ForegroundColor Yellow
-Write-Host "to complete authentication.`n" -ForegroundColor Yellow
+Write-Host "`n📡 Connecting to Microsoft Graph — sign in with the browser window that opens..." -ForegroundColor Cyan
 
 try {
-    # Always use device code authentication - it's more reliable when called from Electron
-    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -UseDeviceAuthentication -ErrorAction Stop
+    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -ErrorAction Stop
     Write-Host "`n✓ Connected to tenant: $TenantId" -ForegroundColor Green
 } catch {
     Write-Error "Failed to connect to Microsoft Graph: $_"

@@ -7,14 +7,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$graphMods = @('Microsoft.Graph.Authentication', 'Microsoft.Graph.Files', 'Microsoft.Graph.Users')
-foreach ($m in $graphMods) {
-    if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
-        Write-Error "Required module not installed: $m`nRun: Install-Module Microsoft.Graph -Scope CurrentUser -Force"
-        exit 1
-    }
-    Import-Module $m -ErrorAction Stop
-}
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Files','Microsoft.Graph.Users')
 
 # Check if already connected with adequate scopes
 $ctx = Get-MgContext -ErrorAction SilentlyContinue
@@ -26,11 +19,10 @@ if ($ctx) {
     exit 0
 }
 
-Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Cyan
-Write-Host ">>> Visit https://microsoft.com/devicelogin and enter the code shown below <<<" -ForegroundColor Yellow
+Write-Host "Connecting to Microsoft Graph — sign in with the browser window that opens..." -ForegroundColor Cyan
 Write-Host ""
 
-Connect-MgGraph -Scopes 'Sites.ReadWrite.All', 'User.Read.All' -UseDeviceCode -NoWelcome -ErrorAction Stop
+Connect-MgGraph -Scopes 'Sites.ReadWrite.All', 'User.Read.All' -NoWelcome -ErrorAction Stop
 
 $ctx = Get-MgContext
 Write-Host ""

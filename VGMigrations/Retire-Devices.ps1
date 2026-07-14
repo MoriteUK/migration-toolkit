@@ -61,16 +61,7 @@ $idCol = if ($cols -contains 'DeviceObjectId') { 'DeviceObjectId' }
 Write-Host "ID column    : $idCol"
 Write-Host ''
 
-# Load Graph modules
-$graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Identity.DirectoryManagement')
-foreach ($m in $graphMods) {
-    if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
-        Write-Host "ERROR: Required module not installed: $m"
-        Write-Host "Install it with:  Install-Module Microsoft.Graph -Scope CurrentUser -Force"
-        exit 1
-    }
-    Import-Module $m -ErrorAction Stop
-}
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Identity.DirectoryManagement')
 
 Write-Host 'Connecting to Microsoft Graph...'
 try {

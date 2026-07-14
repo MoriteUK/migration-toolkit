@@ -56,7 +56,7 @@ function Connect-EXOIfNeeded {
               'Get-UnifiedGroup','Set-UnifiedGroup','Get-MailContact','Set-MailContact',
               'Get-Recipient','Remove-AcceptedDomain')
     try {
-        Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -ErrorAction Stop
+        Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
         $script:exoConnected = $true
         Write-Host 'Exchange Online connected.' -ForegroundColor Green
         return $true
@@ -101,7 +101,7 @@ foreach ($csvName in @('02_Mailboxes.csv', '05_SharedMailboxes.csv')) {
     if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): $csvName"; continue }
     $rows  = @(Import-Csv -Path $csvPath -Encoding UTF8)
     $label = if ($csvName -eq '02_Mailboxes.csv') { 'Mailboxes' } else { 'Shared Mailboxes' }
-    Write-Host "--- $label: $($rows.Count) item(s) ---"
+    Write-Host "--- ${label}: $($rows.Count) item(s) ---"
     if ($rows.Count -eq 0) { Write-Host ''; continue }
     if (-not $WhatIf -and -not (Connect-EXOIfNeeded)) { Write-Host ''; continue }
     $ok = 0; $fail = 0; $nochange = 0
@@ -118,7 +118,7 @@ foreach ($csvName in @('02_Mailboxes.csv', '05_SharedMailboxes.csv')) {
             Write-Host "  Renamed : $id" -ForegroundColor Green; $ok++
         } catch { Write-Host "  FAILED  : $id — $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red; $fail++ }
     }
-    Write-Host "  $label: $ok renamed  |  $fail failed  |  $nochange unchanged"
+    Write-Host "  ${label}: $ok renamed  |  $fail failed  |  $nochange unchanged"
     Write-Host ''
 }
 

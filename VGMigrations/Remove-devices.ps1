@@ -309,13 +309,13 @@ function Show-RemoveDevicesUI {
             }
 
             try {
-                QLog 'Checking for Microsoft.Graph.Identity.DirectoryManagement module...'
-                if (-not (Get-Module -ListAvailable -Name 'Microsoft.Graph.Identity.DirectoryManagement' -ErrorAction SilentlyContinue)) {
-                    throw 'Module not installed: Microsoft.Graph.Identity.DirectoryManagement. Run: Install-Module Microsoft.Graph -Scope CurrentUser'
+                QLog 'Checking for Microsoft.Graph.Identity.DirectoryManagement module (pinned 2.33.0 — avoids the SDK''s mandatory-WAM regression in >= 2.34.0)...'
+                foreach ($m in @('Microsoft.Graph.Authentication','Microsoft.Graph.Identity.DirectoryManagement')) {
+                    if (-not (Get-Module -ListAvailable -Name $m | Where-Object { $_.Version -eq '2.33.0' })) {
+                        Install-Module -Name $m -RequiredVersion '2.33.0' -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+                    }
+                    Import-Module -Name $m -RequiredVersion '2.33.0' -Force -DisableNameChecking -ErrorAction Stop
                 }
-                Import-Module Microsoft.Graph.Identity.DirectoryManagement -DisableNameChecking -ErrorAction Stop
-
-                try { Set-MgGraphOption -DisableLoginByWAM $true -ErrorAction SilentlyContinue } catch {}
 
                 QLog 'Connecting to Microsoft Graph - sign in when the browser opens...'
                 Connect-MgGraph -Scopes 'Device.ReadWrite.All', 'Directory.ReadWrite.All' -NoWelcome -ErrorAction Stop
@@ -442,15 +442,7 @@ function Invoke-RemoveDevicesHeadless {
     Write-Host ''
 
     # Load Graph modules
-    $graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Identity.DirectoryManagement')
-    foreach ($m in $graphMods) {
-        if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
-            Write-Host "ERROR: Required module not installed: $m"
-            Write-Host "Install it with:  Install-Module Microsoft.Graph -Scope CurrentUser -Force"
-            exit 1
-        }
-        Import-Module $m -ErrorAction Stop
-    }
+    . (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Identity.DirectoryManagement')
 
     Write-Host 'Connecting to Microsoft Graph...'
     try {

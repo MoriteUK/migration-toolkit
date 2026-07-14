@@ -540,7 +540,7 @@ function Show-HideAddressBookUI {
                 try {
                     QLog 'Connecting to Exchange Online — sign in when the browser opens...'
                     $cmds = @('Set-Mailbox','Set-MailContact','Set-DistributionGroup','Set-UnifiedGroup')
-                    Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -ErrorAction Stop
+                    Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
                     $exoConnected = $true
                     QLog 'Exchange Online connected.' 'OK'
                     return $true
@@ -748,7 +748,7 @@ if ($DiscoveryFolder) {
             Write-Host 'Connecting to Exchange Online — sign in when the browser opens...'
             try {
                 $cmds = @('Set-Mailbox','Set-MailContact','Set-DistributionGroup','Set-UnifiedGroup')
-                Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -ErrorAction Stop
+                Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
                 $exoConnected = $true
                 Write-Host 'Exchange Online connected.'
             } catch {

@@ -550,7 +550,7 @@ function Show-RemoveDomainUI {
                               'Remove-Mailbox','Remove-UnifiedGroup','Set-Mailbox','Set-DistributionGroup',
                               'Set-UnifiedGroup','Get-Mailbox','Get-DistributionGroup','Get-UnifiedGroup',
                               'Get-MailContact','Get-Recipient')
-                    Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -ErrorAction Stop
+                    Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
                     $connState.EXO = $true
                     QLog 'Exchange Online connected.' 'OK'
                     return $true
@@ -1097,7 +1097,7 @@ function Invoke-RenameDomainHeadless {
                   'Get-UnifiedGroup','Set-UnifiedGroup','Get-MailContact','Set-MailContact',
                   'Get-Recipient','Remove-AcceptedDomain')
         try {
-            Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -ErrorAction Stop
+            Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
             $script:rdExo = $true; Write-Host 'Exchange Online connected.'; return $true
         } catch {
             Write-Host "ERROR: EXO connect failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])"; return $false
@@ -1138,7 +1138,7 @@ function Invoke-RenameDomainHeadless {
         if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): $csvName"; continue }
         $rows = @(Import-Csv -Path $csvPath -Encoding UTF8)
         $label = if ($csvName -eq '02_Mailboxes.csv') { 'Mailboxes' } else { 'Shared Mailboxes' }
-        Write-Host "--- $label: $($rows.Count) item(s) ---"
+        Write-Host "--- ${label}: $($rows.Count) item(s) ---"
         if ($rows.Count -eq 0) { Write-Host ''; continue }
         if (-not $WhatIf -and -not (Connect-EXOIfNeeded)) { Write-Host ''; continue }
         $ok = 0; $fail = 0; $nochange = 0
@@ -1155,7 +1155,7 @@ function Invoke-RenameDomainHeadless {
                 Write-Host "  Renamed : $id"; $ok++
             } catch { Write-Host "  FAILED  : $id — $($_.Exception.Message.Split([Environment]::NewLine)[0])"; $fail++ }
         }
-        Write-Host "  $label: $ok renamed  |  $fail failed  |  $nochange unchanged"; Write-Host ''
+        Write-Host "  ${label}: $ok renamed  |  $fail failed  |  $nochange unchanged"; Write-Host ''
     }
 
     # ── Distribution Groups — rename email domain ─────────────────────────────

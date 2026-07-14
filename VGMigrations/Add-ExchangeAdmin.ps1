@@ -27,19 +27,10 @@ Write-Host "=== Assign Exchange Administrator Role ==="
 Write-Host "Account : $UPN"
 Write-Host ''
 
-$graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Identity.Governance','Microsoft.Graph.Users')
-foreach ($m in $graphMods) {
-    if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
-        Write-Host "ERROR: Required module not installed: $m"
-        Write-Host "Install with:  Install-Module Microsoft.Graph -Scope CurrentUser -Force"
-        exit 1
-    }
-    Import-Module $m -ErrorAction Stop
-}
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Identity.Governance','Microsoft.Graph.Users')
 
 Write-Host 'Connecting to Microsoft Graph — sign in with a Global Administrator account...'
-Connect-MgGraph -Scopes 'RoleManagement.ReadWrite.Directory','User.Read.All' `
-    -UseDeviceCode -NoWelcome -ErrorAction Stop
+Connect-MgGraph -Scopes 'RoleManagement.ReadWrite.Directory','User.Read.All' -NoWelcome -ErrorAction Stop
 Write-Host 'Connected.'
 Write-Host ''
 

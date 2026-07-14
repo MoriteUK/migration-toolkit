@@ -40,22 +40,13 @@ Write-Host "$($addresses.Count) address(es) loaded." -ForegroundColor Green
 
 # Check modules
 Write-Host "`nChecking Microsoft.Graph modules..." -ForegroundColor Cyan
-$missing = @()
-foreach ($m in 'Microsoft.Graph.Groups', 'Microsoft.Graph.Users') {
-    if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) { $missing += $m }
-}
-if ($missing.Count -gt 0) {
-    Write-Error "Required modules not installed: $($missing -join ', ').`nRun: Install-Module Microsoft.Graph -Scope CurrentUser"
-    exit 1
-}
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Groups','Microsoft.Graph.Users')
 
 # Connect
 Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Cyan
 Write-Host "(A sign-in window will open — please authenticate)" -ForegroundColor Yellow
 Connect-MgGraph -Scopes 'Group.ReadWrite.All','GroupMember.ReadWrite.All','User.Read.All' -ErrorAction Stop
 Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
-
-Import-Module Microsoft.Graph.Groups, Microsoft.Graph.Users -DisableNameChecking -ErrorAction Stop
 
 # Resolve owner
 Write-Host "Resolving owner: $OwnerUpn" -ForegroundColor Cyan

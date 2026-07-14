@@ -49,21 +49,11 @@ Log "Log file   : $logFile"
 Log ''
 
 # ── Load Graph modules ────────────────────────────────────────────────────────
-$graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Users',
-               'Microsoft.Graph.Groups','Microsoft.Graph.Identity.DirectoryManagement')
-foreach ($m in $graphMods) {
-    if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
-        Log "ERROR: Required module not installed: $m"
-        Log "Install it with:  Install-Module Microsoft.Graph -Scope CurrentUser -Force"
-        exit 1
-    }
-    Import-Module $m -ErrorAction Stop
-}
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Users','Microsoft.Graph.Groups','Microsoft.Graph.Identity.DirectoryManagement')
 
 # ── Connect ────────────────────────────────────────────────────────────────────
 Log 'Connecting to Microsoft Graph — sign in when prompted...'
-Connect-MgGraph -Scopes 'User.ReadWrite.All','Group.Read.All','Directory.Read.All' `
-    -UseDeviceCode -NoWelcome -ErrorAction Stop
+Connect-MgGraph -Scopes 'User.ReadWrite.All','Group.Read.All','Directory.Read.All' -NoWelcome -ErrorAction Stop
 Log 'Connected to Microsoft Graph.'
 Log ''
 

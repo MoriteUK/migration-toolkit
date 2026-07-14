@@ -1,7 +1,18 @@
 {
-  "version": "2.9.20",
+  "version": "2.9.21",
   "releaseDate": "2026-07-14",
   "changelog": [
+    {
+      "version": "2.9.21",
+      "date": "2026-07-14",
+      "changes": [
+        "Rolled the device-code fix out to every script that connects to Graph/Exchange Online headlessly (spawned by the app with no visible window) — confirmed live failures today on Update-SIPDomain.ps1 ('A window handle must be configured') and Retire-Devices.ps1 (same error) showed the problem wasn't limited to Discovery: WAM hard-requires a window that a headless spawn simply doesn't have, and its device-code fallback is now blocked tenant-wide by a Conditional Access policy",
+        "New Ensure-GraphModules.ps1 — shared helper (dot-sourced) that pins whichever Microsoft.Graph.* submodules a script uses to 2.33.0 (last version before the SDK made WAM mandatory), installing side-by-side if missing. Replaces duplicated ad-hoc module-check blocks in every script below",
+        "Graph: removed -UseDeviceCode/-UseDeviceAuthentication and added the pinned-module helper to Add-ExchangeAdmin.ps1, Check-OneDriveStatus.ps1, Connect-MicrosoftGraph.ps1, New-AzureAppRegistration.ps1, Provision-OneDrives.ps1, Remove-EntraUsers.ps1, Remove-devices.ps1, Retire-Devices.ps1, Set-TeamsOwners-Run.ps1, Update-SIPDomain.ps1, Update-UPN.ps1 (all 3 connect sites, including the visible-window device-code helper script it spawns for its WinForms Connect button)",
+        "Exchange Online: added -DisableWAM (documented fix for 'A window handle must be configured') to every bare Connect-ExchangeOnline call — Hide-AddressBook.ps1 (x2), Remove-AliasAddresses.ps1, Rename-DomainObjects.ps1, remove-domain.ps1 (x2), search-domain.ps1's two mid-run parallel-runspace reconnects, Update-SIPDomain.ps1",
+        "Fixed an unrelated pre-existing bug found along the way: Rename-DomainObjects.ps1 and remove-domain.ps1 both had \"$label:\" inside a double-quoted string (PowerShell parses this as an invalid scope-qualified variable reference) — this was a genuine parse error that would have made both scripts fail to run at all past that point. Fixed to \"${label}:\" in both"
+      ]
+    },
     {
       "version": "2.9.20",
       "date": "2026-07-14",

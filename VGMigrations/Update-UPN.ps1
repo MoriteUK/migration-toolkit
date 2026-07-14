@@ -27,6 +27,12 @@ $script:RootDir = $PSScriptRoot
 # Disable WAM broker BEFORE any Graph modules load
 $env:AZURE_IDENTITY_DISABLE_BROKER = 'true'
 
+# Belt-and-braces: the env var above wasn't sufficient on its own (this script previously always
+# used -UseDeviceCode as a result), and device-code flow can now be blocked tenant-wide by a
+# Conditional Access "Authentication flows" policy. Pin Microsoft.Graph.Authentication to 2.33.0 —
+# the last version before WAM became mandatory in the SDK — so plain interactive sign-in works.
+. (Join-Path $script:RootDir 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Identity.DirectoryManagement','Microsoft.Graph.Users')
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -381,8 +387,8 @@ Write-Host 'Connecting to Microsoft Graph...' -ForegroundColor Yellow
 Write-Host ''
 
 try {
-    Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
-    Connect-MgGraph -Scopes 'User.ReadWrite.All','Domain.Read.All','Group.Read.All' -UseDeviceCode -TenantId 'organizations' -NoWelcome -ErrorAction Stop
+    Import-Module -Name 'Microsoft.Graph.Authentication' -RequiredVersion '2.33.0' -ErrorAction Stop
+    Connect-MgGraph -Scopes 'User.ReadWrite.All','Domain.Read.All','Group.Read.All' -TenantId 'organizations' -NoWelcome -ErrorAction Stop
 
     Write-Host ''
     Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor Green
@@ -824,18 +830,10 @@ if ($OldDomain -and $NewDomain) {
     $new = $NewDomain.TrimStart('@')
     Write-Host "=== Update-UPN  @$old  →  @$new$(if ($WhatIf) { '  [WhatIf]' }) ==="
     Write-Host 'Loading Microsoft Graph modules...'
+    . (Join-Path $script:RootDir 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Users')
 
-    foreach ($mod in @('Microsoft.Graph.Authentication','Microsoft.Graph.Users')) {
-        if (-not (Get-Module -ListAvailable -Name $mod -ErrorAction SilentlyContinue)) {
-            Write-Host "ERROR: Module not installed: $mod"
-            Write-Host 'Install with: Install-Module Microsoft.Graph -Scope CurrentUser'
-            exit 1
-        }
-        Import-Module $mod -ErrorAction Stop
-    }
-
-    Write-Host 'Connecting to Microsoft Graph (device code)...'
-    Connect-MgGraph -Scopes 'User.ReadWrite.All' -UseDeviceCode -TenantId 'organizations' -NoWelcome -ErrorAction Stop
+    Write-Host 'Connecting to Microsoft Graph...'
+    Connect-MgGraph -Scopes 'User.ReadWrite.All' -TenantId 'organizations' -NoWelcome -ErrorAction Stop
     Write-Host 'Connected.'
 
     Write-Host "Searching for users with UPN suffix @$old ..."

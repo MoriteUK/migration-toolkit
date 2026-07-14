@@ -149,7 +149,7 @@ foreach ($sec in $script:SectionDefs) {
         try {
             $cmds = @('Get-Mailbox','Set-Mailbox','Get-DistributionGroup','Set-DistributionGroup',
                       'Get-MailContact','Set-MailContact','Get-UnifiedGroup','Set-UnifiedGroup')
-            Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -ErrorAction Stop
+            Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
             $exoConnected = $true
             Write-Host 'Exchange Online connected.'
         } catch {

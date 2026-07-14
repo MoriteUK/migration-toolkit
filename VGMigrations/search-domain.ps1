@@ -1706,7 +1706,7 @@ try {
                         Import-Module ExchangeOnlineManagement -ErrorAction Stop | Out-Null
                         $exoConnections = Get-ConnectionInformation -ErrorAction SilentlyContinue
                         if (-not $exoConnections -or @($exoConnections).Count -eq 0) {
-                            Connect-ExchangeOnline -ShowBanner:$false -CommandName 'Get-Mailbox','Get-MailboxStatistics' -ErrorAction Stop | Out-Null
+                            Connect-ExchangeOnline -ShowBanner:$false -CommandName 'Get-Mailbox','Get-MailboxStatistics' -DisableWAM -ErrorAction Stop | Out-Null
                         }
                     } catch {
                         return [PSCustomObject]@{ UPN = $upn; Found = $false; Error = "EXO connect failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])"; Mb = $null; Stats = $null; ArchStats = $null }
@@ -1925,7 +1925,7 @@ try {
                     Import-Module ExchangeOnlineManagement -ErrorAction Stop | Out-Null
                     $exoConnections = Get-ConnectionInformation -ErrorAction SilentlyContinue
                     if (-not $exoConnections -or @($exoConnections).Count -eq 0) {
-                        Connect-ExchangeOnline -ShowBanner:$false -CommandName 'Get-Mailbox','Get-MailboxStatistics' -ErrorAction Stop | Out-Null
+                        Connect-ExchangeOnline -ShowBanner:$false -CommandName 'Get-Mailbox','Get-MailboxStatistics' -DisableWAM -ErrorAction Stop | Out-Null
                     }
                 } catch {
                     return [PSCustomObject]@{ UPN = $upn; Found = $false; Error = "EXO connect failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])"; Mb = $null; Stats = $null; ArchStats = $null }

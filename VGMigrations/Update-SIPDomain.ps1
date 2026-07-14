@@ -61,23 +61,18 @@ $exoCmds = @('Get-Recipient','Get-Mailbox','Set-Mailbox',
              'Get-MailContact','Set-MailContact')
 
 Log 'Connecting to Exchange Online...'
-Connect-ExchangeOnline -ShowBanner:$false -CommandName $exoCmds -ErrorAction Stop
+# -DisableWAM: this script is spawned headlessly (no console window) by the Electron app, and
+# WAM hard-requires a parent window handle — without it Connect-ExchangeOnline throws "A window
+# handle must be configured" immediately. -DisableWAM (EXO module >= 3.7.2) uses a normal browser
+# popup instead, which doesn't need a window belonging to this process.
+Connect-ExchangeOnline -ShowBanner:$false -CommandName $exoCmds -DisableWAM -ErrorAction Stop
 Log 'Connected to Exchange Online.'
 
 # ── Connect Microsoft Graph (Remove mode only) ────────────────────────────────
 if ($Mode -eq 'Remove') {
-    $graphMods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Users',
-                   'Microsoft.Graph.Identity.DirectoryManagement')
-    foreach ($m in $graphMods) {
-        if (-not (Get-Module -ListAvailable -Name $m -ErrorAction SilentlyContinue)) {
-            Log "ERROR: Required module not installed: $m"
-            Log "Install it with:  Install-Module Microsoft.Graph -Scope CurrentUser -Force"
-            exit 1
-        }
-        Import-Module $m -ErrorAction Stop
-    }
+    . (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Users','Microsoft.Graph.Identity.DirectoryManagement')
     Log 'Connecting to Microsoft Graph for license management...'
-    Connect-MgGraph -Scopes 'User.ReadWrite.All','Organization.Read.All' -UseDeviceCode -NoWelcome -ErrorAction Stop
+    Connect-MgGraph -Scopes 'User.ReadWrite.All','Organization.Read.All' -NoWelcome -ErrorAction Stop
     Log 'Connected to Microsoft Graph.'
 }
 
