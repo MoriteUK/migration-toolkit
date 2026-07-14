@@ -974,25 +974,30 @@
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <span class="step-number">4</span>
+              <span style="flex:1; font-size:13px;">Clear Employee ID (On-Prem)</span>
+              <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-clear-employeeid">Go →</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="step-number">5</span>
               <span style="flex:1; font-size:13px;">Remove Alias Addresses (smtp: / SIP / EUM)</span>
               <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-alias">Go →</button>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
-              <span class="step-number">5</span>
+              <span class="step-number">6</span>
               <span style="flex:1; font-size:13px;">SIP / IM Addresses — remove or replace</span>
               <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-sip">Go →</button>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
-              <span class="step-number">6</span>
+              <span class="step-number">7</span>
               <span style="flex:1; font-size:13px; color:#6B7280;">Sync to Cloud — run <code>Start-ADSyncSyncCycle -PolicyType Delta</code> on the Entra Connect server</span>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
-              <span class="step-number">7</span>
+              <span class="step-number">8</span>
               <span style="flex:1; font-size:13px;">Retire Devices</span>
               <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-retire-devices">Go →</button>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
-              <span class="step-number">8</span>
+              <span class="step-number">9</span>
               <span style="flex:1; font-size:13px;">Rename Domain Objects + Remove from Tenant</span>
               <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-remove">Go →</button>
             </div>
@@ -1316,7 +1321,7 @@
         <div class="form-card form-card-compact">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
-            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-alias">Next: Remove Aliases →</button>
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-clear-employeeid">Next: Clear Employee ID →</button>
           </div>
 
           <h3 class="form-card-title">Exchange Global Address List</h3>
@@ -1355,6 +1360,7 @@
         <div class="form-card form-card-compact">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-alias">Next: Remove Aliases →</button>
           </div>
 
           <h3 class="form-card-title">Clear On-Premise AD EmployeeID Attribute</h3>

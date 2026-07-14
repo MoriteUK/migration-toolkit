@@ -1,7 +1,14 @@
 {
-  "version": "2.9.19",
-  "releaseDate": "2026-07-13",
+  "version": "2.9.20",
+  "releaseDate": "2026-07-14",
   "changelog": [
+    {
+      "version": "2.9.20",
+      "date": "2026-07-14",
+      "changes": [
+        "Domain Removal Workflow: added 'Clear Employee ID (On-Prem)' as step 4, right after 'Hide from Address Book' — steps renumbered 1-9 and the Next-button chain updated (Hide → Clear Employee ID → Remove Aliases) so the guided flow includes it"
+      ]
+    },
     {
       "version": "2.9.19",
       "date": "2026-07-13",
