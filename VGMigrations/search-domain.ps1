@@ -69,12 +69,21 @@
     don't fail.
 
 .NOTES
-    Version    : 2.12.1
+    Version    : 2.12.2
     Last edit  : 2026-07-13
     Author     : Andrew White / Claude (Anthropic)
     Repository : internal — Volaris M365 migration tooling
 
     Version history:
+      2.12.2 SharePoint and Power Platform sections were silently skipping themselves whenever
+             Microsoft.Online.SharePoint.PowerShell / Microsoft.PowerApps.Administration.PowerShell
+             weren't already installed — they only logged a WARN with manual install instructions
+             instead of installing. Ensure-Module now actually installs missing modules from
+             PSGallery (CurrentUser scope) instead of just checking for them, and gained an
+             optional -RequiredVersion pin (used to simplify the 2.12.1 Graph pin). All four
+             SPO/Power-Platform module-presence checks (upfront + mid-run fallback for each) now
+             route through it, so a missing module gets installed automatically instead of
+             quietly skipping that section of the scan.
       2.12.1 v2.12.0's Graph fix didn't work — confirmed live against celcat.com: WAM was still
              attempted and still fell back to device-code, which then got blocked as expected.
              Set-MgGraphOption -DisableLoginByWAM $true is a documented no-op on Windows unless
@@ -415,22 +424,38 @@ function Get-CsvRowCountFast {
 }
 
 function Ensure-Module {
+    # Verifies a module is installed (auto-installing from PSGallery to CurrentUser scope if
+    # missing) and imports it. Pass -RequiredVersion to pin an exact version — installs it
+    # side-by-side without touching any other version already present. -Optional means failures
+    # are logged and return $false instead of exiting the whole script (used for modules that
+    # gate a single section, like SPO or Power Platform, rather than the whole run).
     param(
         [Parameter(Mandatory)][string]$Name,
-        [switch]$Optional
+        [switch]$Optional,
+        [string]$RequiredVersion
     )
     try {
-        if (-not (Get-Module -ListAvailable -Name $Name)) {
-            if ($Optional) { Write-Log "Optional module missing: $Name" -Level WARN; return $false }
-            Write-Log "Required module missing: $Name. Install: Install-Module $Name -Scope CurrentUser -Force" -Level ERROR
-            exit 1
+        $versionLabel = if ($RequiredVersion) { " $RequiredVersion" } else { "" }
+        $existing = if ($RequiredVersion) {
+            Get-Module -ListAvailable -Name $Name | Where-Object { $_.Version -eq $RequiredVersion }
+        } else {
+            Get-Module -ListAvailable -Name $Name
         }
-        Import-Module $Name -ErrorAction Stop
-        Write-Log "Loaded module: $Name" -Level INFO
+        if (-not $existing) {
+            Write-Log "Module missing: $Name$versionLabel — installing from PSGallery (CurrentUser scope)..." -Level WARN
+            $installArgs = @{ Name = $Name; Scope = 'CurrentUser'; Force = $true; AllowClobber = $true; ErrorAction = 'Stop' }
+            if ($RequiredVersion) { $installArgs['RequiredVersion'] = $RequiredVersion }
+            Install-Module @installArgs
+            Write-Log "Installed module: $Name$versionLabel" -Level SUCCESS
+        }
+        $importArgs = @{ Name = $Name; Force = $true; ErrorAction = 'Stop' }
+        if ($RequiredVersion) { $importArgs['RequiredVersion'] = $RequiredVersion }
+        Import-Module @importArgs
+        Write-Log "Loaded module: $Name$versionLabel" -Level INFO
         return $true
     } catch {
-        if ($Optional) { Write-Log "Optional module failed to load: $Name — $($_.Exception.Message)" -Level WARN; return $false }
-        Write-Log "Failed to load module: $Name — $($_.Exception.Message)" -Level ERROR
+        if ($Optional) { Write-Log "Optional module could not be installed/loaded: $Name$versionLabel — $($_.Exception.Message)" -Level WARN; return $false }
+        Write-Log "Required module could not be installed/loaded: $Name$versionLabel — $($_.Exception.Message)" -Level ERROR
         exit 1
     }
 }
@@ -898,18 +923,12 @@ Ensure-Module -Name 'ExchangeOnlineManagement' | Out-Null
 # per-tenant admin consent needed. Installs side-by-side if missing; does not remove or affect
 # any newer version already on the machine.
 $GraphAuthPinnedVersion = '2.33.0'
-try {
-    if (-not (Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication' | Where-Object { $_.Version -eq $GraphAuthPinnedVersion })) {
-        Write-Log "Installing Microsoft.Graph.Authentication $GraphAuthPinnedVersion (pinned — avoids the SDK's mandatory-WAM regression in >= 2.34.0)..." -Level INFO
-        Install-Module -Name 'Microsoft.Graph.Authentication' -RequiredVersion $GraphAuthPinnedVersion -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
-    }
-    Import-Module -Name 'Microsoft.Graph.Authentication' -RequiredVersion $GraphAuthPinnedVersion -Force -ErrorAction Stop
-    Write-Log "Loaded module: Microsoft.Graph.Authentication $GraphAuthPinnedVersion" -Level INFO
-    $GraphModuleOk = $true
-} catch {
-    Write-Log "Could not load pinned Microsoft.Graph.Authentication ${GraphAuthPinnedVersion}: $($_.Exception.Message) — Graph sections will be skipped." -Level WARN
-    $GraphModuleOk = $false
-}
+$GraphModuleOk = Ensure-Module -Name 'Microsoft.Graph.Authentication' -RequiredVersion $GraphAuthPinnedVersion -Optional
+
+# All other optional per-section modules: auto-installed on first use further down (SPO,
+# Power Platform), same pattern as above. ActiveDirectory (-Hybrid only) is the one exception —
+# it's a Windows RSAT feature, not a PSGallery module, so it can't be Install-Module'd; that
+# check further down still just warns with install instructions.
 
 # ─────────────────────────────────────────────────────────────
 # DOMAIN INPUT
@@ -1228,8 +1247,8 @@ if ($true) {
         $spAns = 'Y'
     }
     if ($spAns -match '^[Yy]') {
-        if (-not (Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell' -ErrorAction SilentlyContinue)) {
-            Write-Log "Microsoft.Online.SharePoint.PowerShell not installed — skipping. Install: Install-Module Microsoft.Online.SharePoint.PowerShell -Scope CurrentUser" -Level WARN
+        if (-not (Ensure-Module -Name 'Microsoft.Online.SharePoint.PowerShell' -Optional)) {
+            Write-Log "Skipping upfront SPO enumeration." -Level WARN
         } else {
             # ── Resolve the SPO admin URL ─────────────────────────────────────────
             # Priority: -SharePointAdminUrl param → shared-config.json → hardcoded default
@@ -1415,8 +1434,8 @@ catch {
         $ppAns = 'Y'
     }
     if ($ppAns -match '^[Yy]') {
-        if (-not (Get-Module -ListAvailable -Name 'Microsoft.PowerApps.Administration.PowerShell' -ErrorAction SilentlyContinue)) {
-            Write-Log "Microsoft.PowerApps.Administration.PowerShell not installed — skipping." -Level WARN
+        if (-not (Ensure-Module -Name 'Microsoft.PowerApps.Administration.PowerShell' -Optional)) {
+            Write-Log "Skipping upfront Power Platform scan." -Level WARN
         } else {
             Write-Log "Launching Power Platform scan upfront."
             Write-Log "An interactive sign-in window will appear. Sign in with a Power Platform admin account."
@@ -2667,10 +2686,8 @@ try {
 
         # Mid-run SPO — fallback if the upfront scan didn't succeed (module missing, etc.)
         if (-not $tenantWide) {
-            $spoModule = Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell' -ErrorAction SilentlyContinue
-            if (-not $spoModule) {
-                Write-Log "Microsoft.Online.SharePoint.PowerShell not installed — skipping tenant-wide enumeration." -Level WARN
-                Write-Log "Install: Install-Module Microsoft.Online.SharePoint.PowerShell -Scope CurrentUser" -Level WARN
+            if (-not (Ensure-Module -Name 'Microsoft.Online.SharePoint.PowerShell' -Optional)) {
+                Write-Log "Skipping tenant-wide SPO enumeration." -Level WARN
             } else {
                 # Tenant admin URL: derive from any site URL we already have, else ask the user
                 $adminUrl = $null
@@ -3445,10 +3462,8 @@ try {
     }
 
     if (-not $ppDoneUpfront) {
-        $ppModule = Get-Module -ListAvailable -Name 'Microsoft.PowerApps.Administration.PowerShell' -ErrorAction SilentlyContinue
-        if (-not $ppModule) {
-            Write-Log "Microsoft.PowerApps.Administration.PowerShell not installed — skipping." -Level WARN
-            Write-Log "Install: Install-Module Microsoft.PowerApps.Administration.PowerShell -Scope CurrentUser" -Level WARN
+        if (-not (Ensure-Module -Name 'Microsoft.PowerApps.Administration.PowerShell' -Optional)) {
+            Write-Log "Skipping mid-run Power Platform scan." -Level WARN
         } else {
             # The Power Platform module ships its own copy of Microsoft.Identity.Client.dll which
             # conflicts with the version Microsoft.Graph already loaded into this session.

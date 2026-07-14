@@ -1,7 +1,15 @@
 {
-  "version": "2.9.16",
+  "version": "2.9.17",
   "releaseDate": "2026-07-13",
   "changelog": [
+    {
+      "version": "2.9.17",
+      "date": "2026-07-13",
+      "changes": [
+        "search-domain.ps1 (v2.12.2): the SharePoint and Power Platform sections were silently skipping themselves whenever their module (Microsoft.Online.SharePoint.PowerShell / Microsoft.PowerApps.Administration.PowerShell) wasn't already installed on the machine, instead of installing it",
+        "Ensure-Module now actually auto-installs missing modules from PSGallery (CurrentUser scope) rather than just checking for them and telling you to install manually — applies to all four SPO/Power-Platform module checks (upfront scan + mid-run fallback, for each)"
+      ]
+    },
     {
       "version": "2.9.16",
       "date": "2026-07-13",
