@@ -1,7 +1,15 @@
 {
-  "version": "2.9.26",
+  "version": "2.9.27",
   "releaseDate": "2026-07-14",
   "changelog": [
+    {
+      "version": "2.9.27",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: fixed a control-flow bug causing 'Authorization_IdentityNotFound: The identity of the calling application could not be established' errors on several tenants (AEP, Trans Track, Transloc, Signature) — Connect-MgGraph -ClientSecretCredential can issue a token even when the app was never actually consented in that tenant (no service principal there), so the connect step 'succeeded' but the first real Graph call then failed with no interactive fallback attempted",
+        "App-only auth is now verified with a real Get-MgOrganization call before being treated as successful — if that fails, it falls back to interactive sign-in exactly like an outright connect failure does, instead of surfacing as an unrecoverable error"
+      ]
+    },
     {
       "version": "2.9.26",
       "date": "2026-07-14",

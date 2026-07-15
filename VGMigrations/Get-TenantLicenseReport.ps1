@@ -346,10 +346,17 @@ foreach ($rec in $tenantRecords) {
                 $secureSecret = ConvertTo-SecureString $rec.AppSecret -AsPlainText -Force
                 $cred = [PSCredential]::new($rec.AppId, $secureSecret)
                 Connect-MgGraph -TenantId $rec.TenantId -ClientSecretCredential $cred -NoWelcome -ErrorAction Stop
+                # Client-credentials auth can issue a token even when the app was never
+                # actually consented in this tenant (no service principal) — that only
+                # surfaces on the first real Graph call, as Authorization_IdentityNotFound.
+                # Verify here so a "successful" connect that doesn't actually work still
+                # falls back to interactive instead of being reported as a hard failure.
+                $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
                 $connected = $true
             } catch {
                 Write-Host "  App-only auth failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Yellow
                 Write-Host "  Falling back to interactive sign-in." -ForegroundColor Yellow
+                try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
             } finally {
                 $secureSecret = $null; $cred = $null
             }
@@ -360,9 +367,9 @@ foreach ($rec in $tenantRecords) {
             Write-Host "  >>> SIGN IN TO: $label <<<" -ForegroundColor Yellow
             Write-Host "  A browser window will open — use the admin account for this tenant." -ForegroundColor Gray
             Connect-MgGraph -TenantId $rec.TenantId -Scopes 'Organization.Read.All' -NoWelcome -ErrorAction Stop
+            $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
         }
 
-        $org     = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
         $allSkus = @(Get-MgSubscribedSku -All -ErrorAction Stop)
         $skus    = @($allSkus | Where-Object { Test-SkuGrantsMailboxOrOneDrive $_ })
         $excludedCount = $allSkus.Count - $skus.Count
