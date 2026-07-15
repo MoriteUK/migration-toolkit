@@ -1,7 +1,15 @@
 {
-  "version": "2.9.24",
+  "version": "2.9.25",
   "releaseDate": "2026-07-14",
   "changelog": [
+    {
+      "version": "2.9.25",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: excludes the ourvolaris management tenant itself from the report (new -ExcludeDomains param, default @('ourvolaris')) — it's the source/management tenant, not a customer to check",
+        "Tenants with no mailbox/OneDrive-capable license now get a single 0 row in the CSV (SkuPartNumber '(none)') instead of being silently omitted, so it's clear the tenant was actually checked"
+      ]
+    },
     {
       "version": "2.9.24",
       "date": "2026-07-14",

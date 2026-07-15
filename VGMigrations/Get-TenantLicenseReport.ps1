@@ -8,7 +8,9 @@
     Reads a list of tenants from an Excel workbook or CSV, connects to Microsoft Graph for
     each in turn, and pulls the tenant's subscribed SKUs — friendly product name,
     enabled/consumed/available unit counts. Writes one consolidated CSV covering every
-    tenant plus a per-tenant summary in the log.
+    tenant plus a per-tenant summary in the log. Tenants with no mailbox/OneDrive-capable
+    license still get a single row in the CSV (SkuPartNumber '(none)', all counts 0) so it's
+    clear the tenant was checked rather than silently missing from the report.
 
     Two connection modes per tenant, chosen automatically:
       - App-only (no sign-in): used when the row has both an App ID and App Secret —
@@ -51,6 +53,10 @@
 .PARAMETER HeaderRow
     Row number the data starts after (.xlsx only) — row 1 is assumed to be headers. Default 1.
 
+.PARAMETER ExcludeDomains
+    Domain substrings to exclude (case-insensitive) — matched against the Domain column.
+    Default excludes 'ourvolaris' (the Volaris management tenant itself, not a customer).
+
 .PARAMETER Column
     CSV only: column name to read tenant identifiers from. Auto-detected if omitted
     (tries TenantId, Tenant, Domain, TenantDomain, Name). CSV rows also get app-only auth
@@ -76,6 +82,8 @@ param(
     [string]$LicensesOkColumn = 'I',
     [string]$SkipValue       = 'Yes',
     [int]$HeaderRow          = 1,
+
+    [string[]]$ExcludeDomains = @('ourvolaris'),
 
     [string]$Column,
 
@@ -205,6 +213,21 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
 # Dedup by TenantId, keeping the first occurrence of each.
 $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $tenantRecords = @($tenantRecords | Where-Object { $_.TenantId -and $seen.Add($_.TenantId) })
+
+# Exclude the Volaris management tenant itself (and any other -ExcludeDomains match) — it's
+# the source/management tenant, not a customer to be checked.
+if ($ExcludeDomains -and $ExcludeDomains.Count -gt 0) {
+    $beforeCount = $tenantRecords.Count
+    $tenantRecords = @($tenantRecords | Where-Object {
+        $rec = $_
+        -not ($ExcludeDomains | Where-Object { $rec.Domain -and $rec.Domain -match [regex]::Escape($_) })
+    })
+    $excludedByDomain = $beforeCount - $tenantRecords.Count
+    if ($excludedByDomain -gt 0) {
+        Write-Host "$excludedByDomain tenant(s) excluded (domain matches: $($ExcludeDomains -join ', '))." -ForegroundColor Yellow
+    }
+}
+
 Write-Host "$($tenantRecords.Count) unique tenant(s) to check." -ForegroundColor Cyan
 Write-Host ""
 
@@ -341,6 +364,24 @@ foreach ($rec in $tenantRecords) {
             Write-Host "  No mailbox/OneDrive-capable licenses found ($excludedCount other SKU(s) excluded)." -ForegroundColor Yellow
         } elseif ($excludedCount -gt 0) {
             Write-Host "  ($excludedCount SKU(s) without mailbox/OneDrive excluded)" -ForegroundColor DarkGray
+        }
+
+        if ($skus.Count -eq 0) {
+            # Still record the tenant in the report — a 0 row makes it obvious this tenant
+            # was checked and genuinely has no mailbox/OneDrive-capable license, rather than
+            # silently missing from the CSV.
+            $allRows.Add([pscustomobject]@{
+                Domain        = $rec.Domain
+                TenantId      = $org.Id
+                TenantName    = $org.DisplayName
+                SkuPartNumber = '(none)'
+                FriendlyName  = '(none)'
+                Enabled       = 0
+                Consumed      = 0
+                Available     = 0
+                Suspended     = 0
+                Warning       = 0
+            })
         }
 
         foreach ($sku in $skus) {
