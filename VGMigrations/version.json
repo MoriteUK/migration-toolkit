@@ -1,7 +1,16 @@
 {
-  "version": "2.9.23",
+  "version": "2.9.24",
   "releaseDate": "2026-07-14",
   "changelog": [
+    {
+      "version": "2.9.24",
+      "date": "2026-07-14",
+      "changes": [
+        "Sidebar: Discovery is now an expandable section (matching AvePoint Fly / Misc Scripts / Domain Removal) with two entries — 'M365 Discovery' (unchanged) and 'License Report' (moved here from Misc Scripts, since it's a discovery-adjacent tenant check)",
+        "Get-TenantLicenseReport.ps1: added a second skip condition — column I ('Licenses available' = Yes) is now excluded alongside column L ('Cutover' = Yes), since those tenants already have confirmed-correct licenses",
+        "Finished report now auto-opens on screen — the script signals ##OPEN_FILE:<path>## (same convention as New-AzureAppRegistration.ps1) and the app opens the CSV natively via Electron's shell.openPath the moment the run completes"
+      ]
+    },
     {
       "version": "2.9.23",
       "date": "2026-07-14",

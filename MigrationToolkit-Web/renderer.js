@@ -1654,6 +1654,8 @@ function switchView(viewName) {
   const viewMap = {
     'dashboard': 'dashboardView',
     'discovery': 'discoveryView',
+    // Discovery sub-views
+    'discovery-tenant-licenses': 'discoveryTenantLicensesView',
     // AvePoint Fly sub-views
     'avepoint-appreg': 'avepointAppRegView',
     'avepoint-aos': 'avepointAosView',
@@ -1667,7 +1669,6 @@ function switchView(viewName) {
     'misc-deduplicate': 'miscDeduplicateView',
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-domain-devices': 'miscDomainDevicesView',
-    'misc-tenant-licenses': 'miscTenantLicensesView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -3030,7 +3031,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function appendTenantLicensesLog(text) {
     if (!tenantLicensesLogPre) return;
-    tenantLicensesLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    const clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+    // Detect ##OPEN_FILE:<path>## signal from the PS script and open via Electron —
+    // pops the finished CSV report open on screen (same convention as App Registration).
+    const fileMarker = clean.match(/##OPEN_FILE:(.+?)##/);
+    if (fileMarker) {
+      window.electronAPI.openFile(fileMarker[1].trim());
+      tenantLicensesLogPre.textContent += clean.replace(/##OPEN_FILE:.+?##/g, '').replace(/^\n/, '');
+    } else {
+      tenantLicensesLogPre.textContent += clean;
+    }
     tenantLicensesLogPre.scrollTop = tenantLicensesLogPre.scrollHeight;
   }
 

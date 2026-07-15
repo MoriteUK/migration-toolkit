@@ -37,11 +37,16 @@
     Default 'D'.
 
 .PARAMETER SkipColumn
-    Excel column letter holding the skip flag (.xlsx only) — rows where this column equals
-    -SkipValue are excluded. Default 'L'.
+    Excel column letter holding the "cutover done" skip flag (.xlsx only) — rows where this
+    column equals -SkipValue are excluded. Default 'L'.
 
 .PARAMETER SkipValue
-    Value in -SkipColumn that marks a tenant to be skipped (case-insensitive). Default 'Yes'.
+    Value in -SkipColumn / -LicensesOkColumn that marks a tenant to be skipped
+    (case-insensitive). Default 'Yes'.
+
+.PARAMETER LicensesOkColumn
+    Excel column letter holding the "licenses already confirmed correct" flag (.xlsx only) —
+    rows where this column equals -SkipValue are excluded, same as -SkipColumn. Default 'I'.
 
 .PARAMETER HeaderRow
     Row number the data starts after (.xlsx only) — row 1 is assumed to be headers. Default 1.
@@ -68,6 +73,7 @@ param(
     [string]$AppIdColumn     = 'C',
     [string]$AppSecretColumn = 'D',
     [string]$SkipColumn      = 'L',
+    [string]$LicensesOkColumn = 'I',
     [string]$SkipValue       = 'Yes',
     [int]$HeaderRow          = 1,
 
@@ -114,20 +120,26 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
     }
     Import-Module ImportExcel -ErrorAction Stop
 
-    $domainIdx = ConvertFrom-ExcelColumnLetter $DomainColumn
-    $idIdx     = ConvertFrom-ExcelColumnLetter $TenantIdColumn
-    $appIdIdx  = ConvertFrom-ExcelColumnLetter $AppIdColumn
-    $appSecIdx = ConvertFrom-ExcelColumnLetter $AppSecretColumn
-    $skipIdx   = ConvertFrom-ExcelColumnLetter $SkipColumn
-    Write-Host "Reading column $TenantIdColumn (tenant ID), $DomainColumn (domain) — skipping rows where column $SkipColumn = '$SkipValue'." -ForegroundColor Gray
+    $domainIdx  = ConvertFrom-ExcelColumnLetter $DomainColumn
+    $idIdx      = ConvertFrom-ExcelColumnLetter $TenantIdColumn
+    $appIdIdx   = ConvertFrom-ExcelColumnLetter $AppIdColumn
+    $appSecIdx  = ConvertFrom-ExcelColumnLetter $AppSecretColumn
+    $skipIdx    = ConvertFrom-ExcelColumnLetter $SkipColumn
+    $licOkIdx   = ConvertFrom-ExcelColumnLetter $LicensesOkColumn
+    Write-Host "Reading column $TenantIdColumn (tenant ID), $DomainColumn (domain) — skipping rows where column $SkipColumn or $LicensesOkColumn = '$SkipValue'." -ForegroundColor Gray
 
     $excelRows = @(Import-Excel -Path $TenantsFile -NoHeader -StartRow ($HeaderRow + 1) -ErrorAction Stop)
     $skippedCount = 0
     foreach ($row in $excelRows) {
-        $idVal   = $row."P$idIdx"
-        $skipVal = $row."P$skipIdx"
+        $idVal    = $row."P$idIdx"
+        $skipVal  = $row."P$skipIdx"
+        $licOkVal = $row."P$licOkIdx"
         if ([string]::IsNullOrWhiteSpace($idVal)) { continue }
         if ($skipVal -and $skipVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $skippedCount++
+            continue
+        }
+        if ($licOkVal -and $licOkVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
             $skippedCount++
             continue
         }
@@ -138,7 +150,7 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
             AppSecret = $row."P$appSecIdx"
         })
     }
-    if ($skippedCount -gt 0) { Write-Host "$skippedCount tenant(s) skipped (column $SkipColumn = '$SkipValue')." -ForegroundColor Yellow }
+    if ($skippedCount -gt 0) { Write-Host "$skippedCount tenant(s) skipped (column $SkipColumn or $LicensesOkColumn = '$SkipValue')." -ForegroundColor Yellow }
 } else {
     # Detect CSV encoding from BOM — same helper as Import-FlyMappings.ps1 / search-domain.ps1.
     function Get-CsvEncoding([string]$Path) {
@@ -366,6 +378,9 @@ if ($allRows.Count -gt 0) {
     $allRows | Export-Csv -Path $OutputPath -NoTypeInformation -Encoding UTF8 -Force
     Write-Host ""
     Write-Host "Report written: $OutputPath" -ForegroundColor Green
+    # Signal the Electron app to open this file natively (same convention as
+    # New-AzureAppRegistration.ps1) — pops the CSV open on screen when the run finishes.
+    Write-Output "##OPEN_FILE:$OutputPath##"
 }
 
 Write-Host ""
