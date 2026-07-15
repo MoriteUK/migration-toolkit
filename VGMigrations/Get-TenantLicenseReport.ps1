@@ -307,9 +307,18 @@ function Get-LicenseFriendlyName([string]$SkuPartNumber) {
 # Only report SKUs that actually grant a mailbox (Exchange Online) and/or OneDrive (bundled
 # under the SharePoint service plan) — excludes add-on-only SKUs like EMS, Entra ID P1/P2,
 # Power BI Pro, Defender, Visio, Project, Teams Phone, Audio Conferencing, etc.
+#
+# Trap: many trial/add-on-only SKUs (Power Automate Free, Teams Exploratory, Defender for
+# Endpoint, Windows Store for Business, etc.) bundle EXCHANGE_S_FOUNDATION purely as internal
+# plumbing — it grants no real mailbox. SHAREPOINTWAC is Office-for-the-web viewing rights, not
+# storage. Both look like real Exchange/SharePoint matches to a plain name-prefix check, so they
+# have to be excluded explicitly rather than relying on the prefix alone.
 function Test-SkuGrantsMailboxOrOneDrive($Sku) {
     foreach ($plan in $Sku.ServicePlans) {
-        if ($plan.ServicePlanName -match '^EXCHANGE_S_' -or $plan.ServicePlanName -match '^SHAREPOINT') { return $true }
+        $name = $plan.ServicePlanName
+        if ($name -match '_FOUNDATION$') { continue }
+        if ($name -eq 'SHAREPOINTWAC' -or $name -eq 'SHAREPOINTWAC_EDU') { continue }
+        if ($name -match '^EXCHANGE_S_' -or $name -match '^SHAREPOINT') { return $true }
     }
     return $false
 }
@@ -408,7 +417,22 @@ foreach ($rec in $tenantRecords) {
         Write-Host "  OK — $($skus.Count) SKU(s)." -ForegroundColor Green
         $ok++
     } catch {
-        Write-Host "  FAILED: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red
+        $errMsg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+        Write-Host "  FAILED: $errMsg" -ForegroundColor Red
+        # Still record the tenant — without this, a connect/query failure makes the tenant
+        # vanish from the CSV entirely instead of showing up as an obvious error row.
+        $allRows.Add([pscustomobject]@{
+            Domain        = $rec.Domain
+            TenantId      = $rec.TenantId
+            TenantName    = '(FAILED)'
+            SkuPartNumber = '(ERROR)'
+            FriendlyName  = $errMsg
+            Enabled       = 0
+            Consumed      = 0
+            Available     = 0
+            Suspended     = 0
+            Warning       = 0
+        })
         $failed++
     }
 }

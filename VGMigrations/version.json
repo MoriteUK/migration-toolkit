@@ -1,7 +1,15 @@
 {
-  "version": "2.9.25",
+  "version": "2.9.26",
   "releaseDate": "2026-07-14",
   "changelog": [
+    {
+      "version": "2.9.26",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: fixed false positives in the mailbox/OneDrive filter — trial/add-on SKUs like FLOW_FREE, MDATP_XPLAT, WINDOWS_STORE, and Teams Exploratory/EEA were incorrectly showing up because they bundle EXCHANGE_S_FOUNDATION (plumbing only, not a real mailbox) or SHAREPOINTWAC (Office-for-the-web viewing rights, not storage) — both are now explicitly excluded",
+        "Tenants that fail to connect or query (both app-only and interactive auth failed) now get an error row in the CSV (SkuPartNumber '(ERROR)', TenantName '(FAILED)', error message in FriendlyName) instead of silently vanishing from the report — this was why some tenants weren't showing up at all"
+      ]
+    },
     {
       "version": "2.9.25",
       "date": "2026-07-14",
