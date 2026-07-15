@@ -1667,6 +1667,7 @@ function switchView(viewName) {
     'misc-deduplicate': 'miscDeduplicateView',
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-domain-devices': 'miscDomainDevicesView',
+    'misc-tenant-licenses': 'miscTenantLicensesView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -3019,6 +3020,40 @@ document.addEventListener('DOMContentLoaded', () => {
   if (getDomainDevicesBtn) {
     getDomainDevicesBtn.addEventListener('click', async () => {
       await launchScript('Get-DomainDevices.ps1', getDomainDevicesBtn);
+    });
+  }
+
+  // ── Tenant License Report ─────────────────────────────────────────────────
+  const tenantLicensesRunBtn = document.getElementById('tenantLicensesRunBtn');
+  const tenantLicensesCsvFile = document.getElementById('tenantLicensesCsvFile');
+  const tenantLicensesLogPre = document.getElementById('tenantLicensesLogPre');
+
+  function appendTenantLicensesLog(text) {
+    if (!tenantLicensesLogPre) return;
+    tenantLicensesLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    tenantLicensesLogPre.scrollTop = tenantLicensesLogPre.scrollHeight;
+  }
+
+  if (tenantLicensesRunBtn) {
+    tenantLicensesRunBtn.addEventListener('click', async () => {
+      const csvFile = tenantLicensesCsvFile?.value?.trim();
+      if (!csvFile) { alert('Please browse for the tenants CSV file.'); return; }
+
+      tenantLicensesRunBtn.disabled = true;
+      tenantLicensesRunBtn.textContent = 'Running…';
+      if (tenantLicensesLogPre) tenantLicensesLogPre.textContent = '';
+
+      window.electronAPI.onPsOutput(appendTenantLicensesLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Get-TenantLicenseReport.ps1', ['-TenantsFile', csvFile]);
+        appendTenantLicensesLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendTenantLicensesLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        tenantLicensesRunBtn.disabled = false;
+        tenantLicensesRunBtn.textContent = '▶ Run License Report';
+      }
     });
   }
 

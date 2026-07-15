@@ -1,7 +1,15 @@
 {
-  "version": "2.9.21",
+  "version": "2.9.22",
   "releaseDate": "2026-07-14",
   "changelog": [
+    {
+      "version": "2.9.22",
+      "date": "2026-07-14",
+      "changes": [
+        "Misc Scripts: added 'Tenant License Report' — reads tenant IDs from the standing Volaris tenant workbook (column B, skipping rows with 'Yes' in column L) and connects to each in turn, reporting only licenses that grant a mailbox and/or OneDrive (excludes add-on-only SKUs like EMS, Entra ID P1/P2, Power BI, Defender, Visio, Project, Teams Phone), writing one consolidated CSV",
+        "New Get-TenantLicenseReport.ps1: reads .xlsx (ImportExcel, positional column-letter access) or .csv (auto-detected header column), reuses search-domain.ps1's SKU friendly-name lookup table, uses the pinned-module Graph connect pattern (no device code, no WAM mandate issue). -TenantsFile/-TenantIdColumn/-SkipColumn/-SkipValue all overridable via parameters"
+      ]
+    },
     {
       "version": "2.9.21",
       "date": "2026-07-14",

@@ -117,6 +117,9 @@
             <button type="button" class="sidebar-subitem" data-view="misc-domain-devices">
               <span class="sidebar-sublabel">Get Domain Devices</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-tenant-licenses">
+              <span class="sidebar-sublabel">Tenant License Report</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="domain-devices">
               <span class="sidebar-sublabel">Remove Entra Devices</span>
             </button>
@@ -944,6 +947,35 @@
             <button type="button" class="btn btn-success btn-xs" id="getDomainDevicesBtn">
               ▶ Open Get Domain Devices
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Tenant License Report -->
+      <div id="miscTenantLicensesView" class="view-container hidden">
+        <h2 class="view-title">Tenant License Report</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Check Licenses Across Multiple Tenants</h3>
+          <p class="form-help">Reads tenant IDs from column B of the workbook below (skips any row with "Yes" in column L), connects to each tenant in turn, and reports only licenses that grant a mailbox and/or OneDrive — friendly product name, enabled/consumed/available units. Writes one consolidated CSV report next to the input file. Each tenant needs its own sign-in via the browser window that opens; if your account has delegated admin access to all of them, SSO usually carries over between tenants without re-entering a password.</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">Tenants Workbook</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="tenantLicensesCsvFile" value="C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Tenant IDs.xlsx" readonly>
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx,xlsm,xls,csv">Browse</button>
+            </div>
+            <small class="form-help">Defaults to the standing Volaris tenant list — column B (tenant ID), skips rows with "Yes" in column L</small>
+          </div>
+
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-success btn-xs" id="tenantLicensesRunBtn">
+              ▶ Run License Report
+            </button>
+          </div>
+
+          <div id="tenantLicensesLog" style="margin-top:12px;">
+            <pre id="tenantLicensesLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
         </div>
       </div>
