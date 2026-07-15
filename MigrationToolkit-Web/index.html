@@ -957,7 +957,7 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Check Licenses Across Multiple Tenants</h3>
-          <p class="form-help">Reads tenant IDs from column B of the workbook below (skips any row with "Yes" in column L), connects to each tenant in turn, and reports only licenses that grant a mailbox and/or OneDrive — friendly product name, enabled/consumed/available units. Writes one consolidated CSV report next to the input file. Each tenant needs its own sign-in via the browser window that opens; if your account has delegated admin access to all of them, SSO usually carries over between tenants without re-entering a password.</p>
+          <p class="form-help">Reads tenant ID (column B), domain (column A), and app registration credentials (columns C/D) from the workbook below (skips any row with "Yes" in column L), connects to each tenant in turn, and reports only licenses that grant a mailbox and/or OneDrive — friendly product name, enabled/consumed/available units. Writes one consolidated CSV report next to the input file. Tenants with a stored App ID + Secret connect automatically, no sign-in needed; any others show the tenant's domain in the log right before the browser opens so you know which account to use.</p>
 
           <div class="form-group-tight">
             <label class="form-label">Tenants Workbook</label>
@@ -965,7 +965,7 @@
               <input type="text" class="form-input form-input-compact" id="tenantLicensesCsvFile" value="C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Tenant IDs.xlsx" readonly>
               <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx,xlsm,xls,csv">Browse</button>
             </div>
-            <small class="form-help">Defaults to the standing Volaris tenant list — column B (tenant ID), skips rows with "Yes" in column L</small>
+            <small class="form-help">Defaults to the standing Volaris tenant list — columns A/B/C/D (domain/tenant ID/App ID/App Secret), skips rows with "Yes" in column L</small>
           </div>
 
           <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">

@@ -10,15 +10,31 @@
     enabled/consumed/available unit counts. Writes one consolidated CSV covering every
     tenant plus a per-tenant summary in the log.
 
-    Each tenant needs its own sign-in. If the signed-in account already has delegated
-    admin access to every tenant in the list (e.g. a Partner/GDAP relationship), the
-    browser will generally re-use SSO between tenants without asking for a password again.
+    Two connection modes per tenant, chosen automatically:
+      - App-only (no sign-in): used when the row has both an App ID and App Secret —
+        authenticates as that app registration via client-credentials, no browser at all.
+        Requires the app registration to already hold Organization.Read.All (application
+        permission, admin-consented) in that tenant; falls back to interactive if it doesn't.
+      - Interactive: used when App ID/Secret are missing, or app-only auth fails. The
+        tenant's Domain is printed as a prominent banner right before the browser opens so
+        you know which account to sign in with.
 
 .PARAMETER TenantsFile
     Path to the tenants workbook/CSV. Defaults to the standing Volaris tenant list.
 
+.PARAMETER DomainColumn
+    Excel column letter holding the tenant's domain (.xlsx only, display only). Default 'A'.
+
 .PARAMETER TenantIdColumn
     Excel column letter holding the tenant ID (.xlsx only). Default 'B'.
+
+.PARAMETER AppIdColumn
+    Excel column letter holding the app registration's Client/App ID (.xlsx only, optional —
+    enables app-only auth for that row when paired with -AppSecretColumn). Default 'C'.
+
+.PARAMETER AppSecretColumn
+    Excel column letter holding the app registration's client secret (.xlsx only, optional).
+    Default 'D'.
 
 .PARAMETER SkipColumn
     Excel column letter holding the skip flag (.xlsx only) — rows where this column equals
@@ -32,7 +48,8 @@
 
 .PARAMETER Column
     CSV only: column name to read tenant identifiers from. Auto-detected if omitted
-    (tries TenantId, Tenant, Domain, TenantDomain, Name).
+    (tries TenantId, Tenant, Domain, TenantDomain, Name). CSV rows also get app-only auth
+    automatically if the CSV has AppId/ClientId and AppSecret/ClientSecret columns.
 
 .PARAMETER OutputPath
     Path for the consolidated CSV report. Defaults to a timestamped file next to TenantsFile.
@@ -46,10 +63,13 @@
 param(
     [string]$TenantsFile = 'C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Tenant IDs.xlsx',
 
-    [string]$TenantIdColumn = 'B',
-    [string]$SkipColumn     = 'L',
-    [string]$SkipValue      = 'Yes',
-    [int]$HeaderRow         = 1,
+    [string]$DomainColumn    = 'A',
+    [string]$TenantIdColumn  = 'B',
+    [string]$AppIdColumn     = 'C',
+    [string]$AppSecretColumn = 'D',
+    [string]$SkipColumn      = 'L',
+    [string]$SkipValue       = 'Yes',
+    [int]$HeaderRow          = 1,
 
     [string]$Column,
 
@@ -84,7 +104,8 @@ function ConvertFrom-ExcelColumnLetter([string]$Letter) {
 }
 
 $ext = [System.IO.Path]::GetExtension($TenantsFile).ToLowerInvariant()
-$tenants = [System.Collections.Generic.List[string]]::new()
+# Each record: Domain, TenantId, AppId, AppSecret (AppId/AppSecret may be blank)
+$tenantRecords = [System.Collections.Generic.List[pscustomobject]]::new()
 
 if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
     if (-not (Get-Module -ListAvailable -Name ImportExcel)) {
@@ -93,9 +114,12 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
     }
     Import-Module ImportExcel -ErrorAction Stop
 
-    $idIdx   = ConvertFrom-ExcelColumnLetter $TenantIdColumn
-    $skipIdx = ConvertFrom-ExcelColumnLetter $SkipColumn
-    Write-Host "Reading column $TenantIdColumn (tenant ID) — skipping rows where column $SkipColumn = '$SkipValue'." -ForegroundColor Gray
+    $domainIdx = ConvertFrom-ExcelColumnLetter $DomainColumn
+    $idIdx     = ConvertFrom-ExcelColumnLetter $TenantIdColumn
+    $appIdIdx  = ConvertFrom-ExcelColumnLetter $AppIdColumn
+    $appSecIdx = ConvertFrom-ExcelColumnLetter $AppSecretColumn
+    $skipIdx   = ConvertFrom-ExcelColumnLetter $SkipColumn
+    Write-Host "Reading column $TenantIdColumn (tenant ID), $DomainColumn (domain) — skipping rows where column $SkipColumn = '$SkipValue'." -ForegroundColor Gray
 
     $excelRows = @(Import-Excel -Path $TenantsFile -NoHeader -StartRow ($HeaderRow + 1) -ErrorAction Stop)
     $skippedCount = 0
@@ -107,7 +131,12 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
             $skippedCount++
             continue
         }
-        $tenants.Add($idVal.ToString().Trim())
+        $tenantRecords.Add([pscustomobject]@{
+            Domain    = $row."P$domainIdx"
+            TenantId  = $idVal.ToString().Trim()
+            AppId     = $row."P$appIdIdx"
+            AppSecret = $row."P$appSecIdx"
+        })
     }
     if ($skippedCount -gt 0) { Write-Host "$skippedCount tenant(s) skipped (column $SkipColumn = '$SkipValue')." -ForegroundColor Yellow }
 } else {
@@ -146,11 +175,25 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
     }
     Write-Host "Using '$tenantCol' as the tenant identifier column." -ForegroundColor Gray
 
-    foreach ($v in ($rows | ForEach-Object { $_.$tenantCol } | Where-Object { $_ })) { $tenants.Add($v.Trim()) }
+    $domainCol = @('Domain','TenantDomain') | Where-Object { $headers -contains $_ } | Select-Object -First 1
+    $appIdCol  = @('AppId','ClientId') | Where-Object { $headers -contains $_ } | Select-Object -First 1
+    $appSecCol = @('AppSecret','ClientSecret','Secret') | Where-Object { $headers -contains $_ } | Select-Object -First 1
+
+    foreach ($row in $rows) {
+        if (-not $row.$tenantCol) { continue }
+        $tenantRecords.Add([pscustomobject]@{
+            Domain    = if ($domainCol) { $row.$domainCol } else { $null }
+            TenantId  = $row.$tenantCol.Trim()
+            AppId     = if ($appIdCol)  { $row.$appIdCol }  else { $null }
+            AppSecret = if ($appSecCol) { $row.$appSecCol } else { $null }
+        })
+    }
 }
 
-$tenants = @($tenants | Where-Object { $_ } | Select-Object -Unique)
-Write-Host "$($tenants.Count) unique tenant(s) to check." -ForegroundColor Cyan
+# Dedup by TenantId, keeping the first occurrence of each.
+$seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$tenantRecords = @($tenantRecords | Where-Object { $_.TenantId -and $seen.Add($_.TenantId) })
+Write-Host "$($tenantRecords.Count) unique tenant(s) to check." -ForegroundColor Cyan
 Write-Host ""
 
 # Same friendly-name lookup table search-domain.ps1 uses for its license sections.
@@ -239,13 +282,41 @@ function Test-SkuGrantsMailboxOrOneDrive($Sku) {
 $allRows = [System.Collections.Generic.List[pscustomobject]]::new()
 $ok = 0; $failed = 0
 
-foreach ($tenant in $tenants) {
-    Write-Host "--- $tenant ---" -ForegroundColor Cyan
+foreach ($rec in $tenantRecords) {
+    $label = if ($rec.Domain) { $rec.Domain } else { $rec.TenantId }
+    Write-Host ""
+    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "  TENANT: $label" -ForegroundColor Cyan
+    if ($rec.Domain) { Write-Host "  ($($rec.TenantId))" -ForegroundColor DarkGray }
+    Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
+
     try {
         try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
 
-        Write-Host "  Connecting — sign in with the browser window that opens..." -ForegroundColor Gray
-        Connect-MgGraph -TenantId $tenant -Scopes 'Organization.Read.All' -NoWelcome -ErrorAction Stop
+        $hasAppCreds = -not [string]::IsNullOrWhiteSpace($rec.AppId) -and -not [string]::IsNullOrWhiteSpace($rec.AppSecret)
+        $connected = $false
+
+        if ($hasAppCreds) {
+            Write-Host "  Connecting with the stored app registration — no sign-in needed..." -ForegroundColor Gray
+            try {
+                $secureSecret = ConvertTo-SecureString $rec.AppSecret -AsPlainText -Force
+                $cred = [PSCredential]::new($rec.AppId, $secureSecret)
+                Connect-MgGraph -TenantId $rec.TenantId -ClientSecretCredential $cred -NoWelcome -ErrorAction Stop
+                $connected = $true
+            } catch {
+                Write-Host "  App-only auth failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Yellow
+                Write-Host "  Falling back to interactive sign-in." -ForegroundColor Yellow
+            } finally {
+                $secureSecret = $null; $cred = $null
+            }
+        }
+
+        if (-not $connected) {
+            Write-Host ""
+            Write-Host "  >>> SIGN IN TO: $label <<<" -ForegroundColor Yellow
+            Write-Host "  A browser window will open — use the admin account for this tenant." -ForegroundColor Gray
+            Connect-MgGraph -TenantId $rec.TenantId -Scopes 'Organization.Read.All' -NoWelcome -ErrorAction Stop
+        }
 
         $org     = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
         $allSkus = @(Get-MgSubscribedSku -All -ErrorAction Stop)
@@ -268,7 +339,7 @@ foreach ($tenant in $tenants) {
             Write-Host ("  {0,-45} enabled={1,-6} consumed={2,-6} available={3}" -f $friendly, $enabled, $consumed, $available)
 
             $allRows.Add([pscustomobject]@{
-                TenantInput   = $tenant
+                Domain        = $rec.Domain
                 TenantId      = $org.Id
                 TenantName    = $org.DisplayName
                 SkuPartNumber = $sku.SkuPartNumber
@@ -287,13 +358,13 @@ foreach ($tenant in $tenants) {
         Write-Host "  FAILED: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red
         $failed++
     }
-    Write-Host ""
 }
 
 try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
 
 if ($allRows.Count -gt 0) {
     $allRows | Export-Csv -Path $OutputPath -NoTypeInformation -Encoding UTF8 -Force
+    Write-Host ""
     Write-Host "Report written: $OutputPath" -ForegroundColor Green
 }
 

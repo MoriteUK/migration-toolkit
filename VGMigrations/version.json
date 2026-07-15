@@ -1,7 +1,17 @@
 {
-  "version": "2.9.22",
+  "version": "2.9.23",
   "releaseDate": "2026-07-14",
   "changelog": [
+    {
+      "version": "2.9.23",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: now reads columns A (Domain) and C/D (App ID / App Secret) from the tenant workbook alongside tenant ID and skip flag",
+        "Tenants with a stored App ID + App Secret connect automatically via client-credentials (app-only) auth — no sign-in at all — falling back to interactive if that fails (e.g. the app registration lacks Organization.Read.All)",
+        "Tenants without stored app credentials show a prominent '>>> SIGN IN TO: <domain> <<<' banner in the log right before the browser opens, so it's always clear which tenant/account to sign in with",
+        "Report CSV now includes the tenant's Domain column"
+      ]
+    },
     {
       "version": "2.9.22",
       "date": "2026-07-14",
