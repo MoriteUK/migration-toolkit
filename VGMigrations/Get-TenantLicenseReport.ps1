@@ -65,6 +65,14 @@
 .PARAMETER OutputPath
     Path for the consolidated CSV report. Defaults to a timestamped file next to TenantsFile.
 
+.PARAMETER RefreshIntervalDays
+    How often the local lookup copy is refreshed from -TenantsFile, in days. Default 3.5
+    (twice a week). The script always reads from the copy, never the original, so the
+    original stays free for you to keep open in Excel while a report runs.
+
+.PARAMETER ForceRefreshLookup
+    Refresh the lookup copy from -TenantsFile now, regardless of its age.
+
 .EXAMPLE
     .\Get-TenantLicenseReport.ps1
 .EXAMPLE
@@ -87,7 +95,10 @@ param(
 
     [string]$Column,
 
-    [string]$OutputPath
+    [string]$OutputPath,
+
+    [double]$RefreshIntervalDays = 3.5,
+    [switch]$ForceRefreshLookup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -107,6 +118,42 @@ if (-not $OutputPath) {
     $OutputPath = Join-Path (Split-Path $TenantsFile -Parent) "TenantLicenseReport_$stamp.csv"
 }
 
+# Always read from a local copy, never the original — keeps the original free for you to have
+# open in Excel while a report runs, since Import-Excel can't open a file someone else has
+# locked. The copy is refreshed from the original at most every -RefreshIntervalDays (default
+# twice a week); run with -ForceRefreshLookup to sync it immediately regardless of age.
+# Stored under %LOCALAPPDATA%\FlyMigration (same as shared-config.json) rather than
+# $PSScriptRoot, which is read-only for non-admin users in a perMachine packaged install.
+$origItem    = Get-Item -LiteralPath $TenantsFile
+$lookupCacheDir = Join-Path $env:LOCALAPPDATA 'FlyMigration'
+if (-not (Test-Path $lookupCacheDir)) { New-Item -ItemType Directory -Path $lookupCacheDir -Force | Out-Null }
+$lookupFile = Join-Path $lookupCacheDir ("$($origItem.BaseName)-lookupcache$($origItem.Extension)")
+
+$needsRefresh = $ForceRefreshLookup -or -not (Test-Path $lookupFile)
+if (-not $needsRefresh) {
+    $ageDays = ((Get-Date) - (Get-Item $lookupFile).LastWriteTime).TotalDays
+    if ($ageDays -ge $RefreshIntervalDays) { $needsRefresh = $true }
+}
+
+if ($needsRefresh) {
+    try {
+        Copy-Item -LiteralPath $TenantsFile -Destination $lookupFile -Force -ErrorAction Stop
+        Write-Host "Lookup copy refreshed from the original." -ForegroundColor Green
+    } catch {
+        if (Test-Path $lookupFile) {
+            $ageDaysStale = [math]::Round(((Get-Date) - (Get-Item $lookupFile).LastWriteTime).TotalDays, 1)
+            Write-Host "WARNING: Could not refresh lookup copy ($($_.Exception.Message.Split([Environment]::NewLine)[0])) — using existing copy ($ageDaysStale day(s) old)." -ForegroundColor Yellow
+        } else {
+            Write-Host "ERROR: Could not create the lookup copy and none exists yet: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red
+            exit 1
+        }
+    }
+} else {
+    $ageDaysDisplay = [math]::Round(((Get-Date) - (Get-Item $lookupFile).LastWriteTime).TotalDays, 1)
+    Write-Host "Using existing lookup copy ($ageDaysDisplay day(s) old — refreshes every $RefreshIntervalDays days)." -ForegroundColor Gray
+}
+Write-Host "Lookup copy: $lookupFile" -ForegroundColor White
+
 # Converts an Excel column letter (A, B, ..., Z, AA, AB, ...) to a 1-based index.
 function ConvertFrom-ExcelColumnLetter([string]$Letter) {
     $Letter = $Letter.Trim().ToUpperInvariant()
@@ -117,7 +164,7 @@ function ConvertFrom-ExcelColumnLetter([string]$Letter) {
     return $index
 }
 
-$ext = [System.IO.Path]::GetExtension($TenantsFile).ToLowerInvariant()
+$ext = [System.IO.Path]::GetExtension($lookupFile).ToLowerInvariant()
 # Each record: Domain, TenantId, AppId, AppSecret (AppId/AppSecret may be blank)
 $tenantRecords = [System.Collections.Generic.List[pscustomobject]]::new()
 
@@ -136,7 +183,7 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
     $licOkIdx   = ConvertFrom-ExcelColumnLetter $LicensesOkColumn
     Write-Host "Reading column $TenantIdColumn (tenant ID), $DomainColumn (domain) — skipping rows where column $SkipColumn or $LicensesOkColumn = '$SkipValue'." -ForegroundColor Gray
 
-    $excelRows = @(Import-Excel -Path $TenantsFile -NoHeader -StartRow ($HeaderRow + 1) -ErrorAction Stop)
+    $excelRows = @(Import-Excel -Path $lookupFile -NoHeader -StartRow ($HeaderRow + 1) -ErrorAction Stop)
     $skippedCount = 0
     foreach ($row in $excelRows) {
         $idVal    = $row."P$idIdx"
@@ -174,8 +221,8 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
         return 'Default'
     }
 
-    $encoding = Get-CsvEncoding $TenantsFile
-    $rows = @(Import-Csv -Path $TenantsFile -Encoding $encoding)
+    $encoding = Get-CsvEncoding $lookupFile
+    $rows = @(Import-Csv -Path $lookupFile -Encoding $encoding)
     if ($rows.Count -eq 0) {
         Write-Host "Tenants file has no rows. Nothing to do." -ForegroundColor Yellow
         exit 0

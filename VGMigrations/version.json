@@ -1,7 +1,15 @@
 {
-  "version": "2.9.27",
+  "version": "2.9.28",
   "releaseDate": "2026-07-14",
   "changelog": [
+    {
+      "version": "2.9.28",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: always reads from a local copy of the tenants workbook now, never the original — the original stays free to have open in Excel (verified Copy-Item works even while the file is open in Excel, which was blocking Import-Excel directly). The copy is stored under %LOCALAPPDATA%\\FlyMigration and refreshed automatically at most every 3.5 days (twice a week) — self-managing, no Windows Scheduled Task needed",
+        "New -RefreshIntervalDays (default 3.5) and -ForceRefreshLookup params to override the cadence or force an immediate re-sync from the original"
+      ]
+    },
     {
       "version": "2.9.27",
       "date": "2026-07-14",
