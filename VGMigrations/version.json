@@ -1,7 +1,16 @@
 {
-  "version": "2.9.28",
-  "releaseDate": "2026-07-14",
+  "version": "2.9.29",
+  "releaseDate": "2026-07-18",
   "changelog": [
+    {
+      "version": "2.9.29",
+      "date": "2026-07-18",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: fixed truncated error messages — MSAL/WAM broker diagnostics get written directly to .NET's Console.Out/Error, bypassing PowerShell's exception object entirely, so a failed interactive sign-in showed a blank 'InteractiveBrowserCredential authentication failed: ' with nothing after it. Console.Out/Error are now captured during the interactive connect attempt and folded into the error, same fix search-domain.ps1 already uses for its own Graph/EXO connects",
+        "New Get-CleanErrorMessage helper joins the first few non-blank lines of an exception instead of taking only the first line, which was also silently discarding real detail on multi-line errors",
+        "Suppressed Connect-MgGraph/Disconnect-MgGraph pipeline output (piped to Out-Null) — these were leaking raw context object dumps (ClientId/TenantId/Scopes/...) into the log between tenants, making it hard to read"
+      ]
+    },
     {
       "version": "2.9.28",
       "date": "2026-07-14",

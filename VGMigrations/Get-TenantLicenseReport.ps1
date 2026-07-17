@@ -103,6 +103,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# MSAL/Azure.Identity exceptions frequently put the actual detail on the second (or later)
+# line, with a generic "X authentication failed:" on the first — taking only the first line
+# (as this script used to) silently discards the real reason. Joins the first few non-blank
+# lines into one readable summary instead.
+function Get-CleanErrorMessage($ErrorRecord) {
+    $lines = @($ErrorRecord.Exception.Message -split "`r?`n" | Where-Object { $_.Trim() })
+    if ($lines.Count -eq 0) { return $ErrorRecord.Exception.GetType().Name }
+    return ($lines | Select-Object -First 3) -join ' | '
+}
+
 Write-Host "=== Get-TenantLicenseReport ===" -ForegroundColor Cyan
 Write-Host "Tenants file: $TenantsFile" -ForegroundColor White
 
@@ -142,9 +152,9 @@ if ($needsRefresh) {
     } catch {
         if (Test-Path $lookupFile) {
             $ageDaysStale = [math]::Round(((Get-Date) - (Get-Item $lookupFile).LastWriteTime).TotalDays, 1)
-            Write-Host "WARNING: Could not refresh lookup copy ($($_.Exception.Message.Split([Environment]::NewLine)[0])) — using existing copy ($ageDaysStale day(s) old)." -ForegroundColor Yellow
+            Write-Host "WARNING: Could not refresh lookup copy ($(Get-CleanErrorMessage $_)) — using existing copy ($ageDaysStale day(s) old)." -ForegroundColor Yellow
         } else {
-            Write-Host "ERROR: Could not create the lookup copy and none exists yet: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red
+            Write-Host "ERROR: Could not create the lookup copy and none exists yet: $(Get-CleanErrorMessage $_)" -ForegroundColor Red
             exit 1
         }
     }
@@ -382,7 +392,7 @@ foreach ($rec in $tenantRecords) {
     Write-Host "════════════════════════════════════════════════════" -ForegroundColor Cyan
 
     try {
-        try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
+        try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
 
         $hasAppCreds = -not [string]::IsNullOrWhiteSpace($rec.AppId) -and -not [string]::IsNullOrWhiteSpace($rec.AppSecret)
         $connected = $false
@@ -392,7 +402,7 @@ foreach ($rec in $tenantRecords) {
             try {
                 $secureSecret = ConvertTo-SecureString $rec.AppSecret -AsPlainText -Force
                 $cred = [PSCredential]::new($rec.AppId, $secureSecret)
-                Connect-MgGraph -TenantId $rec.TenantId -ClientSecretCredential $cred -NoWelcome -ErrorAction Stop
+                Connect-MgGraph -TenantId $rec.TenantId -ClientSecretCredential $cred -NoWelcome -ErrorAction Stop | Out-Null
                 # Client-credentials auth can issue a token even when the app was never
                 # actually consented in this tenant (no service principal) — that only
                 # surfaces on the first real Graph call, as Authorization_IdentityNotFound.
@@ -401,9 +411,9 @@ foreach ($rec in $tenantRecords) {
                 $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
                 $connected = $true
             } catch {
-                Write-Host "  App-only auth failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Yellow
+                Write-Host "  App-only auth failed: $(Get-CleanErrorMessage $_)" -ForegroundColor Yellow
                 Write-Host "  Falling back to interactive sign-in." -ForegroundColor Yellow
-                try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
+                try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
             } finally {
                 $secureSecret = $null; $cred = $null
             }
@@ -413,8 +423,33 @@ foreach ($rec in $tenantRecords) {
             Write-Host ""
             Write-Host "  >>> SIGN IN TO: $label <<<" -ForegroundColor Yellow
             Write-Host "  A browser window will open — use the admin account for this tenant." -ForegroundColor Gray
-            Connect-MgGraph -TenantId $rec.TenantId -Scopes 'Organization.Read.All' -NoWelcome -ErrorAction Stop
-            $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
+
+            # MSAL/WAM broker diagnostics get written directly to .NET's Console.Out/Error,
+            # bypassing every PowerShell stream — a plain .Exception.Message can end up
+            # completely blank even though MSAL actually explained the failure (same issue
+            # search-domain.ps1 documented and worked around for its own Graph/EXO connects).
+            # Capture Console.Out/Error during the attempt and fold it into the thrown error
+            # so a failure here actually shows a reason instead of "authentication failed: ".
+            $consoleSwallow = New-Object System.IO.StringWriter
+            $origConsoleOut = [Console]::Out
+            $origConsoleErr = [Console]::Error
+            [Console]::SetOut($consoleSwallow)
+            [Console]::SetError($consoleSwallow)
+            try {
+                Connect-MgGraph -TenantId $rec.TenantId -Scopes 'Organization.Read.All' -NoWelcome -ErrorAction Stop | Out-Null
+                $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
+            } catch {
+                [Console]::SetOut($origConsoleOut); [Console]::SetError($origConsoleErr)
+                $swallowed = $consoleSwallow.ToString().Trim()
+                if ($swallowed) {
+                    throw "$(Get-CleanErrorMessage $_) — broker output: $($swallowed -replace '[\r\n]+', ' ')"
+                }
+                throw
+            } finally {
+                if ([Console]::Out -ne $origConsoleOut) { [Console]::SetOut($origConsoleOut) }
+                if ([Console]::Error -ne $origConsoleErr) { [Console]::SetError($origConsoleErr) }
+                $consoleSwallow.Dispose()
+            }
         }
 
         $allSkus = @(Get-MgSubscribedSku -All -ErrorAction Stop)
@@ -471,7 +506,7 @@ foreach ($rec in $tenantRecords) {
         Write-Host "  OK — $($skus.Count) SKU(s)." -ForegroundColor Green
         $ok++
     } catch {
-        $errMsg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+        $errMsg = Get-CleanErrorMessage $_
         Write-Host "  FAILED: $errMsg" -ForegroundColor Red
         # Still record the tenant — without this, a connect/query failure makes the tenant
         # vanish from the CSV entirely instead of showing up as an obvious error row.
@@ -491,7 +526,7 @@ foreach ($rec in $tenantRecords) {
     }
 }
 
-try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
+try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
 
 if ($allRows.Count -gt 0) {
     $allRows | Export-Csv -Path $OutputPath -NoTypeInformation -Encoding UTF8 -Force
