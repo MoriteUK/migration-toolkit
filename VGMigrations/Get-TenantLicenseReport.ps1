@@ -424,31 +424,50 @@ foreach ($rec in $tenantRecords) {
             Write-Host "  >>> SIGN IN TO: $label <<<" -ForegroundColor Yellow
             Write-Host "  A browser window will open — use the admin account for this tenant." -ForegroundColor Gray
 
-            # MSAL/WAM broker diagnostics get written directly to .NET's Console.Out/Error,
-            # bypassing every PowerShell stream — a plain .Exception.Message can end up
-            # completely blank even though MSAL actually explained the failure (same issue
-            # search-domain.ps1 documented and worked around for its own Graph/EXO connects).
-            # Capture Console.Out/Error during the attempt and fold it into the thrown error
-            # so a failure here actually shows a reason instead of "authentication failed: ".
-            $consoleSwallow = New-Object System.IO.StringWriter
-            $origConsoleOut = [Console]::Out
-            $origConsoleErr = [Console]::Error
-            [Console]::SetOut($consoleSwallow)
-            [Console]::SetError($consoleSwallow)
-            try {
-                Connect-MgGraph -TenantId $rec.TenantId -Scopes 'Organization.Read.All' -NoWelcome -ErrorAction Stop | Out-Null
-                $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
-            } catch {
-                [Console]::SetOut($origConsoleOut); [Console]::SetError($origConsoleErr)
-                $swallowed = $consoleSwallow.ToString().Trim()
-                if ($swallowed) {
-                    throw "$(Get-CleanErrorMessage $_) — broker output: $($swallowed -replace '[\r\n]+', ' ')"
+            # Interactive auth can fail with a blank "authentication failed: " even after a
+            # genuinely successful browser sign-in — the most likely cause is degraded MSAL
+            # state carried over from earlier tenants in this same long-running process (e.g.
+            # a loopback redirect listener that didn't fully release), so the callback has
+            # nowhere to land even though the browser completed. A clean Disconnect-MgGraph +
+            # short pause + fresh attempt clears that state; only give up after 2 tries.
+            $maxAttempts = 2
+            for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+                if ($attempt -gt 1) {
+                    Write-Host "  Retrying interactive sign-in (attempt $attempt of $maxAttempts)..." -ForegroundColor Yellow
+                    try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
+                    Start-Sleep -Seconds 3
                 }
-                throw
-            } finally {
-                if ([Console]::Out -ne $origConsoleOut) { [Console]::SetOut($origConsoleOut) }
-                if ([Console]::Error -ne $origConsoleErr) { [Console]::SetError($origConsoleErr) }
-                $consoleSwallow.Dispose()
+
+                # MSAL/WAM broker diagnostics get written directly to .NET's Console.Out/Error,
+                # bypassing every PowerShell stream — a plain .Exception.Message can end up
+                # completely blank even though MSAL actually explained the failure (same issue
+                # search-domain.ps1 documented and worked around for its own Graph/EXO connects).
+                # Capture Console.Out/Error during the attempt and fold it into the thrown error
+                # so a failure here actually shows a reason instead of "authentication failed: ".
+                $consoleSwallow = New-Object System.IO.StringWriter
+                $origConsoleOut = [Console]::Out
+                $origConsoleErr = [Console]::Error
+                [Console]::SetOut($consoleSwallow)
+                [Console]::SetError($consoleSwallow)
+                try {
+                    Connect-MgGraph -TenantId $rec.TenantId -Scopes 'Organization.Read.All' -NoWelcome -ErrorAction Stop | Out-Null
+                    $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
+                    break
+                } catch {
+                    [Console]::SetOut($origConsoleOut); [Console]::SetError($origConsoleErr)
+                    $swallowed = $consoleSwallow.ToString().Trim()
+                    $lastError = if ($swallowed) {
+                        "$(Get-CleanErrorMessage $_) — broker output: $($swallowed -replace '[\r\n]+', ' ')"
+                    } else {
+                        Get-CleanErrorMessage $_
+                    }
+                    if ($attempt -eq $maxAttempts) { throw $lastError }
+                    Write-Host "  Attempt $attempt failed: $lastError" -ForegroundColor Yellow
+                } finally {
+                    if ([Console]::Out -ne $origConsoleOut) { [Console]::SetOut($origConsoleOut) }
+                    if ([Console]::Error -ne $origConsoleErr) { [Console]::SetError($origConsoleErr) }
+                    $consoleSwallow.Dispose()
+                }
             }
         }
 

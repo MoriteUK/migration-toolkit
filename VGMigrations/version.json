@@ -1,7 +1,15 @@
 {
-  "version": "2.9.29",
+  "version": "2.9.30",
   "releaseDate": "2026-07-18",
   "changelog": [
+    {
+      "version": "2.9.30",
+      "date": "2026-07-18",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: the console-capture fix in 2.9.29 found nothing swallowed on a real run — 5 tenants in a row failed interactive sign-in with a genuinely blank error, even though the user completed sign-in correctly in the browser each time. That pattern (clean for the first couple of tenants, then a consistent run of identical failures) points to degraded MSAL state carried over between tenants in the same long-running process — most likely a loopback redirect listener that didn't fully release, so the browser's callback has nowhere to land",
+        "Interactive sign-in now retries once (clean Disconnect-MgGraph + 3s pause + fresh attempt) before giving up on a tenant, testing whether that resets the stuck state. If this doesn't fully resolve it, the next step is isolating each tenant's Graph connection into its own child process (same pattern search-domain.ps1 already uses for Power Platform for a similar shared-state conflict)"
+      ]
+    },
     {
       "version": "2.9.29",
       "date": "2026-07-18",
