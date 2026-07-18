@@ -1,7 +1,16 @@
 {
-  "version": "2.9.30",
+  "version": "2.9.31",
   "releaseDate": "2026-07-18",
   "changelog": [
+    {
+      "version": "2.9.31",
+      "date": "2026-07-18",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: the 2.9.30 retry didn't help — both attempts failed identically on a real run, ruling out simple MSAL cache staleness and confirming a process-level resource issue (most likely a stuck loopback redirect listener) that persists for the life of the PowerShell process, not just the auth context",
+        "Interactive sign-in now runs in a brand-new isolated pwsh.exe window per tenant (new Get-TenantLicenseReport-InteractiveWorker.ps1, spawned and waited on, result read back via a temp JSON file) instead of the main long-running process — guarantees no sign-in state can ever leak between tenants regardless of the exact underlying cause, same isolation pattern search-domain.ps1 already uses for Power Platform for a similar conflict",
+        "App-only auth (client-credentials) is unaffected and still runs in the main process — this issue was specific to the interactive/browser path"
+      ]
+    },
     {
       "version": "2.9.30",
       "date": "2026-07-18",

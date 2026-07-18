@@ -17,9 +17,14 @@
         authenticates as that app registration via client-credentials, no browser at all.
         Requires the app registration to already hold Organization.Read.All (application
         permission, admin-consented) in that tenant; falls back to interactive if it doesn't.
-      - Interactive: used when App ID/Secret are missing, or app-only auth fails. The
-        tenant's Domain is printed as a prominent banner right before the browser opens so
-        you know which account to sign in with.
+      - Interactive: used when App ID/Secret are missing, or app-only auth fails. Runs in a
+        brand-new, isolated pwsh.exe window per tenant (Get-TenantLicenseReport-
+        InteractiveWorker.ps1) rather than the main process — interactive sign-in was found to
+        fail with a blank error for tenants processed later in a run even after a genuinely
+        successful browser sign-in, most likely a stuck loopback redirect listener carried over
+        between tenants; a fresh process per tenant guarantees no such state can leak. The
+        tenant's Domain is printed as a prominent banner right before the window opens so you
+        know which account to sign in with.
 
 .PARAMETER TenantsFile
     Path to the tenants workbook/CSV. Defaults to the standing Volaris tenant list.
@@ -422,56 +427,54 @@ foreach ($rec in $tenantRecords) {
         if (-not $connected) {
             Write-Host ""
             Write-Host "  >>> SIGN IN TO: $label <<<" -ForegroundColor Yellow
-            Write-Host "  A browser window will open — use the admin account for this tenant." -ForegroundColor Gray
+            Write-Host "  Opening an isolated sign-in window — use the admin account for this tenant." -ForegroundColor Gray
 
-            # Interactive auth can fail with a blank "authentication failed: " even after a
-            # genuinely successful browser sign-in — the most likely cause is degraded MSAL
-            # state carried over from earlier tenants in this same long-running process (e.g.
-            # a loopback redirect listener that didn't fully release), so the callback has
-            # nowhere to land even though the browser completed. A clean Disconnect-MgGraph +
-            # short pause + fresh attempt clears that state; only give up after 2 tries.
-            $maxAttempts = 2
-            for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-                if ($attempt -gt 1) {
-                    Write-Host "  Retrying interactive sign-in (attempt $attempt of $maxAttempts)..." -ForegroundColor Yellow
-                    try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
-                    Start-Sleep -Seconds 3
+            # Interactive auth in-process was consistently failing with a blank "authentication
+            # failed:" error for tenants processed later in a run, even after the user
+            # completed sign-in correctly in the browser — a plain retry (Disconnect-MgGraph +
+            # pause) didn't help either, which rules out simple MSAL cache staleness. That
+            # points to state (most likely a loopback redirect listener) getting stuck at the
+            # OS/process level and never releasing for the rest of the run. Running each
+            # interactive attempt in a brand-new child process guarantees no such state can
+            # ever leak between tenants, regardless of the exact cause — same isolation pattern
+            # search-domain.ps1 already uses for Power Platform for a similar conflict.
+            $workerScript = Join-Path $PSScriptRoot 'Get-TenantLicenseReport-InteractiveWorker.ps1'
+            $workerOutput = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.json'
+            try {
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName        = 'pwsh.exe'
+                $psi.Arguments       = "-NoProfile -ExecutionPolicy Bypass -File `"$workerScript`" -TenantId `"$($rec.TenantId)`" -OutputJsonPath `"$workerOutput`""
+                $psi.UseShellExecute = $true
+                $psi.WindowStyle     = [System.Diagnostics.ProcessWindowStyle]::Normal
+
+                $proc = [System.Diagnostics.Process]::Start($psi)
+                $proc.WaitForExit()
+
+                if (-not (Test-Path $workerOutput)) {
+                    throw "Isolated sign-in window closed without producing a result (exit code $($proc.ExitCode))."
+                }
+                $workerResult = Get-Content $workerOutput -Raw | ConvertFrom-Json
+                if (-not $workerResult.success) {
+                    throw $(if ($workerResult.error) { $workerResult.error } else { 'Isolated sign-in failed with no error detail.' })
                 }
 
-                # MSAL/WAM broker diagnostics get written directly to .NET's Console.Out/Error,
-                # bypassing every PowerShell stream — a plain .Exception.Message can end up
-                # completely blank even though MSAL actually explained the failure (same issue
-                # search-domain.ps1 documented and worked around for its own Graph/EXO connects).
-                # Capture Console.Out/Error during the attempt and fold it into the thrown error
-                # so a failure here actually shows a reason instead of "authentication failed: ".
-                $consoleSwallow = New-Object System.IO.StringWriter
-                $origConsoleOut = [Console]::Out
-                $origConsoleErr = [Console]::Error
-                [Console]::SetOut($consoleSwallow)
-                [Console]::SetError($consoleSwallow)
-                try {
-                    Connect-MgGraph -TenantId $rec.TenantId -Scopes 'Organization.Read.All' -NoWelcome -ErrorAction Stop | Out-Null
-                    $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
-                    break
-                } catch {
-                    [Console]::SetOut($origConsoleOut); [Console]::SetError($origConsoleErr)
-                    $swallowed = $consoleSwallow.ToString().Trim()
-                    $lastError = if ($swallowed) {
-                        "$(Get-CleanErrorMessage $_) — broker output: $($swallowed -replace '[\r\n]+', ' ')"
-                    } else {
-                        Get-CleanErrorMessage $_
+                $org = [pscustomobject]@{ Id = $workerResult.orgId; DisplayName = $workerResult.orgName }
+                $isolatedSkus = @($workerResult.skus | ForEach-Object {
+                    [pscustomobject]@{
+                        SkuPartNumber = $_.SkuPartNumber
+                        PrepaidUnits  = [pscustomobject]@{ Enabled = $_.Enabled; Suspended = $_.Suspended; Warning = $_.Warning }
+                        ConsumedUnits = $_.Consumed
+                        ServicePlans  = @($_.ServicePlanNames | ForEach-Object { [pscustomobject]@{ ServicePlanName = $_ } })
                     }
-                    if ($attempt -eq $maxAttempts) { throw $lastError }
-                    Write-Host "  Attempt $attempt failed: $lastError" -ForegroundColor Yellow
-                } finally {
-                    if ([Console]::Out -ne $origConsoleOut) { [Console]::SetOut($origConsoleOut) }
-                    if ([Console]::Error -ne $origConsoleErr) { [Console]::SetError($origConsoleErr) }
-                    $consoleSwallow.Dispose()
-                }
+                })
+            } finally {
+                Remove-Item -Path $workerOutput -Force -ErrorAction SilentlyContinue
             }
         }
 
-        $allSkus = @(Get-MgSubscribedSku -All -ErrorAction Stop)
+        # $allSkus comes from the in-process app-only connection when that succeeded, or from
+        # the isolated worker's result when interactive sign-in was needed.
+        $allSkus = if ($connected) { @(Get-MgSubscribedSku -All -ErrorAction Stop) } else { $isolatedSkus }
         $skus    = @($allSkus | Where-Object { Test-SkuGrantsMailboxOrOneDrive $_ })
         $excludedCount = $allSkus.Count - $skus.Count
 
