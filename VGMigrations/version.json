@@ -1,7 +1,16 @@
 {
-  "version": "2.9.31",
-  "releaseDate": "2026-07-18",
+  "version": "2.9.32",
+  "releaseDate": "2026-07-22",
   "changelog": [
+    {
+      "version": "2.9.32",
+      "date": "2026-07-22",
+      "changes": [
+        "search-domain.ps1: fixed Discovery hanging indefinitely at '[22/22] User Licenses (Graph)' with no further output after a non-retryable Graph error — neither Graph call in this section had a hard timeout, so a single stuck request (auth context or network) could hang the whole run forever with nothing written to the log",
+        "The subscribedSkus prefetch now runs via Start-ThreadJob with a 30s timeout instead of a direct call — falls back to per-licenseDetails values (existing behaviour) if it times out or fails",
+        "The parallel per-user licenseDetails lookup now passes -TimeoutSeconds (min 300s, or 2s/user) to ForEach-Object -Parallel, and collects results into a ConcurrentBag instead of the pipeline — if the timeout fires, whatever results were already collected are kept and the section completes with a WARN instead of hanging the entire Discovery run"
+      ]
+    },
     {
       "version": "2.9.31",
       "date": "2026-07-18",

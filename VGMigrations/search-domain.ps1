@@ -3852,10 +3852,23 @@ try {
         Export-SafeCsv -Path (Join-Path $DiscoveryFolder '22a_LicenseCounts.csv') -Data @() -Label 'License Counts'
     } else {
         # ─── Build tenant SKU lookup (skuId → skuPartNumber + friendly name) ──
+        # Run via Start-ThreadJob with a hard timeout rather than calling Invoke-GraphGetAll
+        # directly — a single Invoke-MgGraphRequest call can hang indefinitely on a stalled
+        # connection/auth prompt with no built-in timeout of its own, and this section was
+        # observed hanging the entire run with zero further output once that happened.
+        # ThreadJob runs in-process (same AppDomain), so the module's Graph connection context
+        # is still available inside it, unlike a classic Start-Job (separate process).
         Write-Log "Fetching tenant subscribedSkus to resolve SKU IDs..."
         $skuMap = @{}
+        $skuJob = $null
         try {
-            $skus = @(Invoke-GraphGetAll -Uri 'https://graph.microsoft.com/v1.0/subscribedSkus')
+            $skuJob = Start-ThreadJob -ScriptBlock {
+                (Invoke-MgGraphRequest -Uri 'https://graph.microsoft.com/v1.0/subscribedSkus' -Method GET -OutputType PSObject -ErrorAction Stop).value
+            }
+            if (-not (Wait-Job -Job $skuJob -Timeout 30)) {
+                throw "Timed out after 30s waiting for subscribedSkus."
+            }
+            $skus = @(Receive-Job -Job $skuJob -ErrorAction Stop)
             foreach ($s in $skus) {
                 $sid  = [string](Get-ObjProp $s 'skuId')
                 $part = [string](Get-ObjProp $s 'skuPartNumber')
@@ -3869,6 +3882,8 @@ try {
             Write-Log "Resolved $($skuMap.Count) tenant SKU(s) from subscribedSkus."
         } catch {
             Write-Log "subscribedSkus fetch failed (will fall back to per-licenseDetails values): $($_.Exception.Message.Split("`n")[0])" -Level WARN
+        } finally {
+            if ($skuJob) { try { Stop-Job -Job $skuJob -ErrorAction SilentlyContinue; Remove-Job -Job $skuJob -Force -ErrorAction SilentlyContinue } catch {} }
         }
 
         # ─── Determine the user set to query ──────────────────────────────────
@@ -3911,36 +3926,47 @@ try {
             Export-SafeCsv -Path (Join-Path $DiscoveryFolder '22a_LicenseCounts.csv') -Data @() -Label 'License Counts'
         } else {
             # ─── Parallel per-user licenseDetails lookup ──────────────────────
+            # Results are collected into a thread-safe bag rather than the pipeline so that a
+            # -TimeoutSeconds abort (e.g. one runspace's Graph auth context stuck/ambiguous)
+            # still leaves us with whatever partial results the other runspaces finished,
+            # instead of losing everything and hanging the whole Discovery run.
             Write-Log "Querying license details for $($userSet.Count) user(s) in parallel (throttle = 10)..."
             $licStart = Get-Date
+            $licTimeoutSeconds = [Math]::Max(300, $userSet.Count * 2)
+            $resultsBag = [System.Collections.Concurrent.ConcurrentBag[psobject]]::new()
 
-            $perUserResults = $userSet | ForEach-Object -ThrottleLimit 10 -Parallel {
-                $u = $_
-                if ([string]::IsNullOrWhiteSpace($u.UPN)) { return $null }
-                try {
-                    # Graph context is inherited per-runspace in PS7 parallel; if missing, the call below will throw.
-                    $upnEnc = [System.Uri]::EscapeDataString($u.UPN)
-                    $uri    = "https://graph.microsoft.com/v1.0/users/$upnEnc/licenseDetails"
-                    $resp   = Invoke-MgGraphRequest -Uri $uri -Method GET -OutputType PSObject -ErrorAction Stop
-                    $vals   = @()
-                    if ($resp.PSObject.Properties['value']) { $vals = @($resp.value) }
-                    [PSCustomObject]@{
-                        UPN         = $u.UPN
-                        DisplayName = $u.DisplayName
-                        Licenses    = $vals
-                        Error       = $null
-                    }
-                } catch {
-                    [PSCustomObject]@{
-                        UPN         = $u.UPN
-                        DisplayName = $u.DisplayName
-                        Licenses    = @()
-                        Error       = $_.Exception.Message.Split([Environment]::NewLine)[0]
+            try {
+                $userSet | ForEach-Object -ThrottleLimit 10 -TimeoutSeconds $licTimeoutSeconds -Parallel {
+                    $u   = $_
+                    $bag = $using:resultsBag
+                    if ([string]::IsNullOrWhiteSpace($u.UPN)) { return }
+                    try {
+                        $upnEnc = [System.Uri]::EscapeDataString($u.UPN)
+                        $uri    = "https://graph.microsoft.com/v1.0/users/$upnEnc/licenseDetails"
+                        $resp   = Invoke-MgGraphRequest -Uri $uri -Method GET -OutputType PSObject -ErrorAction Stop
+                        $vals   = @()
+                        if ($resp.PSObject.Properties['value']) { $vals = @($resp.value) }
+                        $bag.Add([PSCustomObject]@{
+                            UPN         = $u.UPN
+                            DisplayName = $u.DisplayName
+                            Licenses    = $vals
+                            Error       = $null
+                        })
+                    } catch {
+                        $bag.Add([PSCustomObject]@{
+                            UPN         = $u.UPN
+                            DisplayName = $u.DisplayName
+                            Licenses    = @()
+                            Error       = $_.Exception.Message.Split("`n")[0]
+                        })
                     }
                 }
+            } catch {
+                Write-Log "Parallel license lookup aborted after ${licTimeoutSeconds}s timeout — continuing with $($resultsBag.Count) of $($userSet.Count) result(s) collected so far: $($_.Exception.Message.Split("`n")[0])" -Level WARN
             }
+            $perUserResults = @($resultsBag)
             $licElapsed = (Get-Date) - $licStart
-            Write-Log ("Parallel license lookup completed in {0:mm\:ss}." -f $licElapsed)
+            Write-Log ("Parallel license lookup completed in {0:mm\:ss} — {1} of {2} user(s) returned a result." -f $licElapsed, $perUserResults.Count, $userSet.Count)
 
             # ─── Build per-user rows + aggregate counts ───────────────────────
             $licenseRows  = [System.Collections.Generic.List[object]]::new()
