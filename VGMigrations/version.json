@@ -1,7 +1,15 @@
 {
-  "version": "2.9.32",
+  "version": "2.9.33",
   "releaseDate": "2026-07-22",
   "changelog": [
+    {
+      "version": "2.9.33",
+      "date": "2026-07-22",
+      "changes": [
+        "Deduplicate-Inventory.ps1: fixed SharePoint sign-in failing outright — PnP's -DeviceLogin is now blocked tenant-wide by Conditional Access (same block as Graph/EXO elsewhere), and the SPO module fallback's plain Connect-SPOService popup has no window to open against since this script is spawned headlessly, so it failed silently with 'No valid OAuth 2.0 authentication session exists'",
+        "Now connects directly via Connect-SPOService -UseSystemBrowser (the current SPO module's replacement for the removed -UseWebLogin) — opens the OS default browser instead, which needs no window handle on this process at all. Removed the PnP device-code attempt entirely since it can no longer succeed on this tenant"
+      ]
+    },
     {
       "version": "2.9.32",
       "date": "2026-07-22",

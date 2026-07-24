@@ -26,33 +26,20 @@ Add-Type -AssemblyName System.Windows.Forms
 
 Write-Host "Connecting to SharePoint Online..." -ForegroundColor Cyan
 
-$pnpName = @('PnP.PowerShell','SharePointPnPPowerShellOnline') |
-    Where-Object { Get-Module -Name $_ -ListAvailable -ErrorAction SilentlyContinue } |
-    Select-Object -First 1
-$usePnp = $false
-
-if ($pnpName) {
-    Import-Module $pnpName -ErrorAction Stop -WarningAction SilentlyContinue
-    Write-Host ">>> Visit https://microsoft.com/devicelogin and enter the code shown below <<<" -ForegroundColor Yellow
-    try {
-        Connect-PnPOnline -Url $TenantAdminUrl -DeviceLogin -ErrorAction Stop
-        Write-Host "Connected via $pnpName" -ForegroundColor Green
-        $usePnp = $true
-    } catch {
-        Write-Warning "PnP connection failed: $_"
-    }
+# Device-code sign-in (PnP -DeviceLogin) is now blocked tenant-wide by Conditional Access, and
+# this script is spawned headlessly (no window) so a plain Connect-SPOService popup has no HWND
+# to open against and fails silently with "No valid OAuth 2.0 authentication session exists".
+# -UseSystemBrowser (the current SPO module's replacement for the removed -UseWebLogin) opens
+# the OS default browser instead, which doesn't need a window on this process at all — same fix
+# class as -DisableWAM for Graph/Exchange elsewhere in this toolkit.
+if (-not (Get-Module -Name Microsoft.Online.SharePoint.PowerShell -ListAvailable)) {
+    Write-Error "Microsoft.Online.SharePoint.PowerShell is not installed."
+    exit 1
 }
-
-if (-not $usePnp) {
-    if (-not (Get-Module -Name Microsoft.Online.SharePoint.PowerShell -ListAvailable)) {
-        Write-Error "Neither PnP.PowerShell nor Microsoft.Online.SharePoint.PowerShell is installed."
-        exit 1
-    }
-    Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop -WarningAction SilentlyContinue
-    Write-Host "(A sign-in window will open — authenticate as SharePoint Administrator)" -ForegroundColor Yellow
-    Connect-SPOService -Url $TenantAdminUrl -ErrorAction Stop
-    Write-Host "Connected via SPO module." -ForegroundColor Green
-}
+Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop -WarningAction SilentlyContinue
+Write-Host ">>> Your default browser will open — sign in as SharePoint Administrator <<<" -ForegroundColor Yellow
+Connect-SPOService -Url $TenantAdminUrl -UseSystemBrowser -ErrorAction Stop
+Write-Host "Connected via SPO module." -ForegroundColor Green
 
 # ============================================================
 # IMPORT WORKBOOK
@@ -190,8 +177,7 @@ foreach ($Site in $Sites)
     # SPO Validation
     try
     {
-        if ($usePnp) { $SpoSite = Get-PnPTenantSite -Url $SiteUrl -ErrorAction Stop }
-        else         { $SpoSite = Get-SPOSite -Identity $SiteUrl -Detailed -ErrorAction Stop }
+        $SpoSite = Get-SPOSite -Identity $SiteUrl -Detailed -ErrorAction Stop
     }
     catch
     {
@@ -301,4 +287,4 @@ Write-Host "Groups        : $($GroupsOutput.Count)"
 Write-Host "SharePoint    : $($SharePointOutput.Count)"
 Write-Host "ExcludedSites : $($ExcludedSites.Count)"
 
-try { if ($usePnp) { Disconnect-PnPOnline -ErrorAction SilentlyContinue } else { Disconnect-SPOService -ErrorAction SilentlyContinue } } catch {}
+try { Disconnect-SPOService -ErrorAction SilentlyContinue } catch {}
