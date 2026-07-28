@@ -98,6 +98,13 @@ if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Authentication)) {
     exit 1
 }
 
+# Verify file exists
+if (-not (Test-Path $TenantIDsPath)) {
+    Write-Log "ERROR: Tenant IDs file not found: $TenantIDsPath" "ERROR"
+    Write-Log "Please ensure the file exists at the specified path." "ERROR"
+    exit 1
+}
+
 # Read Excel file using COM
 Write-Log "Opening Excel file..."
 $excel = $null
@@ -109,7 +116,13 @@ try {
     $excel.Visible = $false
     $excel.DisplayAlerts = $false
 
-    $workbook = $excel.Workbooks.Open($TenantIDsPath)
+    Write-Log "Opening workbook: $TenantIDsPath"
+    $workbook = $excel.Workbooks.Open($TenantIDsPath, $null, $true)  # Open read-only
+
+    if (-not $workbook) {
+        throw "Failed to open workbook - workbook object is null"
+    }
+
     $worksheet = $workbook.Worksheets.Item(1)
     $usedRange = $worksheet.UsedRange
 
