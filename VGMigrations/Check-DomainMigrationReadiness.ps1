@@ -149,15 +149,13 @@ try {
             continue
         }
 
-        # Check column J (column 10) and column N (column 14) for "Yes"
+        # Check column N (column 14) for "Yes" - indicates migration complete
         if (-not $ProcessAll) {
-            $columnJValue = $usedRange.Cells.Item($row, 10).Text.Trim()
             $columnNValue = $usedRange.Cells.Item($row, 14).Text.Trim()
 
-            # Skip if column J OR column N has "Yes" (case-insensitive)
-            if ($columnJValue.ToLower() -eq "yes" -or $columnNValue.ToLower() -eq "yes") {
-                $whichCol = if ($columnNValue.ToLower() -eq "yes") { "N" } elseif ($columnJValue.ToLower() -eq "yes") { "J" } else { "" }
-                Write-Log "Row $row : [$tenantName] - Skipping (Column $whichCol = Yes)"
+            # Skip if column N has "Yes" (migration complete)
+            if ($columnNValue.ToLower() -eq "yes") {
+                Write-Log "Row $row : [$tenantName] - Skipping (Migration Complete - Column N = Yes)"
                 continue
             }
         }
@@ -230,49 +228,13 @@ $allResults = [System.Collections.Generic.List[object]]::new()
 foreach ($pair in $migrationPairs) {
     Write-Log ""
     Write-Log "=== Processing: $($pair.TenantName) ===" "INFO"
-    Write-Log "Source: $($pair.SourceTenant)"
+    Write-Log "Domain: $($pair.SourceTenant)"
     Write-Log "Destination: $($pair.DestinationTenant)"
 
-    # Connect to source tenant to get domains
-    Write-Log "Connecting to source tenant..."
-    try {
-        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-        Connect-MgGraph -TenantId $pair.SourceTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome
-
-        # Get source tenant info
-        $sourceOrg = Get-MgOrganization
-        $sourceTenantName = $sourceOrg.DisplayName
-        Write-Log "Source tenant: $sourceTenantName"
-
-        # Get domains from source tenant
-        Write-Log "Retrieving domains from source tenant..."
-        $sourceDomains = Get-MgDomain | Where-Object {
-            # Skip .onmicrosoft.com domains
-            $_.Id -notmatch '\.onmicrosoft\.com$'
-        }
-        Write-Log "Found $($sourceDomains.Count) custom domains in source tenant"
-
-        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-
-    } catch {
-        Write-Log "ERROR connecting to source tenant: $_" "ERROR"
-
-        # Add error record and continue to next pair
-        $allResults.Add([PSCustomObject]@{
-            TenantName = $pair.TenantName
-            SourceTenant = $pair.SourceTenant
-            DestinationTenant = $pair.DestinationTenant
-            Domain = "N/A"
-            InSourceTenant = $false
-            InTargetTenant = $false
-            DNSVerifyRecordFound = $false
-            DNSVerifyRecord = $null
-            ReadinessStatus = "Error"
-            Recommendation = "Failed to connect to source tenant"
-            Notes = "Error: $_"
-        })
-        continue
-    }
+    # Use the source tenant value as the domain name (from column P)
+    # No need to connect to source - we already have the domain name
+    $domainToCheck = $pair.SourceTenant
+    Write-Log "Checking domain: $domainToCheck"
 
     # Connect to target tenant
     Write-Log "Connecting to destination tenant..."
@@ -312,35 +274,33 @@ foreach ($pair in $migrationPairs) {
         continue
     }
 
-    # Check each domain
+    # Check the domain
     Write-Log "Checking domain readiness..."
-    foreach ($domain in $sourceDomains) {
-        $domainName = $domain.Id
-        Write-Log "  Checking: $domainName"
+    Write-Log "  Checking: $domainToCheck"
 
-        $result = [PSCustomObject]@{
-            TenantName = $pair.TenantName
-            SourceTenant = $pair.SourceTenant
-            DestinationTenant = $pair.DestinationTenant
-            Domain = $domainName
-            InSourceTenant = $true
-            InTargetTenant = $false
-            DNSVerifyRecordFound = $false
-            DNSVerifyRecord = $null
-            ReadinessStatus = ""
-            Recommendation = ""
-            Notes = ""
-        }
+    $result = [PSCustomObject]@{
+        TenantName = $pair.TenantName
+        SourceTenant = $pair.SourceTenant
+        DestinationTenant = $pair.DestinationTenant
+        Domain = $domainToCheck
+        InSourceTenant = $true
+        InTargetTenant = $false
+        DNSVerifyRecordFound = $false
+        DNSVerifyRecord = $null
+        ReadinessStatus = ""
+        Recommendation = ""
+        Notes = ""
+    }
 
-        # Check if domain exists in target tenant
-        if ($targetDomainNames -contains $domainName) {
+    # Check if domain exists in target tenant
+    if ($targetDomainNames -contains $domainToCheck) {
             Write-Log "    ✓ Domain exists in destination tenant" "SUCCESS"
             $result.InTargetTenant = $true
             $result.ReadinessStatus = "Already Added"
             $result.Recommendation = "Domain is already in destination tenant"
 
             # Check verification status in target
-            $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainName }
+            $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainToCheck }
             if ($targetDomain.IsVerified) {
                 $result.Notes = "Verified in destination tenant"
             } else {
@@ -354,7 +314,7 @@ foreach ($pair in $migrationPairs) {
 
             # Check DNS for verification record
             Write-Log "    Checking DNS for MS verification record..."
-            $dnsCheck = Get-DNSVerificationRecord -Domain $domainName
+            $dnsCheck = Get-DNSVerificationRecord -Domain $domainToCheck
 
             if ($dnsCheck.Found) {
                 Write-Log "    ✓ MS verification record found in DNS: $($dnsCheck.Record)" "SUCCESS"
@@ -376,10 +336,9 @@ foreach ($pair in $migrationPairs) {
                     $result.Notes = "No MS verification TXT record found in public DNS"
                 }
             }
-        }
-
-        $allResults.Add($result)
     }
+
+    $allResults.Add($result)
 }
 
 # Generate report
