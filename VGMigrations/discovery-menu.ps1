@@ -438,13 +438,22 @@ function Show-DiscoveryMenu {
     $form.Controls.Add($btnClearLog)
 
     $btnLicenseReport = New-Object System.Windows.Forms.Button
-    $btnLicenseReport.Text = 'License Report'; $btnLicenseReport.Location = [System.Drawing.Point]::new($lx+360,$y)
-    $btnLicenseReport.Size = [System.Drawing.Size]::new(130,36)
+    $btnLicenseReport.Text = 'License Report'; $btnLicenseReport.Location = [System.Drawing.Point]::new($lx+240,$y)
+    $btnLicenseReport.Size = [System.Drawing.Size]::new(120,36)
     $btnLicenseReport.BackColor = [System.Drawing.Color]::FromArgb(0,100,180)
     $btnLicenseReport.ForeColor = [System.Drawing.Color]::White; $btnLicenseReport.Font = $FontBold
     $btnLicenseReport.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat; $btnLicenseReport.FlatAppearance.BorderSize = 0
     $btnLicenseReport.Cursor = [System.Windows.Forms.Cursors]::Hand
     $form.Controls.Add($btnLicenseReport)
+
+    $btnDomainReadiness = New-Object System.Windows.Forms.Button
+    $btnDomainReadiness.Text = 'Domain Readiness'; $btnDomainReadiness.Location = [System.Drawing.Point]::new($lx+370,$y)
+    $btnDomainReadiness.Size = [System.Drawing.Size]::new(140,36)
+    $btnDomainReadiness.BackColor = [System.Drawing.Color]::FromArgb(0,100,180)
+    $btnDomainReadiness.ForeColor = [System.Drawing.Color]::White; $btnDomainReadiness.Font = $FontBold
+    $btnDomainReadiness.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat; $btnDomainReadiness.FlatAppearance.BorderSize = 0
+    $btnDomainReadiness.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $form.Controls.Add($btnDomainReadiness)
 
     $y += 46
 
@@ -705,6 +714,56 @@ function Show-DiscoveryMenu {
             & $writeDiscLog "ERROR: $($_.Exception.Message)"
             [System.Windows.Forms.MessageBox]::Show(
                 "License report failed:`n`n$($_.Exception.Message)",
+                'Error', 'OK', 'Error') | Out-Null
+        }
+    }.GetNewClosure())
+
+    # ── Domain Readiness handler ──────────────────────────────────────────────
+    $btnDomainReadiness.Add_Click({
+        Write-Log 'Domain Readiness clicked'
+        $readinessScript = Join-Path $PSScriptRoot 'Check-DomainMigrationReadiness.ps1'
+        if (-not (Test-Path $readinessScript)) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Domain readiness script not found:`n$readinessScript",
+                'Script Not Found', 'OK', 'Error') | Out-Null
+            return
+        }
+
+        try {
+            Write-Log "Launching domain readiness check: $readinessScript"
+            $rtbLog.Clear()
+            & $writeDiscLog "=== Domain Migration Readiness Check Started  $(Get-Date) ==="
+            & $writeDiscLog ""
+
+            # Run the domain readiness script and capture output
+            $output = & 'pwsh.exe' -NoProfile -ExecutionPolicy Bypass -File $readinessScript 2>&1
+
+            foreach ($line in $output) {
+                & $writeDiscLog $line.ToString()
+            }
+
+            & $writeDiscLog ""
+            & $writeDiscLog "=== Domain Readiness Check Complete  $(Get-Date) ==="
+            Write-Log 'Domain readiness check completed'
+
+            # Check if output files were created and offer to open them
+            $outputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations"
+            $latestSummary = Get-ChildItem -Path $outputPath -Filter "DomainMigrationReadiness_*.txt" -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+            if ($latestSummary) {
+                $result = [System.Windows.Forms.MessageBox]::Show(
+                    "Domain readiness check complete.`n`nSummary: $($latestSummary.Name)`n`nOpen the summary?",
+                    'Check Complete', 'YesNo', 'Information')
+                if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                    Start-Process $latestSummary.FullName
+                }
+            }
+        } catch {
+            Write-Log "Domain readiness check failed: $($_.Exception.Message)" 'ERROR'
+            & $writeDiscLog "ERROR: $($_.Exception.Message)"
+            [System.Windows.Forms.MessageBox]::Show(
+                "Domain readiness check failed:`n`n$($_.Exception.Message)",
                 'Error', 'OK', 'Error') | Out-Null
         }
     }.GetNewClosure())

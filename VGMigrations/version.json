@@ -1,7 +1,23 @@
 {
-  "version": "2.4.0",
-  "releaseDate": "2026-06-03",
+  "version": "2.5.0",
+  "releaseDate": "2026-07-28",
   "changelog": [
+    {
+      "version": "2.5.0",
+      "date": "2026-07-28",
+      "changes": [
+        "Added Check-DomainMigrationReadiness.ps1 - domain verification checker",
+        "Auto-reads source/destination from Tenant IDs.xlsx columns P/Q",
+        "Checks if domains exist in target tenant and verification status",
+        "Queries DNS for MS-verify TXT records",
+        "Handles multiple comma-separated source tenants",
+        "Added Domain Readiness button to Discovery menu",
+        "Enhanced Check-TenantLicenses.ps1 with auto-app registration",
+        "License report now auto-creates app registration per tenant",
+        "Stores credentials locally for reuse (no repeated auth)",
+        "Counts licenses granting Exchange Online mailboxes by domain"
+      ]
+    },
     {
       "version": "2.4.0",
       "date": "2026-06-03",
