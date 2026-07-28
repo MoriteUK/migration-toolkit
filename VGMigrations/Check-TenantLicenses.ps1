@@ -596,3 +596,6 @@ Write-Log "Summary TXT: $summaryFile"
 Write-Log ""
 Write-Log "App credentials stored in: $CredentialStorePath\appcreds_*.json"
 Write-Log "These will be reused on subsequent runs for automatic authentication."
+
+# Signal to Electron to open the CSV file
+Write-Output "##OPEN_FILE:$reportFile##"
