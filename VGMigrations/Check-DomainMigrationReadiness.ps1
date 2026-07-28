@@ -28,6 +28,10 @@ param(
 
     [string]$OutputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations",
 
+    [string]$AppName = "VG-DomainReadiness-Reporter",
+
+    [string]$CredentialStorePath = $PSScriptRoot,
+
     [switch]$ProcessAll
 )
 
@@ -45,6 +49,127 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
     $line = "$timestamp  [$($Level.PadRight(5))]  $Msg"
     Write-Host $line
+}
+
+function Get-OrCreateAppRegistration {
+    param(
+        [string]$TenantId,
+        [string]$TenantName,
+        [string]$AppName,
+        [string]$LoginHint
+    )
+
+    Write-Log "Checking app registration for $TenantName..."
+
+    try {
+        # Check if we already have stored credentials
+        $credFile = Join-Path $CredentialStorePath "domaincheck_$($TenantId).json"
+        if (Test-Path $credFile) {
+            $creds = Get-Content $credFile | ConvertFrom-Json
+            Write-Log "Using stored credentials (App: $($creds.AppId))"
+            return $creds
+        }
+
+        # Need to create app registration - connect interactively
+        Write-Log "First time setup - please authenticate as admin"
+        if ($LoginHint) {
+            Write-Log "Use account: $LoginHint"
+        }
+
+        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+        Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -NoWelcome
+
+        # Check if app exists
+        $existingApp = Get-MgApplication -Filter "displayName eq '$AppName'" -ErrorAction SilentlyContinue
+
+        if ($existingApp) {
+            Write-Log "App exists: $($existingApp.AppId)"
+            $appId = $existingApp.AppId
+            $objectId = $existingApp.Id
+        } else {
+            Write-Log "Creating app registration..."
+
+            # Required permissions for domain checking
+            $requiredResourceAccess = @(
+                @{
+                    ResourceAppId = "00000003-0000-0000-c000-000000000000" # MS Graph
+                    ResourceAccess = @(
+                        @{ Id = "dbb9058a-0e50-45d7-ae91-66909b5d4664"; Type = "Role" } # Domain.Read.All
+                    )
+                }
+            )
+
+            $newApp = New-MgApplication -DisplayName $AppName -SignInAudience "AzureADMyOrg" -RequiredResourceAccess $requiredResourceAccess
+            $appId = $newApp.AppId
+            $objectId = $newApp.Id
+            Write-Log "App created: $appId"
+            Start-Sleep -Seconds 3
+        }
+
+        # Create client secret
+        Write-Log "Creating client secret..."
+        $passwordCred = @{
+            DisplayName = "Auto-$(Get-Date -Format 'yyyyMMdd')"
+            EndDateTime = (Get-Date).AddYears(2)
+        }
+        $secret = Add-MgApplicationPassword -ApplicationId $objectId -PasswordCredential $passwordCred
+        $clientSecret = $secret.SecretText
+
+        # Ensure service principal exists
+        $sp = Get-MgServicePrincipal -Filter "appId eq '$appId'" -ErrorAction SilentlyContinue
+        if (-not $sp) {
+            $sp = New-MgServicePrincipal -AppId $appId
+            Start-Sleep -Seconds 2
+        }
+
+        # Grant admin consent
+        Write-Log "Granting admin consent..."
+        $graphSP = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
+        try {
+            New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -BodyParameter @{
+                PrincipalId = $sp.Id
+                ResourceId = $graphSP.Id
+                AppRoleId = "dbb9058a-0e50-45d7-ae91-66909b5d4664" # Domain.Read.All
+            } -ErrorAction SilentlyContinue | Out-Null
+        } catch {}
+
+        # Store credentials
+        $credObject = @{
+            TenantId = $TenantId
+            TenantName = $TenantName
+            AppId = $appId
+            ClientSecret = $clientSecret
+            SecretExpires = $secret.EndDateTime
+            CreatedDate = Get-Date
+        }
+        $credObject | ConvertTo-Json | Out-File -FilePath $credFile -Encoding UTF8 -Force
+        Write-Log "Credentials saved for future runs" "SUCCESS"
+
+        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+        return [PSCustomObject]$credObject
+
+    } catch {
+        Write-Log "Failed to create app registration: $_" "ERROR"
+        throw
+    }
+}
+
+function Connect-WithAppCredentials {
+    param(
+        [string]$TenantId,
+        [string]$AppId,
+        [string]$ClientSecret
+    )
+
+    try {
+        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+        $secureSecret = ConvertTo-SecureString $ClientSecret -AsPlainText -Force
+        $credential = New-Object System.Management.Automation.PSCredential($AppId, $secureSecret)
+        Connect-MgGraph -TenantId $TenantId -ClientSecretCredential $credential -NoWelcome
+    } catch {
+        Write-Log "Failed to connect with app credentials: $_" "ERROR"
+        throw
+    }
 }
 
 function Get-DNSVerificationRecord {
@@ -250,15 +375,14 @@ foreach ($pair in $migrationPairs) {
         Notes = ""
     }
 
-    # STEP 1: Connect to target tenant to get the expected verification record
+    # STEP 1: Get or create app registration for this tenant
     Write-Log "Connecting to destination tenant: $($pair.DestinationTenant)"
     try {
-        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+        # Get app credentials (creates app on first run, reuses thereafter)
+        $appCreds = Get-OrCreateAppRegistration -TenantId $pair.DestinationTenant -TenantName $pair.TenantName -AppName $AppName -LoginHint $pair.LoginCredential
 
-        if (-not [string]::IsNullOrWhiteSpace($pair.LoginCredential)) {
-            Write-Log "Please authenticate as: $($pair.LoginCredential)"
-        }
-        Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome
+        # Connect using app credentials
+        Connect-WithAppCredentials -TenantId $appCreds.TenantId -AppId $appCreds.AppId -ClientSecret $appCreds.ClientSecret
 
         # Check if domain is already added to target
         Write-Log "Checking if domain exists in target tenant..."
