@@ -1,7 +1,21 @@
 {
-  "version": "2.9.34",
+  "version": "2.9.35",
   "releaseDate": "2026-07-28",
   "changelog": [
+    {
+      "version": "2.9.35",
+      "date": "2026-07-28",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Now uses app registration with stored credentials",
+        "First run: Device code authentication to create app registration per tenant",
+        "Subsequent runs: Automatic authentication using stored credentials",
+        "No more repeated device code prompts - authenticate once per tenant",
+        "Credentials stored in domaincheck_<tenantid>.json for reuse",
+        "Required permission: Domain.Read.All (application)",
+        "App name: VG-DomainReadiness-Reporter",
+        "Added Archive-OldLogs.ps1 - Auto-archives logs older than 7 days to Old_Logs.zip on startup"
+      ]
+    },
     {
       "version": "2.9.34",
       "date": "2026-07-28",
