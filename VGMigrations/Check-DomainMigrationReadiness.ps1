@@ -278,6 +278,14 @@ $summaryFile = Join-Path $OutputPath "DomainMigrationReadiness_$timestamp.txt"
 $allResults | Export-Csv -Path $reportFile -NoTypeInformation -Encoding UTF8
 Write-Log "Detailed report saved: $reportFile"
 
+# Open the CSV file automatically
+try {
+    Write-Log "Opening CSV report in Excel..."
+    Invoke-Item $reportFile
+} catch {
+    Write-Log "Could not auto-open CSV: $_" "WARN"
+}
+
 # Generate summary
 $totalDomains = $allResults.Count
 $ready = ($allResults | Where-Object { $_.ReadinessStatus -eq "✓ Ready" }).Count
