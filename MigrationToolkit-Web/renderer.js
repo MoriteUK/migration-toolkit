@@ -143,6 +143,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // Discovery - License Report button
+  const licenseReportBtn = document.getElementById('licenseReportBtn');
+  if (licenseReportBtn) {
+    licenseReportBtn.addEventListener('click', async () => {
+      console.log('License Report clicked');
+      await launchScript('Check-TenantLicenses.ps1', licenseReportBtn);
+    });
+  }
+
+  // Discovery - Domain Readiness button
+  const domainReadinessBtn = document.getElementById('domainReadinessBtn');
+  if (domainReadinessBtn) {
+    domainReadinessBtn.addEventListener('click', async () => {
+      console.log('Domain Readiness clicked');
+      await launchScript('Check-DomainMigrationReadiness.ps1', domainReadinessBtn);
+    });
+  }
+
   // Discovery - Start button
   const startDiscoveryBtn = document.getElementById('startDiscoveryBtn');
   if (startDiscoveryBtn) {
