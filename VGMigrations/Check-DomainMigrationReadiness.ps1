@@ -256,11 +256,9 @@ foreach ($pair in $migrationPairs) {
         Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
 
         if (-not [string]::IsNullOrWhiteSpace($pair.LoginCredential)) {
-            Write-Log "Using account: $($pair.LoginCredential)"
-            Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome -AccountId $pair.LoginCredential
-        } else {
-            Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome
+            Write-Log "Please authenticate as: $($pair.LoginCredential)"
         }
+        Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome
 
         # Check if domain is already added to target
         Write-Log "Checking if domain exists in target tenant..."
