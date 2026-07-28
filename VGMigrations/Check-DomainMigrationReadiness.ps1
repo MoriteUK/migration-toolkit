@@ -206,13 +206,23 @@ try {
             }
         }
 
-        # Read column P (source tenant - column 16) and Q (destination tenant - column 17)
-        # Column P = Domain names (comma-separated)
-        # Column Q = Target tenant ID
-        # Column R = Login credentials (optional)
-        $domainNames = $usedRange.Cells.Item($row, 16).Text.Trim()
+        # Read columns:
+        # Column B = Primary domain name (column 2)
+        # Column C = Tenant ID (column 3)
+        # Column P = Additional domain names (comma-separated) (column 16)
+        # Column Q = Target tenant ID (column 17)
+        # Column R = Login credentials (optional) (column 18)
+        $primaryDomain = $usedRange.Cells.Item($row, 2).Text.Trim()
+        $tenantId = $usedRange.Cells.Item($row, 3).Text.Trim()
+        $additionalDomains = $usedRange.Cells.Item($row, 16).Text.Trim()
         $destinationTenant = $usedRange.Cells.Item($row, 17).Text.Trim()
         $loginCredential = $usedRange.Cells.Item($row, 18).Text.Trim()
+
+        # Combine primary domain with additional domains
+        $domainNames = $primaryDomain
+        if (-not [string]::IsNullOrWhiteSpace($additionalDomains)) {
+            $domainNames += ",$additionalDomains"
+        }
 
         # Skip if no domain or destination
         if ([string]::IsNullOrWhiteSpace($domainNames) -or [string]::IsNullOrWhiteSpace($destinationTenant)) {
@@ -310,10 +320,28 @@ foreach ($pair in $migrationPairs) {
         $targetDomains = Get-MgDomain
         $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainToCheck }
 
-        if ($targetDomain) {
-            Write-Log "  ℹ Domain is added to target tenant (Verified: $($targetDomain.IsVerified))"
+        if (-not $targetDomain) {
+            Write-Log "  ℹ Domain NOT yet added to target tenant - attempting to add..."
+            try {
+                # Add domain to tenant
+                $newDomain = New-MgDomain -Id $domainToCheck
+                Write-Log "  ✓ Domain added to target tenant successfully" "SUCCESS"
+                $targetDomain = $newDomain
+            } catch {
+                Write-Log "  ✗ Failed to add domain: $_" "ERROR"
+                $result.ReadinessStatus = "Error"
+                $result.Notes = "Failed to add domain to target tenant: $_"
+                Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+                $allResults.Add($result)
+                continue
+            }
+        } else {
+            Write-Log "  ℹ Domain is already in target tenant (Verified: $($targetDomain.IsVerified))"
+        }
 
-            # Get the verification DNS record from the target tenant
+        # Get the verification DNS record from the target tenant
+        Write-Log "  Retrieving DNS verification record..."
+        try {
             $verificationRecords = Get-MgDomainServiceConfigurationRecord -DomainId $domainToCheck
 
             # Find the TXT record for verification
@@ -323,8 +351,8 @@ foreach ($pair in $migrationPairs) {
 
             if ($txtRecord) {
                 $recordType = "TXT"
-                $recordLabel = if ($txtRecord.Label) { $txtRecord.Label } else { "@" }
-                $recordValue = $txtRecord.Text
+                $recordLabel = if ($txtRecord.AdditionalProperties.label) { $txtRecord.AdditionalProperties.label } else { "@" }
+                $recordValue = $txtRecord.AdditionalProperties.text
 
                 Write-Log "  DNS Record to configure:"
                 Write-Log "    Type: $recordType"
@@ -340,11 +368,19 @@ foreach ($pair in $migrationPairs) {
                 $result.DNS_RecordType = "TXT"
                 $result.DNS_Label = "Unable to retrieve"
                 $result.DNS_Value = "Unable to retrieve from target"
+                $result.ReadinessStatus = "Error"
+                $result.Notes = "Domain added but could not retrieve verification record"
+                Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+                $allResults.Add($result)
+                continue
             }
-        } else {
-            Write-Log "  ℹ Domain NOT yet added to target tenant"
-            $result.Notes = "Domain not added to target tenant yet - add domain first to get verification record"
-            $result.ReadinessStatus = "Not Ready"
+        } catch {
+            Write-Log "  ✗ Error retrieving verification record: $_" "ERROR"
+            $result.DNS_RecordType = "TXT"
+            $result.DNS_Label = "Error"
+            $result.DNS_Value = "Error: $_"
+            $result.ReadinessStatus = "Error"
+            $result.Notes = "Failed to retrieve DNS verification record: $_"
             Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
             $allResults.Add($result)
             continue
