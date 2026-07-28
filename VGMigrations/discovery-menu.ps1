@@ -437,6 +437,15 @@ function Show-DiscoveryMenu {
     $btnClearLog.Cursor = [System.Windows.Forms.Cursors]::Hand
     $form.Controls.Add($btnClearLog)
 
+    $btnLicenseReport = New-Object System.Windows.Forms.Button
+    $btnLicenseReport.Text = 'License Report'; $btnLicenseReport.Location = [System.Drawing.Point]::new($lx+360,$y)
+    $btnLicenseReport.Size = [System.Drawing.Size]::new(130,36)
+    $btnLicenseReport.BackColor = [System.Drawing.Color]::FromArgb(0,100,180)
+    $btnLicenseReport.ForeColor = [System.Drawing.Color]::White; $btnLicenseReport.Font = $FontBold
+    $btnLicenseReport.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat; $btnLicenseReport.FlatAppearance.BorderSize = 0
+    $btnLicenseReport.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $form.Controls.Add($btnLicenseReport)
+
     $y += 46
 
     # ── Output log ────────────────────────────────────────────────────────────
@@ -649,6 +658,56 @@ function Show-DiscoveryMenu {
             $btnStop.Enabled = $false
         }
     }.GetNewClosure()
+
+    # ── License Report handler ────────────────────────────────────────────────
+    $btnLicenseReport.Add_Click({
+        Write-Log 'License Report clicked'
+        $licenseScript = Join-Path $PSScriptRoot 'Check-TenantLicenses.ps1'
+        if (-not (Test-Path $licenseScript)) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "License report script not found:`n$licenseScript",
+                'Script Not Found', 'OK', 'Error') | Out-Null
+            return
+        }
+
+        try {
+            Write-Log "Launching license report: $licenseScript"
+            $rtbLog.Clear()
+            & $writeDiscLog "=== Tenant License Report Started  $(Get-Date) ==="
+            & $writeDiscLog ""
+
+            # Run the license check script and capture output
+            $output = & 'pwsh.exe' -NoProfile -ExecutionPolicy Bypass -File $licenseScript 2>&1
+
+            foreach ($line in $output) {
+                & $writeDiscLog $line.ToString()
+            }
+
+            & $writeDiscLog ""
+            & $writeDiscLog "=== License Report Complete  $(Get-Date) ==="
+            Write-Log 'License report completed'
+
+            # Check if output file was created and offer to open it
+            $outputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations"
+            $latestReport = Get-ChildItem -Path $outputPath -Filter "TenantLicenseReport_*.csv" -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+            if ($latestReport) {
+                $result = [System.Windows.Forms.MessageBox]::Show(
+                    "License report generated successfully.`n`nFile: $($latestReport.Name)`n`nOpen the report?",
+                    'Report Complete', 'YesNo', 'Information')
+                if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                    Start-Process $latestReport.FullName
+                }
+            }
+        } catch {
+            Write-Log "License report failed: $($_.Exception.Message)" 'ERROR'
+            & $writeDiscLog "ERROR: $($_.Exception.Message)"
+            [System.Windows.Forms.MessageBox]::Show(
+                "License report failed:`n`n$($_.Exception.Message)",
+                'Error', 'OK', 'Error') | Out-Null
+        }
+    }.GetNewClosure())
 
     # ── Run handler ───────────────────────────────────────────────────────────
     $btnRun.Add_Click({
