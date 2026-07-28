@@ -242,7 +242,9 @@ foreach ($pair in $migrationPairs) {
         TenantName = $pair.TenantName
         DomainName = $domainToCheck
         DestinationTenant = $pair.DestinationTenant
-        ExpectedVerifyRecord = ""
+        DNS_RecordType = ""
+        DNS_Label = ""
+        DNS_Value = ""
         DNSVerifyRecord = ""
         ReadinessStatus = ""
         Notes = ""
@@ -266,18 +268,35 @@ foreach ($pair in $migrationPairs) {
         $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainToCheck }
 
         if ($targetDomain) {
-            Write-Log "  ℹ Domain is added to target tenant (Status: $($targetDomain.AuthenticationType))"
+            Write-Log "  ℹ Domain is added to target tenant (Verified: $($targetDomain.IsVerified))"
 
             # Get the verification DNS record from the target tenant
-            $verificationRecords = Get-MgDomainServiceConfigurationRecord -DomainId $domainToCheck | Where-Object { $_.RecordType -eq 'Txt' -and $_.Label -eq '@' }
+            $verificationRecords = Get-MgDomainServiceConfigurationRecord -DomainId $domainToCheck
 
-            if ($verificationRecords) {
-                $expectedRecord = $verificationRecords[0].Text
-                Write-Log "  Expected verify record: $expectedRecord"
-                $result.ExpectedVerifyRecord = $expectedRecord
+            # Find the TXT record for verification
+            $txtRecord = $verificationRecords | Where-Object {
+                $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.domainDnsTxtRecord'
+            } | Select-Object -First 1
+
+            if ($txtRecord) {
+                $recordType = "TXT"
+                $recordLabel = if ($txtRecord.Label) { $txtRecord.Label } else { "@" }
+                $recordValue = $txtRecord.Text
+
+                Write-Log "  DNS Record to configure:"
+                Write-Log "    Type: $recordType"
+                Write-Log "    Label: $recordLabel"
+                Write-Log "    Value: $recordValue"
+
+                $result.DNS_RecordType = $recordType
+                $result.DNS_Label = $recordLabel
+                $result.DNS_Value = $recordValue
+                $result.DNSVerifyRecord = $recordValue
             } else {
-                Write-Log "  ⚠ Could not retrieve expected verification record from target" "WARN"
-                $result.ExpectedVerifyRecord = "Unable to retrieve from target"
+                Write-Log "  ⚠ Could not retrieve DNS verification record from target" "WARN"
+                $result.DNS_RecordType = "TXT"
+                $result.DNS_Label = "Unable to retrieve"
+                $result.DNS_Value = "Unable to retrieve from target"
             }
         } else {
             Write-Log "  ℹ Domain NOT yet added to target tenant"
@@ -304,24 +323,21 @@ foreach ($pair in $migrationPairs) {
 
     if ($dnsCheck.Found) {
         # Check if the DNS record matches what the target expects
-        if ($dnsCheck.AllRecords -match [regex]::Escape($result.ExpectedVerifyRecord)) {
+        if ($dnsCheck.AllRecords -match [regex]::Escape($result.DNS_Value)) {
             Write-Log "  ✓ Correct MS verification record found in DNS" "SUCCESS"
-            $result.DNSVerifyRecord = $result.ExpectedVerifyRecord
             $result.ReadinessStatus = "Ready"
-            $result.Notes = "Domain added to target and DNS verification record matches"
+            $result.Notes = "DNS verification record matches target tenant"
         } else {
             Write-Log "  ✗ MS verification record found but DOES NOT MATCH target expectation" "WARN"
-            Write-Log "    Expected: $($result.ExpectedVerifyRecord)" "WARN"
+            Write-Log "    Expected: $($result.DNS_Value)" "WARN"
             Write-Log "    Found in DNS: $($dnsCheck.AllRecords)" "WARN"
-            $result.DNSVerifyRecord = $dnsCheck.Record
             $result.ReadinessStatus = "Not Ready"
-            $result.Notes = "DNS has old MS record from previous migration - update with new record"
+            $result.Notes = "DNS has old record - Add new TXT record: Label=$($result.DNS_Label) Value=$($result.DNS_Value)"
         }
     } else {
         Write-Log "  ✗ Expected MS verification record NOT found in DNS" "WARN"
-        $result.DNSVerifyRecord = ""
         $result.ReadinessStatus = "Not Ready"
-        $result.Notes = "Domain added to target but DNS verification record not configured"
+        $result.Notes = "Add DNS TXT record: Label=$($result.DNS_Label) Value=$($result.DNS_Value)"
     }
 
     $allResults.Add($result)
@@ -384,7 +400,7 @@ foreach ($group in $groupedResults) {
     if ($readyDomains) {
         $summary += "  READY ($($readyDomains.Count)):`n"
         foreach ($r in $readyDomains) {
-            $summary += "    $($r.DomainName) - $($r.DNSVerifyRecord)`n"
+            $summary += "    ✓ $($r.DomainName)`n"
         }
         $summary += "`n"
     }
@@ -392,11 +408,14 @@ foreach ($group in $groupedResults) {
     # Not Ready
     $notReadyDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Not Ready" }
     if ($notReadyDomains) {
-        $summary += "  NOT READY ($($notReadyDomains.Count)):`n"
+        $summary += "  NOT READY ($($notReadyDomains.Count)) - DNS Records Needed:`n"
         foreach ($r in $notReadyDomains) {
-            $summary += "    $($r.DomainName) - $($r.Notes)`n"
+            $summary += "    Domain: $($r.DomainName)`n"
+            $summary += "      Type: $($r.DNS_RecordType)`n"
+            $summary += "      Label: $($r.DNS_Label)`n"
+            $summary += "      Value: $($r.DNS_Value)`n"
+            $summary += "`n"
         }
-        $summary += "`n"
     }
 
     # Errors
