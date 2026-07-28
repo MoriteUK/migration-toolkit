@@ -72,10 +72,10 @@
             <button type="button" class="sidebar-subitem" data-view="discovery">
               <span class="sidebar-sublabel">M365 Discovery</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-script="Check-TenantLicenses.ps1">
+            <button type="button" class="sidebar-subitem" data-view="licenseReport">
               <span class="sidebar-sublabel">License Report</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-script="Check-DomainMigrationReadiness.ps1">
+            <button type="button" class="sidebar-subitem" data-view="domainReadiness">
               <span class="sidebar-sublabel">Domain Readiness</span>
             </button>
           </div>
@@ -394,6 +394,68 @@
         <div class="log-section hidden" id="discoveryLog">
           <h3 class="form-card-title">Discovery Log</h3>
           <div class="log-output" id="discoveryLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- License Report View -->
+      <div id="licenseReportView" class="view-container hidden">
+        <h2 class="view-title">📄 License Report</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Tenant License Report</h3>
+          <p class="form-help">
+            Generates a report of mailbox-granting licenses by domain with automatic app registration.
+            Reads from Tenant IDs.xlsx and skips domains with "Yes" in columns J or N.
+          </p>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" id="licenseAutoAuth" checked>
+              <span>Auto-create app registration per tenant (stores credentials for reuse)</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" id="runLicenseReportBtn">
+              🚀 Run License Report
+            </button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="licenseReportLog">
+          <h3 class="form-card-title">License Report Output</h3>
+          <div class="log-output" id="licenseReportLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Domain Readiness View -->
+      <div id="domainReadinessView" class="view-container hidden">
+        <h2 class="view-title">✅ Domain Migration Readiness</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Domain Verification Check</h3>
+          <p class="form-help">
+            Checks if domains are added to target tenant and if DNS verification records are ready.
+            Reads source/destination from Tenant IDs.xlsx columns P/Q and handles comma-separated sources.
+          </p>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" id="domainProcessAll">
+              <span>Process all rows (ignore "Yes" in columns J/N)</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-large" id="runDomainReadinessBtn">
+              🚀 Run Domain Readiness Check
+            </button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="domainReadinessLog">
+          <h3 class="form-card-title">Domain Readiness Output</h3>
+          <div class="log-output" id="domainReadinessLogOutput"></div>
         </div>
       </div>
 

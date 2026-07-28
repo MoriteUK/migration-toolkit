@@ -295,24 +295,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   })();
 
-  // Discovery - License Report button
-  const licenseReportBtn = document.getElementById('licenseReportBtn');
-  if (licenseReportBtn) {
-    licenseReportBtn.addEventListener('click', async () => {
-      console.log('License Report clicked');
-      await launchScript('Check-TenantLicenses.ps1', licenseReportBtn);
-    });
-  }
-
-  // Discovery - Domain Readiness button
-  const domainReadinessBtn = document.getElementById('domainReadinessBtn');
-  if (domainReadinessBtn) {
-    domainReadinessBtn.addEventListener('click', async () => {
-      console.log('Domain Readiness clicked');
-      await launchScript('Check-DomainMigrationReadiness.ps1', domainReadinessBtn);
-    });
-  }
-
   // Discovery - Start button
   const startDiscoveryBtn = document.getElementById('startDiscoveryBtn');
   if (startDiscoveryBtn) {
@@ -371,6 +353,70 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.electronAPI.offPsOutput();
         startDiscoveryBtn.disabled = false;
         startDiscoveryBtn.textContent = 'Start Discovery';
+      }
+    });
+  }
+
+  // License Report - Run button
+  const runLicenseReportBtn = document.getElementById('runLicenseReportBtn');
+  if (runLicenseReportBtn) {
+    runLicenseReportBtn.addEventListener('click', async () => {
+      const logSection = document.getElementById('licenseReportLog');
+      const logOutput = document.getElementById('licenseReportLogOutput');
+
+      logSection.classList.remove('hidden');
+      logOutput.textContent = 'Starting License Report...\n\n';
+
+      runLicenseReportBtn.disabled = true;
+      runLicenseReportBtn.textContent = 'Running...';
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+
+      try {
+        const result = await window.electronAPI.streamPowerShell('Check-TenantLicenses.ps1', []);
+        logOutput.textContent += result?.success ? '\n✓ License Report complete\n' : `\n✗ Failed (exit ${result?.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\n✗ Error: ${err.message}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        runLicenseReportBtn.disabled = false;
+        runLicenseReportBtn.textContent = '🚀 Run License Report';
+      }
+    });
+  }
+
+  // Domain Readiness - Run button
+  const runDomainReadinessBtn = document.getElementById('runDomainReadinessBtn');
+  if (runDomainReadinessBtn) {
+    runDomainReadinessBtn.addEventListener('click', async () => {
+      const logSection = document.getElementById('domainReadinessLog');
+      const logOutput = document.getElementById('domainReadinessLogOutput');
+      const processAll = document.getElementById('domainProcessAll').checked;
+
+      logSection.classList.remove('hidden');
+      logOutput.textContent = 'Starting Domain Readiness Check...\n\n';
+
+      runDomainReadinessBtn.disabled = true;
+      runDomainReadinessBtn.textContent = 'Running...';
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+
+      try {
+        const args = processAll ? ['-ProcessAll'] : [];
+        const result = await window.electronAPI.streamPowerShell('Check-DomainMigrationReadiness.ps1', args);
+        logOutput.textContent += result?.success ? '\n✓ Domain Readiness Check complete\n' : `\n✗ Failed (exit ${result?.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\n✗ Error: ${err.message}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        runDomainReadinessBtn.disabled = false;
+        runDomainReadinessBtn.textContent = '🚀 Run Domain Readiness Check';
       }
     });
   }
@@ -1676,6 +1722,8 @@ function switchView(viewName) {
     'dashboard': 'dashboardView',
     'discovery': 'discoveryView',
     // Discovery sub-views
+    'licenseReport': 'licenseReportView',
+    'domainReadiness': 'domainReadinessView',
     'discovery-tenant-licenses': 'discoveryTenantLicensesView',
     // AvePoint Fly sub-views
     'avepoint-appreg': 'avepointAppRegView',
