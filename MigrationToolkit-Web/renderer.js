@@ -147,17 +147,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Sidebar navigation - sub-items
   const sidebarSubitems = document.querySelectorAll('.sidebar-subitem');
   sidebarSubitems.forEach((subitem) => {
-    subitem.addEventListener('click', (event) => {
+    subitem.addEventListener('click', async (event) => {
       event.stopPropagation();
       const view = subitem.getAttribute('data-view');
+      const script = subitem.getAttribute('data-script');
 
       // Update active state
       sidebarItems.forEach(i => i.classList.remove('active'));
       sidebarSubitems.forEach(i => i.classList.remove('active'));
       subitem.classList.add('active');
 
-      // Switch views
-      if (view) {
+      // Launch script or switch view
+      if (script) {
+        await launchScript(script, subitem);
+      } else if (view) {
         switchView(view);
       }
     });

@@ -107,8 +107,9 @@ Write-UpdateLog "Checking GitHub for updates..."
 
 try {
     # Get latest version.json from GitHub
-    $GitHubVersionUrl = "https://raw.githubusercontent.com/$GitHubRepo/master/VGMigrations/version.json"
-    $RemoteVersionJson = Invoke-RestMethod -Uri $GitHubVersionUrl -ErrorAction Stop
+    $GitHubVersionUrl = "https://raw.githubusercontent.com/$GitHubRepo/main/VGMigrations/version.json"
+    Write-UpdateLog "Contacting GitHub..."
+    $RemoteVersionJson = Invoke-RestMethod -Uri $GitHubVersionUrl -TimeoutSec 20 -ErrorAction Stop
     $RemoteVersion = $RemoteVersionJson.version
 
     Write-UpdateLog "Remote version: $RemoteVersion"
@@ -130,6 +131,7 @@ try {
     }
 
     Write-UpdateLog "Update available: $LocalVersion -> $RemoteVersion" 'OK'
+    Write-Host "UPDATE_AVAILABLE"
 
 } catch {
     Write-UpdateLog "Failed to check for updates: $($_.Exception.Message)" 'ERROR'
@@ -137,39 +139,25 @@ try {
     return
 }
 
-# ── Prompt for Update (unless Silent) ─────────────────────────────────────────
-if (-not $Silent) {
-    $changelog = $RemoteVersionJson.changelog | Where-Object { $_.version -eq $RemoteVersion } | Select-Object -First 1
-    $changeText = if ($changelog) {
-        "`n`nChanges in version $RemoteVersion`:"
-        foreach ($change in $changelog.changes) {
-            $changeText += "`n  • $change"
-        }
-        $changeText
-    } else {
-        ""
-    }
+# ── Show what's new and auto-install ──────────────────────────────────────────
+$changelog = $RemoteVersionJson.changelog | Where-Object { $_.version -eq $RemoteVersion } | Select-Object -First 1
 
-    Write-Host "`n╔═══════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║    UPDATE AVAILABLE                       ║" -ForegroundColor Cyan
-    Write-Host "╚═══════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host "`nCurrent version: " -NoNewline
-    Write-Host $LocalVersion -ForegroundColor Yellow
-    Write-Host "Latest version:  " -NoNewline
-    Write-Host $RemoteVersion -ForegroundColor Green
+Write-Host "`n╔═══════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║    UPDATE AVAILABLE — INSTALLING          ║" -ForegroundColor Cyan
+Write-Host "╚═══════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "`nCurrent version: " -NoNewline
+Write-Host $LocalVersion -ForegroundColor Yellow
+Write-Host "Latest version:  " -NoNewline
+Write-Host $RemoteVersion -ForegroundColor Green
 
-    if ($changeText) {
-        Write-Host $changeText -ForegroundColor Gray
-    }
-
-    Write-Host "`nDo you want to download and install this update? [Y/N]: " -NoNewline -ForegroundColor Cyan
-    $response = Read-Host
-
-    if ($response -notmatch '^[Yy]') {
-        Write-UpdateLog "Update declined by user"
-        return
+if ($changelog) {
+    Write-Host "`nWhat's new in $RemoteVersion`:" -ForegroundColor Cyan
+    foreach ($change in $changelog.changes) {
+        Write-Host "  • $change" -ForegroundColor Gray
     }
 }
+
+Write-Host ""
 
 # ── Download and Install Update ───────────────────────────────────────────────
 Write-UpdateLog "Downloading update from GitHub..."
@@ -180,11 +168,11 @@ try {
     New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
     # Download ZIP from GitHub
-    $ZipUrl = "https://github.com/$GitHubRepo/archive/refs/heads/master.zip"
+    $ZipUrl = "https://github.com/$GitHubRepo/archive/refs/heads/main.zip"
     $ZipPath = Join-Path $TempDir "update.zip"
 
     Write-UpdateLog "Downloading from: $ZipUrl"
-    Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -ErrorAction Stop
+    Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -TimeoutSec 120 -ErrorAction Stop
     Write-UpdateLog "Download complete" 'OK'
 
     # Extract ZIP
@@ -193,7 +181,18 @@ try {
 
     # Find extracted folder (GitHub adds repo name to folder)
     $ExtractedFolder = Get-ChildItem -Path $TempDir -Directory | Select-Object -First 1
-    $SourcePath = $ExtractedFolder.FullName
+    $RepoRoot  = $ExtractedFolder.FullName
+
+    $VGSource  = Join-Path $RepoRoot 'VGMigrations'
+    $WebSource = Join-Path $RepoRoot 'MigrationToolkit-Web'
+    if (-not (Test-Path $VGSource)) {
+        throw "Expected VGMigrations subfolder not found in extracted archive: $VGSource"
+    }
+
+    # Destination roots derived from script location (ScriptRoot = ...VGMigrations\)
+    $ToolkitRoot = Split-Path $ScriptRoot -Parent
+    $VGDest      = $ScriptRoot
+    $WebDest     = Join-Path $ToolkitRoot 'MigrationToolkit-Web'
 
     # Backup user configuration files
     Write-UpdateLog "Backing up user configuration..."
@@ -231,30 +230,43 @@ try {
         Write-UpdateLog "  Backed up: Shared config (from LOCALAPPDATA)"
     }
 
-    # Copy new files (excluding config files)
-    Write-UpdateLog "Installing update..."
-    $Exclude = @('*.log', 'logs', 'reports', 'backup-*', 'auth', '.git', '.gitignore') + $ConfigFiles
+    # Helper: copy all files from a source folder to a destination folder
+    function Copy-UpdateFolder {
+        param([string]$Source, [string]$Dest, [string[]]$Exclude)
+        Get-ChildItem -Path $Source -Recurse -File | ForEach-Object {
+            $RelativePath = $_.FullName.Substring($Source.Length + 1)
+            $DestPath = Join-Path $Dest $RelativePath
 
-    Get-ChildItem -Path $SourcePath -Recurse -File | ForEach-Object {
-        $RelativePath = $_.FullName.Substring($SourcePath.Length + 1)
-        $DestPath = Join-Path $ScriptRoot $RelativePath
+            $Skip = $false
+            foreach ($pattern in $Exclude) {
+                if ($RelativePath -like $pattern -or $_.Name -like $pattern -or
+                    $RelativePath -like "$pattern\*" -or $RelativePath -like "$pattern/*") {
+                    $Skip = $true; break
+                }
+            }
 
-        # Skip excluded files
-        $Skip = $false
-        foreach ($pattern in $Exclude) {
-            if ($RelativePath -like $pattern -or $_.Name -like $pattern) {
-                $Skip = $true
-                break
+            if (-not $Skip) {
+                $DestDir = Split-Path $DestPath
+                if (-not (Test-Path $DestDir)) {
+                    New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
+                }
+                Copy-Item -Path $_.FullName -Destination $DestPath -Force
             }
         }
+    }
 
-        if (-not $Skip) {
-            $DestDir = Split-Path $DestPath
-            if (-not (Test-Path $DestDir)) {
-                New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
-            }
-            Copy-Item -Path $_.FullName -Destination $DestPath -Force
-        }
+    # Copy VGMigrations files
+    Write-UpdateLog "Installing update (VGMigrations)..."
+    $VGExclude = @('*.log', 'logs', 'reports', 'backup-*', 'auth') + $ConfigFiles
+    Copy-UpdateFolder -Source $VGSource -Dest $VGDest -Exclude $VGExclude
+
+    # Copy MigrationToolkit-Web files (skip node_modules and build artifacts)
+    if (Test-Path $WebSource) {
+        Write-UpdateLog "Installing update (MigrationToolkit-Web)..."
+        $WebExclude = @('node_modules', 'dist', '*.log')
+        Copy-UpdateFolder -Source $WebSource -Dest $WebDest -Exclude $WebExclude
+    } else {
+        Write-UpdateLog "MigrationToolkit-Web not found in archive — skipping web update." 'WARN'
     }
 
     # Restore user configuration

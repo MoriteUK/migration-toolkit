@@ -69,12 +69,46 @@
     don't fail.
 
 .NOTES
-    Version    : 2.11.4
-    Last edit  : 2026-05-11
+    Version    : 2.12.2
+    Last edit  : 2026-07-13
     Author     : Andrew White / Claude (Anthropic)
     Repository : internal — Volaris M365 migration tooling
 
     Version history:
+      2.12.2 SharePoint and Power Platform sections were silently skipping themselves whenever
+             Microsoft.Online.SharePoint.PowerShell / Microsoft.PowerApps.Administration.PowerShell
+             weren't already installed — they only logged a WARN with manual install instructions
+             instead of installing. Ensure-Module now actually installs missing modules from
+             PSGallery (CurrentUser scope) instead of just checking for them, and gained an
+             optional -RequiredVersion pin (used to simplify the 2.12.1 Graph pin). All four
+             SPO/Power-Platform module-presence checks (upfront + mid-run fallback for each) now
+             route through it, so a missing module gets installed automatically instead of
+             quietly skipping that section of the scan.
+      2.12.1 v2.12.0's Graph fix didn't work — confirmed live against celcat.com: WAM was still
+             attempted and still fell back to device-code, which then got blocked as expected.
+             Set-MgGraphOption -DisableLoginByWAM $true is a documented no-op on Windows unless
+             paired with a custom app registration (-ClientId) — Microsoft made WAM mandatory
+             for the SDK's default client starting 2.34.0
+             (github.com/microsoftgraph/msgraph-sdk-powershell/issues/3518). Rather than stand
+             up a custom app registration + per-tenant admin consent, the MODULE LOAD section now
+             pins Microsoft.Graph.Authentication to 2.33.0 — the last version before WAM became
+             mandatory — installed side-by-side, doesn't touch any newer version already present.
+             This actually restores plain browser-popup sign-in. The now-ineffective
+             Set-MgGraphOption call in the connect block was removed. Exchange Online's
+             -DisableWAM (from 2.12.0) is untested live but unrelated to this bug — ORDER OF
+             VERIFICATION: confirm EXO sign-in too on the next real run.
+      2.12.0 Stop relying on WAM broker + device-code fallback for interactive sign-in — a
+             Conditional Access "Authentication flows" policy can now block device-code flow
+             tenant-wide, and WAM's own well-documented breakage (see 2.11.3, 2.9.3, 2.8.1
+             below) is what kept triggering that fallback in the first place. Graph: calls
+             `Set-MgGraphOption -DisableLoginByWAM $true` once before connecting (persists
+             across runs; SDK >= 2.34 default is WAM-first, this reverts to a browser popup).
+             Exchange Online: added `-DisableWAM` directly to the primary Connect-ExchangeOnline
+             call (available since ExchangeOnlineManagement 3.7.2). Device-code fallback paths
+             are unchanged (still attempted as a last resort on older module versions where WAM
+             can't be disabled this way) but now give a clear "blocked by tenant CA policy"
+             message instead of a raw AADSTS error when that's what actually failed.
+             CORRECTION (see 2.12.1): the Graph half of this didn't actually work.
       2.11.4 The "argument 'SkuPartNumber'" error reappeared after v2.11.2's Sort-Object
              fix, but from somewhere new — the section 22 catch block was collapsing the
              failure to a single line of text with no location info. Two changes:
@@ -204,7 +238,9 @@ param (
     [switch]$IncludeMembers,
     [switch]$Hybrid,
     [string]$BusinessUnitId,
-    [switch]$SkipPowerPlatform       # When set, the upfront Power Platform scan is bypassed (useful for unattended/overnight runs and batch orchestration)
+    [switch]$SkipPowerPlatform,      # When set, the upfront Power Platform scan is bypassed (useful for unattended/overnight runs and batch orchestration)
+    [string]$OutputPath,             # Base directory for output; overrides (Get-Location) when passed from the Electron UI
+    [string]$SharePointAdminUrl      # SPO admin URL (e.g. https://tenant-admin.sharepoint.com); overrides shared config and the hardcoded default
 )
 
 Set-StrictMode -Version Latest
@@ -388,22 +424,38 @@ function Get-CsvRowCountFast {
 }
 
 function Ensure-Module {
+    # Verifies a module is installed (auto-installing from PSGallery to CurrentUser scope if
+    # missing) and imports it. Pass -RequiredVersion to pin an exact version — installs it
+    # side-by-side without touching any other version already present. -Optional means failures
+    # are logged and return $false instead of exiting the whole script (used for modules that
+    # gate a single section, like SPO or Power Platform, rather than the whole run).
     param(
         [Parameter(Mandatory)][string]$Name,
-        [switch]$Optional
+        [switch]$Optional,
+        [string]$RequiredVersion
     )
     try {
-        if (-not (Get-Module -ListAvailable -Name $Name)) {
-            if ($Optional) { Write-Log "Optional module missing: $Name" -Level WARN; return $false }
-            Write-Log "Required module missing: $Name. Install: Install-Module $Name -Scope CurrentUser -Force" -Level ERROR
-            exit 1
+        $versionLabel = if ($RequiredVersion) { " $RequiredVersion" } else { "" }
+        $existing = if ($RequiredVersion) {
+            Get-Module -ListAvailable -Name $Name | Where-Object { $_.Version -eq $RequiredVersion }
+        } else {
+            Get-Module -ListAvailable -Name $Name
         }
-        Import-Module $Name -ErrorAction Stop
-        Write-Log "Loaded module: $Name" -Level INFO
+        if (-not $existing) {
+            Write-Log "Module missing: $Name$versionLabel — installing from PSGallery (CurrentUser scope)..." -Level WARN
+            $installArgs = @{ Name = $Name; Scope = 'CurrentUser'; Force = $true; AllowClobber = $true; ErrorAction = 'Stop' }
+            if ($RequiredVersion) { $installArgs['RequiredVersion'] = $RequiredVersion }
+            Install-Module @installArgs
+            Write-Log "Installed module: $Name$versionLabel" -Level SUCCESS
+        }
+        $importArgs = @{ Name = $Name; Force = $true; ErrorAction = 'Stop' }
+        if ($RequiredVersion) { $importArgs['RequiredVersion'] = $RequiredVersion }
+        Import-Module @importArgs
+        Write-Log "Loaded module: $Name$versionLabel" -Level INFO
         return $true
     } catch {
-        if ($Optional) { Write-Log "Optional module failed to load: $Name — $($_.Exception.Message)" -Level WARN; return $false }
-        Write-Log "Failed to load module: $Name — $($_.Exception.Message)" -Level ERROR
+        if ($Optional) { Write-Log "Optional module could not be installed/loaded: $Name$versionLabel — $($_.Exception.Message)" -Level WARN; return $false }
+        Write-Log "Required module could not be installed/loaded: $Name$versionLabel — $($_.Exception.Message)" -Level ERROR
         exit 1
     }
 }
@@ -860,7 +912,23 @@ function Merge-CsvFolderToExcel {
 # MODULE LOAD
 # ─────────────────────────────────────────────────────────────
 Ensure-Module -Name 'ExchangeOnlineManagement' | Out-Null
-$GraphModuleOk = Ensure-Module -Name 'Microsoft.Graph.Authentication' -Optional
+
+# Microsoft.Graph SDK >= 2.34.0 makes the WAM broker mandatory for interactive sign-in on
+# Windows. Set-MgGraphOption -DisableLoginByWAM is a documented no-op unless paired with a
+# custom app registration (github.com/microsoftgraph/msgraph-sdk-powershell/issues/3518) — it
+# does NOT actually stop WAM from being tried, so it can't rescue us from WAM's failures or the
+# device-code fallback those failures used to trigger (now blocked tenant-wide on tenants with a
+# Conditional Access "Authentication flows" policy). Pinning to 2.33.0 — the last version before
+# WAM became mandatory — restores plain browser-popup sign-in with no new app registration or
+# per-tenant admin consent needed. Installs side-by-side if missing; does not remove or affect
+# any newer version already on the machine.
+$GraphAuthPinnedVersion = '2.33.0'
+$GraphModuleOk = Ensure-Module -Name 'Microsoft.Graph.Authentication' -RequiredVersion $GraphAuthPinnedVersion -Optional
+
+# All other optional per-section modules: auto-installed on first use further down (SPO,
+# Power Platform), same pattern as above. ActiveDirectory (-Hybrid only) is the one exception —
+# it's a Windows RSAT feature, not a PSGallery module, so it can't be Install-Module'd; that
+# check further down still just warns with install instructions.
 
 # ─────────────────────────────────────────────────────────────
 # DOMAIN INPUT
@@ -876,6 +944,10 @@ $DomainPrefix = ($Domain -split '\.')[0]
 # OUTPUT FOLDER + LOG
 # ─────────────────────────────────────────────────────────────
 $SafeName     = $Domain -replace '[\\/:*?"<>|]', '_'
+if ($OutputPath) {
+    if (-not (Test-Path $OutputPath)) { New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null }
+    Set-Location $OutputPath
+}
 $OutputFolder    = Join-Path (Get-Location) $SafeName
 if (-not (Test-Path $OutputFolder)) { New-Item -ItemType Directory -Path $OutputFolder -Force | Out-Null }
 $DiscoveryFolder = Join-Path $OutputFolder 'Discovery'
@@ -994,13 +1066,57 @@ Write-Detail "================================================"
 # 1. Microsoft Graph (interactive sign-in)
 if ($GraphModuleOk) {
     Write-Log "[1/4] Connecting to Microsoft Graph (tenant: $Domain)..."
+    $graphScopes = @('Directory.Read.All','Group.Read.All','Sites.Read.All','Application.Read.All','User.Read.All','Device.Read.All','DeviceManagementManagedDevices.Read.All','Tasks.Read','Policy.Read.All')
+
+    # NOTE: WAM avoidance now happens via the pinned Microsoft.Graph.Authentication 2.33.0 load
+    # above (MODULE LOAD section) rather than Set-MgGraphOption -DisableLoginByWAM, which turned
+    # out to be a documented no-op on its own — see the comment there for why.
+
+    # Suppress WAM broker noise from [Console]::Out — same pattern as the EXO block below.
+    $consoleSwallowG = New-Object System.IO.StringWriter
+    $origOutG  = [Console]::Out
+    $origErrG  = [Console]::Error
+    [Console]::SetOut($consoleSwallowG)
+    [Console]::SetError($consoleSwallowG)
     try {
-        $scopes = @('Directory.Read.All','Group.Read.All','Sites.Read.All','Application.Read.All','User.Read.All','Device.Read.All','DeviceManagementManagedDevices.Read.All','Tasks.Read','Policy.Read.All')
         # -TenantId directs the login prompt to the SOURCE company's tenant.
         # Sign in with an account that has at least Global Reader access there.
-        Connect-MgGraph -Scopes $scopes -TenantId $Domain -NoWelcome
+        Connect-MgGraph -Scopes $graphScopes -TenantId $Domain -NoWelcome
+        [Console]::SetOut($origOutG); [Console]::SetError($origErrG)
         $GraphAvailable = $true
         Write-Log "Connected to Microsoft Graph." -Level SUCCESS
+    } catch {
+        [Console]::SetOut($origOutG); [Console]::SetError($origErrG)
+        $graphMsg = $_.Exception.Message
+        $swallowedG = $consoleSwallowG.ToString()
+        if ($swallowedG) { Write-Detail "Graph broker console output (swallowed): $($swallowedG -replace [Environment]::NewLine,' || ')" }
+
+        if ($graphMsg -match 'window handle|WAM|broker|RuntimeBroker|InteractiveBrowser' -or $_.Exception -is [System.NullReferenceException]) {
+            Write-Log "Graph WAM auth failed — falling back to device-code flow." -Level WARN
+            Write-Log "  When prompted, enter the code shown at https://microsoft.com/devicelogin" -Level WARN
+            try {
+                Connect-MgGraph -Scopes $graphScopes -TenantId $Domain -NoWelcome -UseDeviceAuthentication
+                $GraphAvailable = $true
+                Write-Log "Connected to Microsoft Graph via device-code." -Level SUCCESS
+            } catch {
+                $GraphAvailable = $false
+                $deviceMsg = $_.Exception.Message
+                if ($deviceMsg -match 'AADSTS1000104|AADSTS53003|blocked|Conditional Access') {
+                    Write-Log "Graph device-code connection failed — this tenant's Conditional Access policy blocks device-code sign-in. Ask the tenant admin for the exact CA policy/exception needed, since neither WAM nor device-code auth will work here." -Level ERROR
+                } else {
+                    Write-Log "Graph device-code connection failed: $deviceMsg" -Level ERROR
+                }
+            }
+        } else {
+            $GraphAvailable = $false
+            Write-Log "Graph connection failed — Graph sections will be skipped: $graphMsg" -Level WARN
+        }
+    } finally {
+        if ([Console]::Out  -ne $origOutG)  { [Console]::SetOut($origOutG)   }
+        if ([Console]::Error -ne $origErrG) { [Console]::SetError($origErrG) }
+    }
+
+    if ($GraphAvailable) {
         try {
             $ctx = Get-MgContext
             Write-Log "  Signed in as : $($ctx.Account)" -Level SUCCESS
@@ -1012,9 +1128,6 @@ if ($GraphModuleOk) {
             $gc.Timeout = [System.TimeSpan]::FromSeconds(900)
             Write-Log "Graph HTTP timeout set to 900 s."
         } catch { }
-    } catch {
-        $GraphAvailable = $false
-        Write-Log "Graph connection failed — Graph sections will be skipped: $($_.Exception.Message)" -Level WARN
     }
 } else {
     Write-Log "Microsoft.Graph.Authentication not available — Graph sections will be skipped." -Level WARN
@@ -1031,14 +1144,20 @@ $exoCmds = @(
     'Get-TransportRule',
     'Get-UnifiedGroup','Get-UnifiedGroupLinks'
 )
-# Try WAM silently first — on healthy hosts this succeeds in seconds; on broken WAM hosts
-# MSAL writes a long NullReferenceException stack trace ("Error Acquiring Token: ...
-# Microsoft.Identity.Client.Platforms.Features.RuntimeBroker.RuntimeBroker..ctor") DIRECTLY
-# to .NET's Console — bypassing every PowerShell stream. Plain `*>$null` does not catch
-# that because it only covers PS streams (success/error/warning/verbose/debug/information).
+# -DisableWAM (available since ExchangeOnlineManagement 3.7.2) skips the WAM broker entirely and
+# uses a normal browser popup instead — WAM is the actual source of the long-standing
+# NullReferenceException/RuntimeBroker failures below, and its device-code fallback can now be
+# blocked outright by a tenant's Conditional Access "Authentication flows" policy. Kept the
+# console-swallow machinery below as a safety net in case WAM still gets attempted on older
+# module versions that don't recognise -DisableWAM.
+#
+# MSAL (when WAM is attempted) writes a long NullReferenceException stack trace ("Error
+# Acquiring Token: ... Microsoft.Identity.Client.Platforms.Features.RuntimeBroker.RuntimeBroker
+# ..ctor") DIRECTLY to .NET's Console — bypassing every PowerShell stream. Plain `*>$null` does
+# not catch that because it only covers PS streams (success/error/warning/verbose/debug/info).
 #
 # To suppress the screen flood, we temporarily redirect [Console]::Out and [Console]::Error
-# to a StringWriter for the duration of the broker attempt. Anything MSAL writes lands in
+# to a StringWriter for the duration of the connect attempt. Anything MSAL writes lands in
 # the StringWriter (which we discard, or optionally log at DEBUG level for diagnostics).
 # The actual thrown exception is still caught normally via try/catch.
 $consoleSwallow = New-Object System.IO.StringWriter
@@ -1048,7 +1167,7 @@ $origStdErr = [Console]::Error
 [Console]::SetError($consoleSwallow)
 try {
     # -Organization directs the connection to the source company's Exchange Online tenant.
-    Connect-ExchangeOnline -ShowBanner:$false -Organization $Domain -CommandName $exoCmds -ErrorAction Stop *>$null
+    Connect-ExchangeOnline -ShowBanner:$false -Organization $Domain -CommandName $exoCmds -DisableWAM -ErrorAction Stop *>$null
     [Console]::SetOut($origStdOut)
     [Console]::SetError($origStdErr)
     Write-Log "Connected to Exchange Online (org: $Domain)." -Level SUCCESS
@@ -1073,7 +1192,12 @@ try {
             Connect-ExchangeOnline -ShowBanner:$false -Organization $Domain -CommandName $exoCmds -Device -ErrorAction Stop
                     Write-Log "Connected to Exchange Online via device-code (org: $Domain)." -Level SUCCESS
         } catch {
-            Write-Log "Device-code retry also failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -Level ERROR
+            $deviceExoMsg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+            if ($deviceExoMsg -match 'AADSTS1000104|AADSTS53003|blocked|Conditional Access') {
+                Write-Log "Device-code retry also failed — this tenant's Conditional Access policy blocks device-code sign-in. Ask the tenant admin for the exact CA policy/exception needed, since neither WAM nor device-code auth will work here." -Level ERROR
+            } else {
+                Write-Log "Device-code retry also failed: $deviceExoMsg" -Level ERROR
+            }
             throw
         }
     } else {
@@ -1123,28 +1247,32 @@ if ($true) {
         $spAns = 'Y'
     }
     if ($spAns -match '^[Yy]') {
-        if (-not (Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell' -ErrorAction SilentlyContinue)) {
-            Write-Log "Microsoft.Online.SharePoint.PowerShell not installed — skipping. Install: Install-Module Microsoft.Online.SharePoint.PowerShell -Scope CurrentUser" -Level WARN
+        if (-not (Ensure-Module -Name 'Microsoft.Online.SharePoint.PowerShell' -Optional)) {
+            Write-Log "Skipping upfront SPO enumeration." -Level WARN
         } else {
             # ── Resolve the SPO admin URL ─────────────────────────────────────────
-            # Default is the Volaris tenant admin site.
-            # Override per-tenant via Settings > Customer > SharePoint Admin URL.
+            # Priority: -SharePointAdminUrl param → shared-config.json → hardcoded default
             $adminUrl = 'https://ourvolaris-admin.sharepoint.com'
 
-            $sharedCfgPath = Join-Path $env:LOCALAPPDATA 'FlyMigration\shared-config.json'
-            try {
-                if (Test-Path $sharedCfgPath) {
-                    $sharedCfg = Get-Content $sharedCfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
-                    $cfgVal = if ($sharedCfg.SharePointAdminUrl) { $sharedCfg.SharePointAdminUrl.Trim().TrimEnd('/') } else { $null }
-                    if ($cfgVal) {
-                        $adminUrl = $cfgVal
-                        Write-Log "SPO admin URL overridden from shared config: $adminUrl" -Level SUCCESS
-                    } else {
-                        Write-Log "SPO admin URL: using default ($adminUrl)"
+            if (-not [string]::IsNullOrWhiteSpace($SharePointAdminUrl)) {
+                $adminUrl = $SharePointAdminUrl.Trim().TrimEnd('/')
+                Write-Log "SPO admin URL from parameter: $adminUrl" -Level SUCCESS
+            } else {
+                $sharedCfgPath = Join-Path $env:LOCALAPPDATA 'FlyMigration\shared-config.json'
+                try {
+                    if (Test-Path $sharedCfgPath) {
+                        $sharedCfg = Get-Content $sharedCfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                        $cfgVal = if ($sharedCfg.SharePointAdminUrl) { $sharedCfg.SharePointAdminUrl.Trim().TrimEnd('/') } else { $null }
+                        if ($cfgVal) {
+                            $adminUrl = $cfgVal
+                            Write-Log "SPO admin URL overridden from shared config: $adminUrl" -Level SUCCESS
+                        } else {
+                            Write-Log "SPO admin URL: using default ($adminUrl)"
+                        }
                     }
+                } catch {
+                    Write-Log "Could not read shared config for SPO admin URL ($($_.Exception.Message)) — using default $adminUrl" -Level WARN
                 }
-            } catch {
-                Write-Log "Could not read shared config for SPO admin URL ($($_.Exception.Message)) — using default $adminUrl" -Level WARN
             }
 
             if ($adminUrl) {
@@ -1306,8 +1434,8 @@ catch {
         $ppAns = 'Y'
     }
     if ($ppAns -match '^[Yy]') {
-        if (-not (Get-Module -ListAvailable -Name 'Microsoft.PowerApps.Administration.PowerShell' -ErrorAction SilentlyContinue)) {
-            Write-Log "Microsoft.PowerApps.Administration.PowerShell not installed — skipping." -Level WARN
+        if (-not (Ensure-Module -Name 'Microsoft.PowerApps.Administration.PowerShell' -Optional)) {
+            Write-Log "Skipping upfront Power Platform scan." -Level WARN
         } else {
             Write-Log "Launching Power Platform scan upfront."
             Write-Log "An interactive sign-in window will appear. Sign in with a Power Platform admin account."
@@ -1578,7 +1706,7 @@ try {
                         Import-Module ExchangeOnlineManagement -ErrorAction Stop | Out-Null
                         $exoConnections = Get-ConnectionInformation -ErrorAction SilentlyContinue
                         if (-not $exoConnections -or @($exoConnections).Count -eq 0) {
-                            Connect-ExchangeOnline -ShowBanner:$false -CommandName 'Get-Mailbox','Get-MailboxStatistics' -ErrorAction Stop | Out-Null
+                            Connect-ExchangeOnline -ShowBanner:$false -CommandName 'Get-Mailbox','Get-MailboxStatistics' -DisableWAM -ErrorAction Stop | Out-Null
                         }
                     } catch {
                         return [PSCustomObject]@{ UPN = $upn; Found = $false; Error = "EXO connect failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])"; Mb = $null; Stats = $null; ArchStats = $null }
@@ -1797,7 +1925,7 @@ try {
                     Import-Module ExchangeOnlineManagement -ErrorAction Stop | Out-Null
                     $exoConnections = Get-ConnectionInformation -ErrorAction SilentlyContinue
                     if (-not $exoConnections -or @($exoConnections).Count -eq 0) {
-                        Connect-ExchangeOnline -ShowBanner:$false -CommandName 'Get-Mailbox','Get-MailboxStatistics' -ErrorAction Stop | Out-Null
+                        Connect-ExchangeOnline -ShowBanner:$false -CommandName 'Get-Mailbox','Get-MailboxStatistics' -DisableWAM -ErrorAction Stop | Out-Null
                     }
                 } catch {
                     return [PSCustomObject]@{ UPN = $upn; Found = $false; Error = "EXO connect failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])"; Mb = $null; Stats = $null; ArchStats = $null }
@@ -2558,10 +2686,8 @@ try {
 
         # Mid-run SPO — fallback if the upfront scan didn't succeed (module missing, etc.)
         if (-not $tenantWide) {
-            $spoModule = Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell' -ErrorAction SilentlyContinue
-            if (-not $spoModule) {
-                Write-Log "Microsoft.Online.SharePoint.PowerShell not installed — skipping tenant-wide enumeration." -Level WARN
-                Write-Log "Install: Install-Module Microsoft.Online.SharePoint.PowerShell -Scope CurrentUser" -Level WARN
+            if (-not (Ensure-Module -Name 'Microsoft.Online.SharePoint.PowerShell' -Optional)) {
+                Write-Log "Skipping tenant-wide SPO enumeration." -Level WARN
             } else {
                 # Tenant admin URL: derive from any site URL we already have, else ask the user
                 $adminUrl = $null
@@ -3019,9 +3145,15 @@ try {
     $DeviceResults = [System.Collections.Generic.List[object]]::new()
     if (-not $GraphAvailable) { Write-Log "Graph unavailable — skipping Devices." -Level WARN }
     else {
-        # Retrieve all member users in the connected (source) tenant.
+        # Retrieve all member users, then filter to those whose UPN belongs to this domain.
         $userUri = "https://graph.microsoft.com/v1.0/users?`$filter=userType eq 'Member'&`$select=id,displayName,userPrincipalName,accountEnabled"
-        $domainUsers = @(Invoke-GraphGetAll -Uri $userUri)
+        $allTenantUsers = @(Invoke-GraphGetAll -Uri $userUri)
+        $domainSuffix = "@$($Domain.ToLower())"
+        $domainUsers = @($allTenantUsers | Where-Object {
+            $upn = Get-ObjProp $_ 'userPrincipalName'
+            $upn -and $upn.ToLower().EndsWith($domainSuffix)
+        })
+        Write-Log "Tenant has $($allTenantUsers.Count) member user(s); $($domainUsers.Count) match domain '$Domain'."
 
         if ($domainUsers.Count -eq 0) {
             Write-Log "No users found matching '*$Domain' — no devices to scan." -Level WARN
@@ -3330,10 +3462,8 @@ try {
     }
 
     if (-not $ppDoneUpfront) {
-        $ppModule = Get-Module -ListAvailable -Name 'Microsoft.PowerApps.Administration.PowerShell' -ErrorAction SilentlyContinue
-        if (-not $ppModule) {
-            Write-Log "Microsoft.PowerApps.Administration.PowerShell not installed — skipping." -Level WARN
-            Write-Log "Install: Install-Module Microsoft.PowerApps.Administration.PowerShell -Scope CurrentUser" -Level WARN
+        if (-not (Ensure-Module -Name 'Microsoft.PowerApps.Administration.PowerShell' -Optional)) {
+            Write-Log "Skipping mid-run Power Platform scan." -Level WARN
         } else {
             # The Power Platform module ships its own copy of Microsoft.Identity.Client.dll which
             # conflicts with the version Microsoft.Graph already loaded into this session.
@@ -3722,10 +3852,23 @@ try {
         Export-SafeCsv -Path (Join-Path $DiscoveryFolder '22a_LicenseCounts.csv') -Data @() -Label 'License Counts'
     } else {
         # ─── Build tenant SKU lookup (skuId → skuPartNumber + friendly name) ──
+        # Run via Start-ThreadJob with a hard timeout rather than calling Invoke-GraphGetAll
+        # directly — a single Invoke-MgGraphRequest call can hang indefinitely on a stalled
+        # connection/auth prompt with no built-in timeout of its own, and this section was
+        # observed hanging the entire run with zero further output once that happened.
+        # ThreadJob runs in-process (same AppDomain), so the module's Graph connection context
+        # is still available inside it, unlike a classic Start-Job (separate process).
         Write-Log "Fetching tenant subscribedSkus to resolve SKU IDs..."
         $skuMap = @{}
+        $skuJob = $null
         try {
-            $skus = @(Invoke-GraphGetAll -Uri 'https://graph.microsoft.com/v1.0/subscribedSkus')
+            $skuJob = Start-ThreadJob -ScriptBlock {
+                (Invoke-MgGraphRequest -Uri 'https://graph.microsoft.com/v1.0/subscribedSkus' -Method GET -OutputType PSObject -ErrorAction Stop).value
+            }
+            if (-not (Wait-Job -Job $skuJob -Timeout 30)) {
+                throw "Timed out after 30s waiting for subscribedSkus."
+            }
+            $skus = @(Receive-Job -Job $skuJob -ErrorAction Stop)
             foreach ($s in $skus) {
                 $sid  = [string](Get-ObjProp $s 'skuId')
                 $part = [string](Get-ObjProp $s 'skuPartNumber')
@@ -3739,6 +3882,8 @@ try {
             Write-Log "Resolved $($skuMap.Count) tenant SKU(s) from subscribedSkus."
         } catch {
             Write-Log "subscribedSkus fetch failed (will fall back to per-licenseDetails values): $($_.Exception.Message.Split("`n")[0])" -Level WARN
+        } finally {
+            if ($skuJob) { try { Stop-Job -Job $skuJob -ErrorAction SilentlyContinue; Remove-Job -Job $skuJob -Force -ErrorAction SilentlyContinue } catch {} }
         }
 
         # ─── Determine the user set to query ──────────────────────────────────
@@ -3781,36 +3926,47 @@ try {
             Export-SafeCsv -Path (Join-Path $DiscoveryFolder '22a_LicenseCounts.csv') -Data @() -Label 'License Counts'
         } else {
             # ─── Parallel per-user licenseDetails lookup ──────────────────────
+            # Results are collected into a thread-safe bag rather than the pipeline so that a
+            # -TimeoutSeconds abort (e.g. one runspace's Graph auth context stuck/ambiguous)
+            # still leaves us with whatever partial results the other runspaces finished,
+            # instead of losing everything and hanging the whole Discovery run.
             Write-Log "Querying license details for $($userSet.Count) user(s) in parallel (throttle = 10)..."
             $licStart = Get-Date
+            $licTimeoutSeconds = [Math]::Max(300, $userSet.Count * 2)
+            $resultsBag = [System.Collections.Concurrent.ConcurrentBag[psobject]]::new()
 
-            $perUserResults = $userSet | ForEach-Object -ThrottleLimit 10 -Parallel {
-                $u = $_
-                if ([string]::IsNullOrWhiteSpace($u.UPN)) { return $null }
-                try {
-                    # Graph context is inherited per-runspace in PS7 parallel; if missing, the call below will throw.
-                    $upnEnc = [System.Uri]::EscapeDataString($u.UPN)
-                    $uri    = "https://graph.microsoft.com/v1.0/users/$upnEnc/licenseDetails"
-                    $resp   = Invoke-MgGraphRequest -Uri $uri -Method GET -OutputType PSObject -ErrorAction Stop
-                    $vals   = @()
-                    if ($resp.PSObject.Properties['value']) { $vals = @($resp.value) }
-                    [PSCustomObject]@{
-                        UPN         = $u.UPN
-                        DisplayName = $u.DisplayName
-                        Licenses    = $vals
-                        Error       = $null
-                    }
-                } catch {
-                    [PSCustomObject]@{
-                        UPN         = $u.UPN
-                        DisplayName = $u.DisplayName
-                        Licenses    = @()
-                        Error       = $_.Exception.Message.Split([Environment]::NewLine)[0]
+            try {
+                $userSet | ForEach-Object -ThrottleLimit 10 -TimeoutSeconds $licTimeoutSeconds -Parallel {
+                    $u   = $_
+                    $bag = $using:resultsBag
+                    if ([string]::IsNullOrWhiteSpace($u.UPN)) { return }
+                    try {
+                        $upnEnc = [System.Uri]::EscapeDataString($u.UPN)
+                        $uri    = "https://graph.microsoft.com/v1.0/users/$upnEnc/licenseDetails"
+                        $resp   = Invoke-MgGraphRequest -Uri $uri -Method GET -OutputType PSObject -ErrorAction Stop
+                        $vals   = @()
+                        if ($resp.PSObject.Properties['value']) { $vals = @($resp.value) }
+                        $bag.Add([PSCustomObject]@{
+                            UPN         = $u.UPN
+                            DisplayName = $u.DisplayName
+                            Licenses    = $vals
+                            Error       = $null
+                        })
+                    } catch {
+                        $bag.Add([PSCustomObject]@{
+                            UPN         = $u.UPN
+                            DisplayName = $u.DisplayName
+                            Licenses    = @()
+                            Error       = $_.Exception.Message.Split("`n")[0]
+                        })
                     }
                 }
+            } catch {
+                Write-Log "Parallel license lookup aborted after ${licTimeoutSeconds}s timeout — continuing with $($resultsBag.Count) of $($userSet.Count) result(s) collected so far: $($_.Exception.Message.Split("`n")[0])" -Level WARN
             }
+            $perUserResults = @($resultsBag)
             $licElapsed = (Get-Date) - $licStart
-            Write-Log ("Parallel license lookup completed in {0:mm\:ss}." -f $licElapsed)
+            Write-Log ("Parallel license lookup completed in {0:mm\:ss} — {1} of {2} user(s) returned a result." -f $licElapsed, $perUserResults.Count, $userSet.Count)
 
             # ─── Build per-user rows + aggregate counts ───────────────────────
             $licenseRows  = [System.Collections.Generic.List[object]]::new()

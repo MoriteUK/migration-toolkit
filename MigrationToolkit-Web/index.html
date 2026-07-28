@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Migration Toolkit</title>
-  <link rel="stylesheet" href="src/styles/main.css?v=2">
+  <link rel="stylesheet" href="src/styles/main.css?v=2.9.34">
   <style>
     #avepointConnectionsView .form-card-compact                    { padding: 12px 16px; margin-bottom: 10px; }
     #avepointConnectionsView .form-card-compact .form-card-title   { margin-bottom: 8px; padding-bottom: 6px; }
@@ -72,8 +72,11 @@
             <button type="button" class="sidebar-subitem" data-view="discovery">
               <span class="sidebar-sublabel">M365 Discovery</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-view="discovery-tenant-licenses">
+            <button type="button" class="sidebar-subitem" data-script="Check-TenantLicenses.ps1">
               <span class="sidebar-sublabel">License Report</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-script="Check-DomainMigrationReadiness.ps1">
+              <span class="sidebar-sublabel">Domain Readiness</span>
             </button>
           </div>
 
@@ -294,19 +297,7 @@
         <h2 class="view-title">📊 M365 Discovery</h2>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Discovery Tools</h3>
-          <div class="form-actions" style="gap: 12px; margin-bottom: 20px;">
-            <button type="button" class="btn btn-primary" id="licenseReportBtn">
-              📄 License Report
-            </button>
-            <button type="button" class="btn btn-primary" id="domainReadinessBtn">
-              ✅ Domain Readiness
-            </button>
-          </div>
-        </div>
-
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Tenant Discovery</h3>
+          <h3 class="form-card-title">Domain Selection</h3>
 
           <div class="form-row">
             <div class="form-group">
@@ -1717,7 +1708,7 @@
     </div>
   </div>
 
-  <script src="renderer.js"></script>
+  <script src="renderer.js?v=2.9.34"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">

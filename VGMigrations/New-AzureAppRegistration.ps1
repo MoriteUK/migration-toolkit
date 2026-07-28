@@ -21,7 +21,10 @@ param(
     [string]$AppName = "AvePoint Fly Migration",
 
     [Parameter(Mandatory=$false)]
-    [switch]$Interactive
+    [switch]$Interactive,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipSavePrompt
 )
 
 Write-Host "`n╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -31,43 +34,14 @@ Write-Host "╚═════════════════════�
 Write-Host "`nTenant ID: $TenantId" -ForegroundColor White
 Write-Host "App Name: $AppName" -ForegroundColor White
 
-# Check if Microsoft.Graph module is installed
-$graphModule = Get-Module -Name Microsoft.Graph.Applications -ListAvailable
-if (-not $graphModule) {
-    Write-Host "`n❌ Microsoft.Graph.Applications module not found" -ForegroundColor Red
-    Write-Host "`nInstalling Microsoft Graph PowerShell SDK..." -ForegroundColor Yellow
-    Write-Host "This may take a few minutes..." -ForegroundColor Gray
-
-    try {
-        Install-Module -Name Microsoft.Graph -Scope CurrentUser -Force -AllowClobber
-        Write-Host "✓ Microsoft Graph module installed" -ForegroundColor Green
-    } catch {
-        Write-Error "Failed to install Microsoft Graph module: $_"
-        Write-Host "`nManual installation:" -ForegroundColor Yellow
-        Write-Host "  Install-Module -Name Microsoft.Graph -Scope CurrentUser" -ForegroundColor Gray
-        exit 1
-    }
-}
-
-# Import required modules
-try {
-    Import-Module Microsoft.Graph.Applications -ErrorAction Stop
-    Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
-    Write-Host "✓ Microsoft Graph modules loaded" -ForegroundColor Green
-} catch {
-    Write-Error "Failed to import Microsoft Graph modules: $_"
-    exit 1
-}
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Applications')
+Write-Host "✓ Microsoft Graph modules loaded" -ForegroundColor Green
 
 # Connect to Microsoft Graph
-Write-Host "`n📡 Connecting to Microsoft Graph..." -ForegroundColor Cyan
-Write-Host "`n⚠️  DEVICE CODE AUTHENTICATION" -ForegroundColor Yellow
-Write-Host "A code will appear below. Copy it and visit https://microsoft.com/devicelogin" -ForegroundColor Yellow
-Write-Host "to complete authentication.`n" -ForegroundColor Yellow
+Write-Host "`n📡 Connecting to Microsoft Graph — sign in with the browser window that opens..." -ForegroundColor Cyan
 
 try {
-    # Always use device code authentication - it's more reliable when called from Electron
-    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -UseDeviceAuthentication -ErrorAction Stop
+    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -ErrorAction Stop
     Write-Host "`n✓ Connected to tenant: $TenantId" -ForegroundColor Green
 } catch {
     Write-Error "Failed to connect to Microsoft Graph: $_"
@@ -76,6 +50,16 @@ try {
     Write-Host "- Check that the Tenant ID is correct" -ForegroundColor Gray
     Write-Host "- Make sure you completed the device code authentication" -ForegroundColor Gray
     exit 1
+}
+
+# Resolve tenant display name
+$tenantName = $TenantId
+try {
+    $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
+    if ($org.DisplayName) { $tenantName = $org.DisplayName }
+    Write-Host "Tenant name: $tenantName" -ForegroundColor Gray
+} catch {
+    Write-Host "Could not resolve tenant name — using tenant ID in filename." -ForegroundColor Gray
 }
 
 # Define required permissions
@@ -129,31 +113,71 @@ try {
     Write-Host "✓ Client secret created" -ForegroundColor Green
     Write-Host "  Expires: $($passwordCred.EndDateTime)" -ForegroundColor Gray
 
-    # Display results
-    Write-Host "`n╔══════════════════════════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "║    App Registration Created Successfully                 ║" -ForegroundColor Green
-    Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    # Display results — use Write-Output so the secret is guaranteed on stdout
+    Write-Output ""
+    Write-Output "========================================================"
+    Write-Output "  App Registration Created Successfully"
+    Write-Output "========================================================"
+    Write-Output ""
+    Write-Output "IMPORTANT: Copy these credentials — the secret is only shown once."
+    Write-Output "--------------------------------------------------------"
+    Write-Output ""
+    Write-Output "Tenant ID:"
+    Write-Output "  $TenantId"
+    Write-Output ""
+    Write-Output "Application (Client) ID:"
+    Write-Output "  $($app.AppId)"
+    Write-Output ""
+    Write-Output "Client Secret:"
+    Write-Output "  $($passwordCred.SecretText)"
+    Write-Output ""
+    Write-Output "Secret Expiry:"
+    Write-Output "  $($passwordCred.EndDateTime)"
+    Write-Output ""
+    Write-Output "--------------------------------------------------------"
 
-    Write-Host "`n📋 IMPORTANT: Save these credentials securely!" -ForegroundColor Yellow
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+    # Save credentials to a file and signal Electron to open it
+    $safeTenantName = $tenantName -replace '[\\/:*?"<>|]', '_'
+    $notepadPath = Join-Path $env:USERPROFILE "Desktop\AppReg_${safeTenantName}_$($app.AppId.Substring(0,8)).txt"
+    $notepadContent = @"
+AvePoint Fly App Registration Credentials
+Created: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+Tenant Name: $tenantName
+App Name: $AppName
+========================================
 
-    Write-Host "`nTenant ID:" -ForegroundColor Cyan
-    Write-Host "  $TenantId" -ForegroundColor White
+Tenant ID:
+  $TenantId
 
-    Write-Host "`nApplication (Client) ID:" -ForegroundColor Cyan
-    Write-Host "  $($app.AppId)" -ForegroundColor White
+Application (Client) ID:
+  $($app.AppId)
 
-    Write-Host "`nClient Secret:" -ForegroundColor Cyan
-    Write-Host "  $($passwordCred.SecretText)" -ForegroundColor White
+Client Secret:
+  $($passwordCred.SecretText)
 
-    Write-Host "`nSecret Expiry:" -ForegroundColor Cyan
-    Write-Host "  $($passwordCred.EndDateTime)" -ForegroundColor White
+Secret Expiry:
+  $($passwordCred.EndDateTime)
 
-    Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Yellow
+========================================
+NEXT STEPS:
+1. Grant admin consent in Azure Portal:
+   https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/CallAnAPI/appId/$($app.AppId)
+2. Enter the Client ID and Secret in Migration Toolkit > Settings > Config tab
+3. Test the connection using the 'Test Connection' button
+
+IMPORTANT: Delete this file once you have saved the credentials securely.
+"@
+    Set-Content -Path $notepadPath -Value $notepadContent -Encoding UTF8
+    Write-Output "Credentials file: $notepadPath"
+    Write-Output ""
+    # Signal the Electron app to open the file — do not remove this line
+    Write-Output "##OPEN_FILE:$notepadPath##"
 
     # Save to config
-    Write-Host "`n💾 Do you want to save these credentials to Migration Toolkit config? (Y/N): " -ForegroundColor Cyan -NoNewline
-    $save = Read-Host
+    $save = if ($SkipSavePrompt) { 'N' } else {
+        Write-Host "`n💾 Do you want to save these credentials to Migration Toolkit config? (Y/N): " -ForegroundColor Cyan -NoNewline
+        Read-Host
+    }
 
     if ($save -eq 'Y' -or $save -eq 'y') {
         $configPath = Join-Path $env:APPDATA "FlyMigration\config.json"

@@ -12,10 +12,8 @@ param(
     [string]$ProjectPrefix
 )
 
-# Load library
 . "$PSScriptRoot\lib.ps1"
 
-# Get Fly API configuration
 $flyApiCfgPath = Join-Path $env:APPDATA "FlyMigration\config.json"
 if (-not (Test-Path $flyApiCfgPath)) {
     Write-Error "Fly API configuration not found. Please configure in Settings."
@@ -26,7 +24,6 @@ try {
     $rawCfg = Get-Content $flyApiCfgPath -Raw | ConvertFrom-Json
     $apiUrl = $rawCfg.Url
     $clientId = $rawCfg.ClientId
-
     if ($rawCfg.EncSecret) {
         $secureSecret = $rawCfg.EncSecret | ConvertTo-SecureString
         $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
@@ -41,7 +38,6 @@ try {
     exit 1
 }
 
-# Import Fly.Client module
 try {
     if (-not (Get-Module -Name Fly.Client -ListAvailable)) {
         Write-Error "Fly.Client module not found. Please install it first."
@@ -53,7 +49,6 @@ try {
     exit 1
 }
 
-# Connect to Fly API
 try {
     Connect-Fly -Url $apiUrl -ClientId $clientId -ClientSecret $clientSecret -ErrorAction Stop
 } catch {
@@ -61,7 +56,21 @@ try {
     exit 1
 }
 
-# Initialize result object
+# Get bearer token directly for raw REST calls (Get-FlyConfiguration is private to the module)
+$restBaseUrl = $apiUrl.TrimEnd('/')
+$restHeaders = $null
+$identityHost = if ($apiUrl -match '\-gov\.') { 'identity-gov.avepointonlineservices.com' } else { 'identity.avepointonlineservices.com' }
+try {
+    $tokenBody = "grant_type=client_credentials&scope=fly.graph.readwrite.all" +
+                 "&client_id=$([uri]::EscapeDataString($clientId))" +
+                 "&client_secret=$([uri]::EscapeDataString($clientSecret))"
+    $tokenResp   = Invoke-RestMethod -Uri "https://$identityHost/connect/token" `
+        -Method POST -ContentType 'application/x-www-form-urlencoded' -Body $tokenBody -ErrorAction Stop
+    $restHeaders = @{ Authorization = "Bearer $($tokenResp.access_token)"; Accept = 'application/json' }
+} catch {
+    Write-Warning "Could not obtain access token for direct REST calls: $_"
+}
+
 $result = @{
     TotalItems = 0
     Completed = 0
@@ -76,135 +85,112 @@ $result = @{
     CompletedItems = @()
 }
 
-# Workload definitions
-$workloads = @{
-    SharePoint = 'SharePoint'
-    Exchange = 'Exchange'
-    OneDrive = 'OneDrive'
-    Teams = 'Teams'
-    'Teams Chat' = 'Teams Chat'
+foreach ($wlKey in $script:FlyWorkloadDefs.Keys) {
+    $result.Workloads[$wlKey] = @{
+        Total = 0; Completed = 0; InProgress = 0; NotStarted = 0; Failed = 0; Warnings = 0
+        ProjectFound = $false
+    }
 }
 
-# Query each workload
-foreach ($wlKey in $workloads.Keys) {
-    $wlName = $workloads[$wlKey]
-    $projectName = "$ProjectPrefix - $wlName"
+foreach ($wlKey in $script:FlyWorkloadDefs.Keys) {
+    $projectName = "$ProjectPrefix - $wlKey"
 
     try {
-        # Check if project exists
         $project = Get-FlyMigrationProject -Name $projectName -ErrorAction SilentlyContinue
 
-        if (-not $project) {
+        if (-not $project -or -not $project.Id) {
             Write-Verbose "Project not found: $projectName"
             continue
         }
 
-        # Get status data
-        $tempFile = [System.IO.Path]::GetTempFileName()
-        $statusCmd = $script:FlyWorkloadDefs[$wlKey].Status
+        # Use the counts already on the ProjectSummaryModel — no need to page through all mappings
+        $wlTotal     = [int]($project.mappingTotalCount              ?? 0)
+        $wlFailed    = [int]($project.mappingFailedCount             ?? 0)
+        $wlWarnings  = [int]($project.mappingCompletedWithExceptionCount ?? 0)
+        $wlCompleted = [int](($project.mappingCompletedCount         ?? 0) + $wlWarnings)
+        $wlNotStart  = [int]($project.mappingNotMigratedCount        ?? 0)
+        $wlInProg    = [int](($project.mappingWaitingCount           ?? 0) +
+                             ($project.mappingInProgressCount        ?? 0) +
+                             ($project.mappingStoppedCount           ?? 0) +
+                             ($project.mappingScheduledCount         ?? 0))
 
-        if ($statusCmd) {
-            & $statusCmd -Project $projectName -OutFile $tempFile -ErrorAction SilentlyContinue | Out-Null
+        $result.TotalItems += $wlTotal
+        $result.Completed  += $wlCompleted
+        $result.InProgress += $wlInProg
+        $result.NotStarted += $wlNotStart
+        $result.Failed     += $wlFailed
+        $result.Warnings   += $wlWarnings
 
-            if (Test-Path $tempFile) {
-                $rows = Import-Csv $tempFile -ErrorAction SilentlyContinue
-                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+        $result.Workloads[$wlKey] = @{
+            Total = $wlTotal; Completed = $wlCompleted; InProgress = $wlInProg
+            NotStarted = $wlNotStart; Failed = $wlFailed; Warnings = $wlWarnings
+            ProjectFound = $true; ProjectId = "$($project.Id)"
+        }
 
-                if ($rows) {
-                    $wlTotal = $rows.Count
-                    $wlCompleted = 0
-                    $wlInProgress = 0
-                    $wlNotStarted = 0
-                    $wlFailed = 0
-                    $wlWarnings = 0
-
-                    # Find status column
-                    $statusCol = $null
-                    foreach ($colName in @('Stage status', 'StageStatus', 'Stage Status', 'Status', 'MigrationStatus', 'Migration Status', 'State')) {
-                        if ($rows[0].PSObject.Properties.Name -contains $colName) {
-                            $statusCol = $colName
-                            break
-                        }
+        # Fetch all mappings for this project and sort client-side.
+        # Server-side stageStatuses filtering is unreliable (parameter encoding varies), so we
+        # fetch a broad page and categorise in PowerShell.
+        if ($wlFailed -gt 0 -or $wlWarnings -gt 0 -or ($wlInProg -gt 0 -and $result.InProgressItems.Count -lt 10)) {
+            try {
+                if (-not $restHeaders) { throw 'No access token available for REST calls' }
+                $uri = "$restBaseUrl/projects/$($project.Id)/mappings/summaries?top=500"
+                $page = Invoke-RestMethod -Uri $uri -Method GET -Headers $restHeaders -ErrorAction Stop
+                foreach ($mapping in ($page.data.data ?? @())) {
+                    # Handle stageStatus as integer OR string enum (API may return either)
+                    $stageVal = $mapping.stageStatus
+                    $statusCode = switch -Regex ("$stageVal") {
+                        '^6$|^Failed$'      { 6 }
+                        '^5$|^Exceptioned$' { 5 }
+                        '^3$|^InProgress$'  { 3 }
+                        '^1$|^Waiting$'     { 1 }
+                        '^2$|^Queued$'      { 2 }
+                        '^7$|^Stopped$'     { 7 }
+                        '^4$|^Successful$'  { 4 }
+                        default             { 0 }
                     }
+                    $sourceUser  = ($mapping.sourceName ?? $mapping.sourceIdentity ?? $mapping.identity) ?? 'Unknown'
+                    $destUser    = ($mapping.destinationName ?? $mapping.destinationIdentity) ?? ''
+                    $lastRunTime = if ($mapping.lastMigrationStartTime -gt 0) {
+                        try { Convert-TicksToDateTime -Ticks $mapping.lastMigrationStartTime -ShowHourFormat $true } catch { '' }
+                    } else { '' }
 
-                    # Count statuses
-                    foreach ($row in $rows) {
-                        $status = if ($statusCol) { ([string]$row.$statusCol).Trim() } else { '' }
-                        $sourceUser = if ($row.PSObject.Properties['SourceUserPrincipalName']) { $row.SourceUserPrincipalName } `
-                                      elseif ($row.PSObject.Properties['Source']) { $row.Source } else { 'Unknown' }
-
-                        switch -Regex ($status) {
-                            '^(Finished|Complete|Completed|Successful|Success)$' {
-                                $wlCompleted++
-                                # Add to recent completed (limit to last 5)
-                                if ($result.CompletedItems.Count -lt 5) {
-                                    $result.CompletedItems += @{
-                                        Name = $sourceUser
-                                        Workload = $wlName
-                                        Status = $status
-                                    }
-                                }
-                            }
-                            '^(Exceptions|Exceptioned|CompletedWithException|FinishedWithException)$' {
-                                $wlWarnings++
-                                $wlCompleted++
-                                $result.WarningItems += @{
-                                    Name = $sourceUser
-                                    Workload = $wlName
-                                    Warning = "Completed with exceptions"
-                                    Status = $status
-                                }
-                            }
-                            '^(Failed)$' {
-                                $wlFailed++
-                                $errorMsg = if ($row.PSObject.Properties['ErrorMessage']) { $row.ErrorMessage } `
-                                           elseif ($row.PSObject.Properties['Error']) { $row.Error } else { 'Migration failed' }
-                                $result.FailedItems += @{
-                                    Name = $sourceUser
-                                    Workload = $wlName
-                                    Error = $errorMsg
-                                }
-                            }
-                            '^(In progress|In queue|In queue with priority|Scheduled|InProgress|Waiting|Queued)$' {
-                                $wlInProgress++
-                                if ($result.InProgressItems.Count -lt 10) {
-                                    $result.InProgressItems += @{
-                                        Name = $sourceUser
-                                        Workload = $wlName
-                                        Status = $status
-                                    }
-                                }
-                            }
-                            default {
-                                $wlNotStarted++
+                    switch ($statusCode) {
+                        6 {  # Failed
+                            $errCount = [int]($mapping.errorItemCount ?? 0)
+                            $result.FailedItems += @{
+                                Name = $sourceUser; Destination = $destUser
+                                Workload = $wlKey; Project = $projectName
+                                Status = 'Failed'; ErrorCount = $errCount; LastRunTime = $lastRunTime
+                                ProjectId = "$($project.Id)"; MappingId = "$($mapping.id)"
                             }
                         }
-                    }
-
-                    # Update totals
-                    $result.TotalItems += $wlTotal
-                    $result.Completed += $wlCompleted
-                    $result.InProgress += $wlInProgress
-                    $result.NotStarted += $wlNotStarted
-                    $result.Failed += $wlFailed
-                    $result.Warnings += $wlWarnings
-
-                    # Store workload breakdown
-                    $result.Workloads[$wlName] = @{
-                        Total = $wlTotal
-                        Completed = $wlCompleted
-                        InProgress = $wlInProgress
-                        NotStarted = $wlNotStarted
-                        Failed = $wlFailed
-                        Warnings = $wlWarnings
+                        5 {  # Exceptioned / completed with warnings
+                            $errCount = [int]($mapping.errorItemCount ?? 0)
+                            $result.WarningItems += @{
+                                Name = $sourceUser; Destination = $destUser
+                                Workload = $wlKey; Project = $projectName
+                                Warning = 'Completed with exceptions'; Status = 'Exceptions'
+                                ErrorCount = $errCount; LastRunTime = $lastRunTime
+                                ProjectId = "$($project.Id)"; MappingId = "$($mapping.id)"
+                            }
+                        }
+                        { $_ -in @(1, 2, 3, 7) -and $result.InProgressItems.Count -lt 10 } {
+                            $status = switch ($_) { 1 { 'In queue' } 2 { 'In queue' } 3 { 'In progress' } 7 { 'Stopped' } }
+                            $result.InProgressItems += @{
+                                Name = $sourceUser; Destination = $destUser
+                                Workload = $wlKey; Project = $projectName; Status = $status; LastRunTime = $lastRunTime
+                            }
+                        }
                     }
                 }
+            } catch {
+                Write-Warning "Error fetching mappings for $wlKey : $_"
             }
         }
+
     } catch {
-        Write-Verbose "Error querying $wlName : $_"
+        Write-Warning "Error querying $wlKey : $_"
     }
 }
 
-# Output as JSON for the web app to consume
 $result | ConvertTo-Json -Depth 10 -Compress

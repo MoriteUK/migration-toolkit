@@ -377,8 +377,8 @@ function Show-SettingsDialog {
             $dir = Split-Path $flyApiCfgPath
             if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
             $encSec = if ($s) { $s | ConvertTo-SecureString -AsPlainText -Force | ConvertFrom-SecureString } else { $null }
-            @{ Url = $u; ClientId = $c; EncSecret = $encSec } |
-                ConvertTo-Json | Set-Content $flyApiCfgPath -Encoding UTF8
+            $json = @{ Url = $u; ClientId = $c; EncSecret = $encSec } | ConvertTo-Json
+            [System.IO.File]::WriteAllText($flyApiCfgPath, $json, (New-Object System.Text.UTF8Encoding $false))
 
             # Shared config
             $customers = @($pfxTable.Rows | ForEach-Object {

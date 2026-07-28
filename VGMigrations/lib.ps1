@@ -347,8 +347,222 @@ $script:FlyWorkloadDefs = [ordered]@{
     Exchange     = @{ Import = 'Import-FlyExchangeMappings';    Start = 'Start-FlyExchangeMigration';    PreScan = 'Start-FlyExchangePreScan';    Verify = 'Start-FlyExchangeVerification';    Status = 'Export-FlyExchangeMappingStatus';    Report = 'Export-FlyExchangeMigrationReport';    PolicyType = 'Exchange'   }
     OneDrive     = @{ Import = 'Import-FlyOneDriveMappings';    Start = 'Start-FlyOneDriveMigration';    PreScan = 'Start-FlyOneDrivePreScan';    Verify = 'Start-FlyOneDriveVerification';    Status = 'Export-FlyOneDriveMappingStatus';    Report = 'Export-FlyOneDriveMigrationReport';    PolicyType = 'OneDrive'   }
     Teams        = @{ Import = 'Import-FlyTeamsMappings';       Start = 'Start-FlyTeamsMigration';       PreScan = 'Start-FlyTeamsPreScan';       Verify = 'Start-FlyTeamsVerification';       Status = 'Export-FlyTeamsMappingStatus';       Report = 'Export-FlyTeamsMigrationReport';       PolicyType = 'Teams'      }
-    'Teams Chat' = @{ Import = 'Import-FlyTeamChatMappings';    Start = 'Start-FlyTeamChatMigration';    PreScan = '';                            Verify = 'Start-FlyTeamChatVerification';    Status = 'Export-FlyTeamChatMappingStatus';    Report = 'Export-FlyTeamChatMigrationReport';    PolicyType = 'TeamChat'   }
+    TeamChat     = @{ Import = 'Import-FlyTeamChatMappings';    Start = 'Start-FlyTeamChatMigration';    PreScan = '';                            Verify = 'Start-FlyTeamChatVerification';    Status = 'Export-FlyTeamChatMappingStatus';    Report = 'Export-FlyTeamChatMigrationReport';    PolicyType = 'TeamChat'   }
     Groups       = @{ Import = 'Import-FlyM365GroupMappings';   Start = 'Start-FlyM365GroupMigration';   PreScan = 'Start-FlyM365GroupPreScan';   Verify = 'Start-FlyM365GroupVerification';   Status = 'Export-FlyM365GroupMappingStatus';   Report = 'Export-FlyM365GroupMigrationReport';   PolicyType = 'M365Group'  }
+}
+
+# ── FLY CONNECTION LOOKUP & AUTO-CREATE ───────────────────────────────────────
+# Workload codes → AOS portal labels used by fly-connector.js
+$script:WorkloadToAosLabel = @{
+    Exchange   = 'Exchange Online'
+    SharePoint = 'SharePoint Online'
+    OneDrive   = 'OneDrive'
+    Teams      = 'Microsoft Teams'
+    TeamChat   = 'Microsoft Teams Chat'
+    Groups     = 'Microsoft 365 Groups'
+}
+
+# Creates Fly destination connections for all workloads by driving the AOS portal
+# via fly-connector.js (Playwright). Requires Node.js + a saved AOS session.
+function Invoke-FlyConnectorCreate {
+    param(
+        [string]$TenantName,    # customer prefix, e.g. "Fara"
+        [string]$TenantSearch   # domain prefix, e.g. "mbufara"
+    )
+
+    $connectorJs = Join-Path $PSScriptRoot 'fly-connector.js'
+    $authFile    = Join-Path $PSScriptRoot 'auth\storageState.json'
+
+    if (-not (Test-Path $connectorJs)) {
+        throw "fly-connector.js not found at '$PSScriptRoot'. Cannot auto-create connections."
+    }
+    if (-not (Test-Path $authFile)) {
+        throw ("No AOS browser session found.`n" +
+               "In the toolkit, go to Settings → Config and click 'Sign in to AOS', " +
+               "complete the Microsoft SSO in the browser, then try again.")
+    }
+
+    $nodeExe = (Get-Command node.exe -ErrorAction SilentlyContinue)?.Source
+    if (-not $nodeExe) {
+        throw "Node.js not found on PATH. Install Node.js 18+ from nodejs.org to enable automatic connection creation."
+    }
+
+    Write-Host "`nCreating destination connections for '$TenantName' (all workloads)..." -ForegroundColor Cyan
+
+    # Build one task per workload
+    $tasks = $script:WorkloadToAosLabel.GetEnumerator() | ForEach-Object {
+        @{
+            id              = [guid]::NewGuid().ToString('N').Substring(0, 8)
+            tenantName      = $TenantName
+            tenantSearch    = $TenantSearch
+            workloadLabel  = $_.Value
+            connectionName = "$TenantName - $($_.Value)"
+        } | ConvertTo-Json -Compress
+    }
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName               = $nodeExe
+    $psi.WorkingDirectory       = $PSScriptRoot
+    $psi.RedirectStandardInput  = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $psi.UseShellExecute        = $false
+    $psi.CreateNoWindow         = $true
+    $psi.ArgumentList.Add($connectorJs)
+    $psi.ArgumentList.Add('--mode=create')
+    $psi.ArgumentList.Add('--headless')
+    $psi.ArgumentList.Add("--display-name=$TenantName")
+
+    $proc = New-Object System.Diagnostics.Process
+    $proc.StartInfo = $psi
+    $null = $proc.Start()
+
+    foreach ($line in $tasks) { $proc.StandardInput.WriteLine($line) }
+    $proc.StandardInput.Close()
+
+    $created = 0; $failed = 0; $skipped = 0
+    while (-not $proc.StandardOutput.EndOfStream) {
+        $raw = $proc.StandardOutput.ReadLine()
+        if (-not $raw) { continue }
+        try {
+            $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+            if ($obj.event -and $obj.message) {
+                Write-Host "  [AOS] $($obj.message)" -ForegroundColor Gray
+            } elseif ($obj.id -and $obj.status) {
+                $c = switch ($obj.status) { 'CREATED'{'Green'} 'SKIPPED'{'Yellow'} 'FAILED'{'Red'} default{'Gray'} }
+                Write-Host "  $($obj.status)  $($obj.message)" -ForegroundColor $c
+                switch ($obj.status) { 'CREATED'{$created++} 'FAILED'{$failed++} 'SKIPPED'{$skipped++} }
+            }
+        } catch { Write-Host "  $raw" -ForegroundColor Gray }
+    }
+    $proc.WaitForExit(120000)
+
+    if ($failed -gt 0) {
+        Write-Warning "$failed connection(s) failed to create. Check the connector logs for details."
+    } else {
+        Write-Host "Connections ready: $created created, $skipped already existed" -ForegroundColor Green
+    }
+    return ($failed -eq 0)
+}
+
+# Finds the destination connection for a given project+workload.
+# Returns the name of the migration policy to use for a given workload.
+# Prefers the default policy; falls back to the first available policy.
+# migrationModuleType integers match connectionType: Exchange=0, Teams=1, SharePoint=2, OneDrive=3, Groups=4, TeamChat=5
+# Requires: Fly.Client module loaded and Connect-Fly already called.
+function Find-FlyPolicy {
+    param(
+        [string]$Workload,  # e.g. "Exchange"
+        [string]$ApiUrl
+    )
+
+    $typeMap = @{ Exchange=0; Teams=1; SharePoint=2; OneDrive=3; Groups=4; TeamChat=5 }
+    $flyModule = Get-Module Fly.Client
+    if (-not $flyModule) { throw "Fly.Client module is not loaded" }
+    $cfg   = & $flyModule { $Script:Configuration }
+    $token = $cfg['AccessToken']
+    $base  = ($cfg['BaseUrl'] ?? $ApiUrl).TrimEnd('/')
+    if (-not $token) { throw "No bearer token — Connect-Fly may have failed" }
+
+    $moduleType = $typeMap[$Workload]
+    Write-Host "Looking up $Workload policies..." -ForegroundColor Cyan
+
+    $response = Invoke-RestMethod `
+        -Uri     "$base/policies/summaries?migrationModuleType=$moduleType&top=100" `
+        -Headers @{ Authorization="Bearer $token"; Accept="application/json" } `
+        -Method  Get -ErrorAction Stop
+
+    # Response may be double-nested { data: { data: [...] } } or single { data: [...] }
+    $policies = if ($response.data.data) { $response.data.data }
+                elseif ($response.data -is [array]) { $response.data }
+                else { $null }
+
+    if (-not $policies -or $policies.Count -eq 0) {
+        throw "No $Workload policies found in Fly. Create at least one policy in the Fly portal before running migrations."
+    }
+
+    # Prefer the marked default; otherwise take the first one
+    $policy = $policies | Where-Object { $_.isDefault -eq $true } | Select-Object -First 1
+    if (-not $policy) { $policy = $policies | Select-Object -First 1 }
+
+    Write-Host "Using policy: $($policy.name)" -ForegroundColor Green
+    return $policy.name
+}
+
+# If no connections exist for the customer and CustomerDomain is provided,
+# auto-creates them via fly-connector.js first.
+# Requires: Fly.Client module loaded and Connect-Fly already called.
+function Find-FlyDestinationConnection {
+    param(
+        [string]$ProjectName,         # e.g. "Fara - Exchange"
+        [string]$Workload,            # e.g. "Exchange"
+        [string]$ApiUrl,              # e.g. "https://graph.avepointonlineservices.com/fly"
+        [string]$CustomerDomain = ""  # tenant search code, e.g. "mbufara" — triggers auto-create if set
+    )
+
+    # connectionType integers used by the Fly API
+    $typeMap = @{ Exchange=0; Teams=1; SharePoint=2; OneDrive=3; Groups=4; TeamChat=5 }
+
+    $flyModule = Get-Module Fly.Client
+    if (-not $flyModule) { throw "Fly.Client module is not loaded" }
+    $cfg   = & $flyModule { $Script:Configuration }
+    $token = $cfg['AccessToken']
+    $base  = ($cfg['BaseUrl'] ?? $ApiUrl).TrimEnd('/')
+    if (-not $token) { throw "No bearer token — Connect-Fly may have failed" }
+
+    $prefix      = ($ProjectName -split ' - ')[0]
+    $prefixLower = $prefix.ToLower()
+    $expectedType = $typeMap[$Workload]
+
+    $headers = @{ Authorization="Bearer $token"; Accept="application/json" }
+
+    function Get-ConnList {
+        $r = Invoke-RestMethod -Uri "$base/connections/summaries?top=500" -Headers $headers -Method Get -ErrorAction Stop
+        return $r.data.data
+    }
+
+    Write-Host "Looking up destination connection for '$prefix'..." -ForegroundColor Cyan
+
+    $connList = Get-ConnList
+
+    # Check if any connections exist for this customer prefix
+    $existing = $connList | Where-Object { $_.name -and $_.name.ToLower() -like "$prefixLower*" }
+
+    if (-not $existing -and $CustomerDomain) {
+        Write-Host "No connections found for '$prefix' — creating via AOS portal..." -ForegroundColor Yellow
+        $ok = Invoke-FlyConnectorCreate -TenantName $prefix -TenantSearch $CustomerDomain
+        if ($ok) {
+            Write-Host "Connections created — re-querying..." -ForegroundColor Cyan
+            Start-Sleep -Seconds 3   # brief pause for Fly to index new connections
+            $connList = Get-ConnList
+        }
+    }
+
+    # Best match: name starts with prefix AND correct workload type
+    $conn = $connList | Where-Object {
+        $_.name -and $_.name.ToLower() -like "$prefixLower*" -and $_.connectionType -eq $expectedType
+    } | Select-Object -First 1
+
+    # Fallback: any connection whose name starts with the customer prefix
+    if (-not $conn) {
+        $conn = $connList | Where-Object {
+            $_.name -and $_.name.ToLower() -like "$prefixLower*"
+        } | Select-Object -First 1
+    }
+
+    if (-not $conn) {
+        $available = ($connList | Where-Object { $_.name } |
+                      Select-Object -ExpandProperty name | Sort-Object -Unique) -join "`n  "
+        $hint = if ($CustomerDomain) {
+            "The connector ran but the connection may not have been created successfully. Check the connector logs."
+        } else {
+            "Add the customer domain in Settings → Customer, then retry."
+        }
+        throw "No destination connection found for '$prefix' ($Workload).`n$hint`n`nAvailable connections:`n  $available"
+    }
+
+    Write-Host "Using connection: $($conn.name)" -ForegroundColor Green
+    return $conn.name
 }
 
 # ── LOG MANAGEMENT ────────────────────────────────────────────────────────────

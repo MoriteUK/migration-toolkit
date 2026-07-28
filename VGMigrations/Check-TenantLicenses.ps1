@@ -362,16 +362,29 @@ try {
     Write-Log "ERROR reading Excel file: $_" "ERROR"
     throw
 } finally {
+    # Aggressive cleanup of Excel COM objects
     if ($workbook) {
-        $workbook.Close($false)
-        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($workbook) | Out-Null
+        try {
+            $workbook.Close($false)
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($workbook) | Out-Null
+        } catch { Write-Log "Error closing workbook: $_" "WARN" }
     }
     if ($excel) {
-        $excel.Quit()
-        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+        try {
+            $excel.Workbooks.Close()
+            $excel.Quit()
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+        } catch { Write-Log "Error quitting Excel: $_" "WARN" }
     }
+
+    # Force garbage collection
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
+    [GC]::Collect()
+
+    # Kill any lingering Excel processes as last resort
+    Start-Sleep -Milliseconds 500
+    Get-Process excel -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq "" } | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
 Write-Log "Found $($tenants.Count) tenants to process"

@@ -3,139 +3,89 @@
 .SYNOPSIS
     Creates a new AvePoint Fly migration project
 .DESCRIPTION
-    Creates a migration project for a specific workload using the Fly.Client module
+    Looks up the destination connection in Fly by matching the customer prefix
+    against existing connection names, then creates the project.
 .PARAMETER ProjectName
-    Name of the project (e.g., "Contoso - SharePoint")
+    Project name in the format "{CustomerPrefix} - {Workload}" (e.g., "Fara - Exchange")
 .PARAMETER Workload
     Workload type: SharePoint, Exchange, OneDrive, Teams, TeamChat, Groups
-.PARAMETER Description
-    Optional project description
-.EXAMPLE
-    .\New-FlyProject.ps1 -ProjectName "Contoso - SharePoint" -Workload SharePoint
+.PARAMETER SourceConnection
+    Source connection name (e.g., "OurVolaris - EXO")
+.PARAMETER CustomerDomain
+    Customer domain prefix (not used for matching; kept for compatibility)
+.PARAMETER Policy
+    Policy name to assign to the project
 #>
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$ProjectName,
-
-    [Parameter(Mandatory=$true)]
-    [ValidateSet('SharePoint', 'Exchange', 'OneDrive', 'Teams', 'TeamChat', 'Groups')]
-    [string]$Workload,
-
-    [Parameter(Mandatory=$false)]
-    [string]$Description = ""
+    [Parameter(Mandatory=$true)]  [string]$ProjectName,
+    [Parameter(Mandatory=$true)]  [ValidateSet('SharePoint','Exchange','OneDrive','Teams','TeamChat','Groups')] [string]$Workload,
+    [Parameter(Mandatory=$true)]  [string]$SourceConnection,
+    [Parameter(Mandatory=$false)] [string]$CustomerDomain = "",
+    [Parameter(Mandatory=$false)] [string]$Description = ""
 )
 
 . "$PSScriptRoot\lib.ps1"
 
-Write-Host "`nCreating Fly Migration Project..." -ForegroundColor Cyan
-Write-Host "Project Name: $ProjectName" -ForegroundColor White
-Write-Host "Workload: $Workload" -ForegroundColor White
+Write-Host "`n=== $ProjectName ===" -ForegroundColor Cyan
 
-# Get Fly API configuration
+# Load Fly API config
 $flyApiCfgPath = Join-Path $env:APPDATA "FlyMigration\config.json"
-if (-not (Test-Path $flyApiCfgPath)) {
-    Write-Error "Fly API configuration not found. Please configure in Settings first."
-    exit 1
-}
+if (-not (Test-Path $flyApiCfgPath)) { Write-Error "Fly API config not found. Configure in Settings first."; exit 1 }
 
 try {
     $rawCfg = Get-Content $flyApiCfgPath -Raw | ConvertFrom-Json
-    $apiUrl = $rawCfg.Url
-    $clientId = $rawCfg.ClientId
-
+    $apiUrl = $rawCfg.Url; $clientId = $rawCfg.ClientId
     if ($rawCfg.EncSecret) {
-        $secureSecret = $rawCfg.EncSecret | ConvertTo-SecureString
-        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
+        $ss = $rawCfg.EncSecret | ConvertTo-SecureString
+        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
         $clientSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
         [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-    } else {
-        Write-Error "Client secret not found in configuration"
-        exit 1
-    }
-} catch {
-    Write-Error "Failed to load Fly API configuration: $_"
-    exit 1
-}
+    } else { Write-Error "Client secret not found in config."; exit 1 }
+} catch { Write-Error "Failed to load config: $_"; exit 1 }
 
-# Import Fly.Client module
+# Import module
 try {
-    if (-not (Get-Module -Name Fly.Client -ListAvailable)) {
-        Write-Error "Fly.Client module not found. Please install it first: Install-Module -Name Fly.Client"
-        exit 1
-    }
+    if (-not (Get-Module -Name Fly.Client -ListAvailable)) { Write-Error "Fly.Client module not found."; exit 1 }
     Import-Module Fly.Client -ErrorAction Stop
-} catch {
-    Write-Error "Failed to import Fly.Client module: $_"
-    exit 1
-}
+} catch { Write-Error "Failed to import Fly.Client: $_"; exit 1 }
 
-# Connect to Fly API
+# Connect
 try {
-    Write-Host "`nConnecting to Fly API..." -ForegroundColor Cyan
+    Write-Host "Connecting to Fly API..." -ForegroundColor Cyan
     Connect-Fly -Url $apiUrl -ClientId $clientId -ClientSecret $clientSecret -ErrorAction Stop
-    Write-Host "Connected successfully" -ForegroundColor Green
-} catch {
-    Write-Error "Failed to connect to Fly API: $_"
-    exit 1
-}
+    Write-Host "Connected" -ForegroundColor Green
+} catch { Write-Error "Failed to connect: $_"; exit 1 }
 
-# Check if project already exists
 try {
-    $existingProject = Get-FlyMigrationProject -Name $ProjectName -ErrorAction SilentlyContinue
-    if ($existingProject) {
-        Write-Warning "Project '$ProjectName' already exists!"
-        Write-Host "Project ID: $($existingProject.Id)" -ForegroundColor Yellow
+    # Look up destination connection (auto-creates via fly-connector.js if missing)
+    $DestinationConnection = Find-FlyDestinationConnection `
+        -ProjectName    $ProjectName `
+        -Workload       $Workload `
+        -ApiUrl         $apiUrl `
+        -CustomerDomain $CustomerDomain
+
+    # Find default policy for this workload
+    $Policy = Find-FlyPolicy -Workload $Workload -ApiUrl $apiUrl
+
+    # Skip if project already exists
+    $existing = Get-FlyMigrationProject -Name $ProjectName -ErrorAction SilentlyContinue
+    if ($existing -and $existing.Id) {
+        Write-Host "Project '$ProjectName' already exists (ID: $($existing.Id)) — skipping." -ForegroundColor Yellow
         exit 0
     }
-} catch {
-    # Project doesn't exist, which is what we want
-}
 
-# Create the project
-try {
-    Write-Host "`nCreating project..." -ForegroundColor Cyan
-
-    $projectParams = @{
-        Name = $ProjectName
+    # Create project
+    Write-Host "Creating project '$ProjectName'..." -ForegroundColor Cyan
+    $params = @{
+        Name                  = $ProjectName
+        SourceConnection      = $SourceConnection
+        DestinationConnection = $DestinationConnection
+        Policy                = $Policy
     }
+    if ($Description) { $params.Description = $Description }
+    $newProject = New-FlyMigrationProject @params -ErrorAction Stop
 
-    if ($Description) {
-        $projectParams.Description = $Description
-    }
+    Write-Host "✓ Project created (ID: $($newProject.Id))" -ForegroundColor Green
 
-    $newProject = New-FlyMigrationProject @projectParams -ErrorAction Stop
-
-    Write-Host "`n✓ Project created successfully!" -ForegroundColor Green
-    Write-Host "Project ID: $($newProject.Id)" -ForegroundColor White
-    Write-Host "Name: $($newProject.Name)" -ForegroundColor White
-
-    if ($newProject.Description) {
-        Write-Host "Description: $($newProject.Description)" -ForegroundColor White
-    }
-
-    # Create default policy for the workload
-    Write-Host "`nCreating default policy for $Workload..." -ForegroundColor Cyan
-
-    $policyCmd = $script:FlyWorkloadDefs[$Workload].PolicyCmd
-    if ($policyCmd) {
-        try {
-            $policyName = "$ProjectName - Default Policy"
-            & "New-Fly$($Workload)Policy" -Name $policyName -Project $ProjectName -ErrorAction Stop
-            Write-Host "✓ Policy created: $policyName" -ForegroundColor Green
-        } catch {
-            Write-Warning "Failed to create policy: $_"
-        }
-    }
-
-    Write-Host "`n=== Next Steps ===" -ForegroundColor Cyan
-    Write-Host "1. Import mappings using: Import-Fly$($Workload)Mappings"
-    Write-Host "2. Configure policy settings in AvePoint Fly portal"
-    Write-Host "3. Start pre-scan: Start-Fly$($Workload)PreScan"
-    Write-Host "4. Start migration: Start-Fly$($Workload)Migration"
-
-} catch {
-    Write-Error "Failed to create project: $_"
-    exit 1
-} finally {
-    Disconnect-Fly -ErrorAction SilentlyContinue
-}
+} catch { Write-Error "Failed: $_"; exit 1 }
+finally { Disconnect-Fly -ErrorAction SilentlyContinue }

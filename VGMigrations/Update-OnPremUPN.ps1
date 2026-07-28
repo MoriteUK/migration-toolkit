@@ -609,14 +609,11 @@ function Show-UpdateOnPremUPNUI {
                     # Update proxyAddresses
                     if ($adUser.proxyAddresses) {
                         $newProxyAddresses = @()
-                        $primaryUpdated = $false
 
                         foreach ($proxy in $adUser.proxyAddresses) {
                             if ($proxy -like "SMTP:*$src") {
-                                # Update primary SMTP
                                 $newProxy = $proxy -replace [regex]::Escape($src) + '$', $tgt
                                 $newProxyAddresses += $newProxy
-                                $primaryUpdated = $true
                             } elseif ($proxy -like "smtp:*$src") {
                                 # Update alias
                                 $newProxy = $proxy -replace [regex]::Escape($src) + '$', $tgt
@@ -716,6 +713,102 @@ function Show-UpdateOnPremUPNUI {
 }
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ENTRY POINT
+# ENTRY POINT — headless if all params provided, WinForms otherwise
 # ═════════════════════════════════════════════════════════════════════════════
-Show-UpdateOnPremUPNUI
+if ($CSVFolder -and $SourceDomain -and $TargetDomain) {
+    $src = '@' + $SourceDomain.TrimStart('@')
+    $tgt = '@' + $TargetDomain.TrimStart('@')
+    Write-Host "=== Update-OnPremUPN  Source: $src  →  Target: $tgt$(if ($WhatIf) { '  [WhatIf]' }) ==="
+
+    if (-not (Test-Path $CSVFolder)) {
+        Write-Host "ERROR: Folder not found: $CSVFolder"
+        exit 1
+    }
+
+    if (-not (Get-Module -ListAvailable -Name 'ActiveDirectory' -ErrorAction SilentlyContinue)) {
+        Write-Host 'ERROR: ActiveDirectory PowerShell module is not installed.'
+        exit 1
+    }
+    Import-Module ActiveDirectory -ErrorAction Stop
+
+    $csvFiles = @(Get-ChildItem -Path $CSVFolder -Filter *.csv -File)
+    Write-Host "Found $($csvFiles.Count) CSV file(s) in $CSVFolder"
+
+    if ($csvFiles.Count -eq 0) {
+        Write-Host 'No CSV files found. Done.'
+        exit 0
+    }
+
+    $allUsers = [System.Collections.Generic.List[pscustomobject]]::new()
+    foreach ($f in $csvFiles) {
+        try {
+            $rows = Import-Csv -Path $f.FullName -Encoding UTF8
+            if (-not $rows -or $rows.Count -eq 0) { continue }
+            if (-not ($rows[0].PSObject.Properties.Name -contains 'UserPrincipalName')) {
+                Write-Host "  Skipped $($f.Name) — no UserPrincipalName column"
+                continue
+            }
+            foreach ($r in $rows) {
+                if ($r.UserPrincipalName) {
+                    $allUsers.Add([pscustomobject]@{
+                        UserPrincipalName = $r.UserPrincipalName
+                        DisplayName       = if ($r.DisplayName) { $r.DisplayName } else { $r.UserPrincipalName.Split('@')[0] }
+                    })
+                }
+            }
+        } catch {
+            Write-Host "  Error reading $($f.Name): $($_.Exception.Message)"
+        }
+    }
+
+    $matching = @($allUsers | Where-Object { $_.UserPrincipalName -like "*$src" })
+    Write-Host "Loaded $($allUsers.Count) user(s) total  |  $($matching.Count) matching '$src'"
+
+    if ($matching.Count -eq 0) {
+        Write-Host 'No users match the source domain. Done.'
+        exit 0
+    }
+
+    $success = 0; $failed = 0
+    foreach ($u in $matching) {
+        $current = $u.UserPrincipalName
+        $new     = $current -replace ([regex]::Escape($src) + '$'), $tgt
+        try {
+            $adUser = Get-ADUser -Filter "UserPrincipalName -eq '$current'" -Properties proxyAddresses,mail -ErrorAction Stop
+            if (-not $adUser) {
+                Write-Host "NOT FOUND in AD: $current"
+                $failed++
+                continue
+            }
+
+            if ($WhatIf) {
+                Write-Host "WhatIf: $current  →  $new  [$($u.DisplayName)]"
+                $success++
+            } else {
+                Set-ADUser -Identity $adUser -UserPrincipalName $new -ErrorAction Stop
+                Set-ADUser -Identity $adUser -EmailAddress $new -ErrorAction Stop
+                if ($adUser.proxyAddresses) {
+                    $newProxies = @()
+                    foreach ($p in $adUser.proxyAddresses) {
+                        if ($p -like "SMTP:*$src" -or $p -like "smtp:*$src") {
+                            $newProxies += $p -replace ([regex]::Escape($src) + '$'), $tgt
+                        } else {
+                            $newProxies += $p
+                        }
+                    }
+                    Set-ADUser -Identity $adUser -Replace @{proxyAddresses = $newProxies} -ErrorAction Stop
+                }
+                Write-Host "UPDATED: $current  →  $new  [$($u.DisplayName)]"
+                $success++
+            }
+        } catch {
+            Write-Host "FAILED: $current — $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+            $failed++
+        }
+    }
+
+    Write-Host ""
+    Write-Host "=== Completed: updated $success  |  failed $failed ==="
+} else {
+    Show-UpdateOnPremUPNUI
+}

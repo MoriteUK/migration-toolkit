@@ -410,6 +410,19 @@ function Show-DiscoveryMenu {
 
     $y += 32
 
+    # ── SharePoint Admin URL ──────────────────────────────────────────────────
+    $null = MkLabel 'SPO Admin URL:' $lx ($y+4) $true
+
+    $txtSpoUrl = New-Object System.Windows.Forms.TextBox
+    $txtSpoUrl.Location    = [System.Drawing.Point]::new($lx + 105, $y + 1)
+    $txtSpoUrl.Size        = [System.Drawing.Size]::new(490, 24)
+    $txtSpoUrl.Font        = $FontBody
+    $txtSpoUrl.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    try { $txtSpoUrl.PlaceholderText = 'https://tenant-admin.sharepoint.com  (leave blank to use saved config)' } catch {}
+    $form.Controls.Add($txtSpoUrl)
+
+    $y += 32
+
     # ── Run / Stop buttons ────────────────────────────────────────────────────
     $btnRun = New-Object System.Windows.Forms.Button
     $btnRun.Text = 'Run Discovery'; $btnRun.Location = [System.Drawing.Point]::new($lx,$y)
@@ -436,24 +449,6 @@ function Show-DiscoveryMenu {
     $btnClearLog.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat; $btnClearLog.FlatAppearance.BorderSize = 0
     $btnClearLog.Cursor = [System.Windows.Forms.Cursors]::Hand
     $form.Controls.Add($btnClearLog)
-
-    $btnLicenseReport = New-Object System.Windows.Forms.Button
-    $btnLicenseReport.Text = 'License Report'; $btnLicenseReport.Location = [System.Drawing.Point]::new($lx+240,$y)
-    $btnLicenseReport.Size = [System.Drawing.Size]::new(120,36)
-    $btnLicenseReport.BackColor = [System.Drawing.Color]::FromArgb(0,100,180)
-    $btnLicenseReport.ForeColor = [System.Drawing.Color]::White; $btnLicenseReport.Font = $FontBold
-    $btnLicenseReport.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat; $btnLicenseReport.FlatAppearance.BorderSize = 0
-    $btnLicenseReport.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $form.Controls.Add($btnLicenseReport)
-
-    $btnDomainReadiness = New-Object System.Windows.Forms.Button
-    $btnDomainReadiness.Text = 'Domain Readiness'; $btnDomainReadiness.Location = [System.Drawing.Point]::new($lx+370,$y)
-    $btnDomainReadiness.Size = [System.Drawing.Size]::new(140,36)
-    $btnDomainReadiness.BackColor = [System.Drawing.Color]::FromArgb(0,100,180)
-    $btnDomainReadiness.ForeColor = [System.Drawing.Color]::White; $btnDomainReadiness.Font = $FontBold
-    $btnDomainReadiness.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat; $btnDomainReadiness.FlatAppearance.BorderSize = 0
-    $btnDomainReadiness.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $form.Controls.Add($btnDomainReadiness)
 
     $y += 46
 
@@ -497,6 +492,7 @@ function Show-DiscoveryMenu {
             foreach ($ctrl in @($sep1Ctrl, $lblOptions,
                                 $chkSkipPP, $chkHybrid, $chkMembers, $chkContinue,
                                 $sep2Ctrl, $lbOutDir, $txtOutDir, $btnBrowseOut,
+                                $txtSpoUrl,
                                 $btnRun, $btnStop, $btnClearLog, $rtbLog)) {
                 $ctrl.Top += $delta
             }
@@ -564,17 +560,26 @@ function Show-DiscoveryMenu {
 
         try {
             $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($Cmd))
-            Write-Log "Launching pwsh.exe (UseShellExecute, minimized)"
+            Write-Log "Launching pwsh.exe (UseShellExecute, normal window)"
 
             # UseShellExecute = $true gives the child its own console window so MSAL
             # uses that process's HWND for OAuth instead of finding this form's HWND.
+            # WindowStyle must stay Normal (not Minimized) — a minimized window has no
+            # visible HWND for the WAM broker to parent its sign-in dialog to.
+            # NOTE: as of search-domain.ps1 v2.12.0, WAM is disabled outright before Graph/EXO
+            # connect (Set-MgGraphOption -DisableLoginByWAM / Connect-ExchangeOnline -DisableWAM)
+            # rather than relying on this window being parentable, because the device-code
+            # fallback that WAM failures used to trigger can now be blocked tenant-wide by a
+            # Conditional Access "Authentication flows" policy. This window is still kept
+            # Normal/visible since the plain browser popup Connect-MgGraph falls back to also
+            # needs somewhere to parent from, and it's harmless either way.
             # Output is captured by tailing the _Search-M365Domain_*.log file that
             # search-domain.ps1 writes to the output folder.
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName        = 'pwsh.exe'
             $psi.Arguments       = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
             $psi.UseShellExecute = $true
-            $psi.WindowStyle     = [System.Diagnostics.ProcessWindowStyle]::Minimized
+            $psi.WindowStyle     = [System.Diagnostics.ProcessWindowStyle]::Normal
 
             $proc = [System.Diagnostics.Process]::Start($psi)
             $script:discProcess = $proc
@@ -668,110 +673,12 @@ function Show-DiscoveryMenu {
         }
     }.GetNewClosure()
 
-    # ── License Report handler ────────────────────────────────────────────────
-    $btnLicenseReport.Add_Click({
-        Write-Log 'License Report clicked'
-        $licenseScript = Join-Path $PSScriptRoot 'Check-TenantLicenses.ps1'
-        if (-not (Test-Path $licenseScript)) {
-            [System.Windows.Forms.MessageBox]::Show(
-                "License report script not found:`n$licenseScript",
-                'Script Not Found', 'OK', 'Error') | Out-Null
-            return
-        }
-
-        try {
-            Write-Log "Launching license report: $licenseScript"
-            $rtbLog.Clear()
-            & $writeDiscLog "=== Tenant License Report Started  $(Get-Date) ==="
-            & $writeDiscLog ""
-
-            # Run the license check script and capture output
-            $output = & 'pwsh.exe' -NoProfile -ExecutionPolicy Bypass -File $licenseScript 2>&1
-
-            foreach ($line in $output) {
-                & $writeDiscLog $line.ToString()
-            }
-
-            & $writeDiscLog ""
-            & $writeDiscLog "=== License Report Complete  $(Get-Date) ==="
-            Write-Log 'License report completed'
-
-            # Check if output file was created and offer to open it
-            $outputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations"
-            $latestReport = Get-ChildItem -Path $outputPath -Filter "TenantLicenseReport_*.csv" -ErrorAction SilentlyContinue |
-                Sort-Object LastWriteTime -Descending | Select-Object -First 1
-
-            if ($latestReport) {
-                $result = [System.Windows.Forms.MessageBox]::Show(
-                    "License report generated successfully.`n`nFile: $($latestReport.Name)`n`nOpen the report?",
-                    'Report Complete', 'YesNo', 'Information')
-                if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-                    Start-Process $latestReport.FullName
-                }
-            }
-        } catch {
-            Write-Log "License report failed: $($_.Exception.Message)" 'ERROR'
-            & $writeDiscLog "ERROR: $($_.Exception.Message)"
-            [System.Windows.Forms.MessageBox]::Show(
-                "License report failed:`n`n$($_.Exception.Message)",
-                'Error', 'OK', 'Error') | Out-Null
-        }
-    }.GetNewClosure())
-
-    # ── Domain Readiness handler ──────────────────────────────────────────────
-    $btnDomainReadiness.Add_Click({
-        Write-Log 'Domain Readiness clicked'
-        $readinessScript = Join-Path $PSScriptRoot 'Check-DomainMigrationReadiness.ps1'
-        if (-not (Test-Path $readinessScript)) {
-            [System.Windows.Forms.MessageBox]::Show(
-                "Domain readiness script not found:`n$readinessScript",
-                'Script Not Found', 'OK', 'Error') | Out-Null
-            return
-        }
-
-        try {
-            Write-Log "Launching domain readiness check: $readinessScript"
-            $rtbLog.Clear()
-            & $writeDiscLog "=== Domain Migration Readiness Check Started  $(Get-Date) ==="
-            & $writeDiscLog ""
-
-            # Run the domain readiness script and capture output
-            $output = & 'pwsh.exe' -NoProfile -ExecutionPolicy Bypass -File $readinessScript 2>&1
-
-            foreach ($line in $output) {
-                & $writeDiscLog $line.ToString()
-            }
-
-            & $writeDiscLog ""
-            & $writeDiscLog "=== Domain Readiness Check Complete  $(Get-Date) ==="
-            Write-Log 'Domain readiness check completed'
-
-            # Check if output files were created and offer to open them
-            $outputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations"
-            $latestSummary = Get-ChildItem -Path $outputPath -Filter "DomainMigrationReadiness_*.txt" -ErrorAction SilentlyContinue |
-                Sort-Object LastWriteTime -Descending | Select-Object -First 1
-
-            if ($latestSummary) {
-                $result = [System.Windows.Forms.MessageBox]::Show(
-                    "Domain readiness check complete.`n`nSummary: $($latestSummary.Name)`n`nOpen the summary?",
-                    'Check Complete', 'YesNo', 'Information')
-                if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-                    Start-Process $latestSummary.FullName
-                }
-            }
-        } catch {
-            Write-Log "Domain readiness check failed: $($_.Exception.Message)" 'ERROR'
-            & $writeDiscLog "ERROR: $($_.Exception.Message)"
-            [System.Windows.Forms.MessageBox]::Show(
-                "Domain readiness check failed:`n`n$($_.Exception.Message)",
-                'Error', 'OK', 'Error') | Out-Null
-        }
-    }.GetNewClosure())
-
     # ── Run handler ───────────────────────────────────────────────────────────
     $btnRun.Add_Click({
         $buid   = $txtBuid.Text.Trim()
         $escOut = $txtOutDir.Text.Trim() -replace "'","''"
+
+        $spoUrl = $txtSpoUrl.Text.Trim()
 
         if ($radSingle.Checked) {
             $domain = $cmbDomain.Text.Trim().ToLower().TrimStart('@')
@@ -781,13 +688,14 @@ function Show-DiscoveryMenu {
             if (-not (Test-Path $SingleScript)) {
                 [System.Windows.Forms.MessageBox]::Show("Script not found:`n$SingleScript",'Not Found','OK','Error') | Out-Null; return
             }
-            Write-Log "Run (single): domain=$domain  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  BUID='$buid'"
+            Write-Log "Run (single): domain=$domain  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  BUID='$buid'  SPOAdmin='$spoUrl'"
             $escS = $SingleScript -replace "'","''"
             $cmd  = "Set-Location '$escOut'; & '$escS' -Domain '$domain'"
             if ($chkHybrid.Checked)  { $cmd += ' -Hybrid' }
             if ($chkMembers.Checked) { $cmd += ' -IncludeMembers' }
             if ($chkSkipPP.Checked)  { $cmd += ' -SkipPowerPlatform' }
             if ($buid)               { $cmd += " -BusinessUnitId '$buid'" }
+            if ($spoUrl)             { $cmd += " -SharePointAdminUrl '$($spoUrl -replace "'","''")'" }
             $watchDir = Join-Path $txtOutDir.Text.Trim() ($domain -replace '[\\/:*?"<>|]', '_')
             & $buildAndLaunch $cmd "Single: $domain" $watchDir
 
@@ -805,7 +713,7 @@ function Show-DiscoveryMenu {
                 [System.Windows.Forms.MessageBox]::Show("Script not found:`n$MultiScript",'Not Found','OK','Error') | Out-Null; return
             }
             # Build @('d1','d2',...) literal for the encoded command
-            Write-Log "Run (multi): $($domains.Count) domains=[$($domains -join ',')]  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  Continue=$($chkContinue.Checked)  BUID='$buid'"
+            Write-Log "Run (multi): $($domains.Count) domains=[$($domains -join ',')]  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  Continue=$($chkContinue.Checked)  BUID='$buid'  SPOAdmin='$spoUrl'"
             $arrayLiteral = "@('" + ($domains -join "','") + "')"
             $escM = $MultiScript -replace "'","''"
             $cmd  = "Set-Location '$escOut'; & '$escM' -Domains $arrayLiteral"
@@ -814,6 +722,7 @@ function Show-DiscoveryMenu {
             if ($chkSkipPP.Checked)   { $cmd += ' -SkipPowerPlatform' }
             if ($chkContinue.Checked) { $cmd += ' -ContinueOnError' }
             if ($buid)                { $cmd += " -BusinessUnitId '$buid'" }
+            if ($spoUrl)              { $cmd += " -SharePointAdminUrl '$($spoUrl -replace "'","''")'" }
             & $buildAndLaunch $cmd "Multi: $($domains.Count) domain(s) - $($domains -join ', ')" ''
         }
     }.GetNewClosure())
