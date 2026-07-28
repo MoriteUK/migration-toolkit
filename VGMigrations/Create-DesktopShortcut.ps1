@@ -53,8 +53,14 @@ Write-Host ""
 Write-Host "You can now launch Migration Toolkit from your desktop." -ForegroundColor Yellow
 Write-Host ""
 
-# Offer to launch now
-$response = Read-Host "Would you like to launch Migration Toolkit now? (Y/N)"
-if ($response -eq 'Y' -or $response -eq 'y') {
-    & $shortcutPath
+# Offer to launch now (only in interactive mode)
+if ([Environment]::UserInteractive -and -not [Environment]::GetCommandLineArgs().Contains('-NonInteractive')) {
+    try {
+        $response = Read-Host "Would you like to launch Migration Toolkit now? (Y/N)"
+        if ($response -eq 'Y' -or $response -eq 'y') {
+            & $shortcutPath
+        }
+    } catch {
+        # Non-interactive mode, skip prompt
+    }
 }
