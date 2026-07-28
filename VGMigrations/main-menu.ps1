@@ -30,6 +30,11 @@ if ($_startupError) {
 try   { . "$PSScriptRoot\settings.ps1"; Write-Log 'settings.ps1 loaded OK' }
 catch { Write-Log "settings.ps1 failed to load: $($_.Exception.Message)" 'WARN' }
 
+# ── Archive old logs (runs silently in background) ────────────────────────────
+Start-Job -ScriptBlock {
+    & "$using:PSScriptRoot\Archive-OldLogs.ps1"
+} | Out-Null
+
 # ── Discovery sub-menu ────────────────────────────────────────────────────────
 function Show-DiscoverySubMenu {
     $dlg = New-Object System.Windows.Forms.Form

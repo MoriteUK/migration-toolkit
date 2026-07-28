@@ -1,9 +1,10 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Archives old log files to keep logs folder clean
+    Archives log files older than 7 days to Old_Logs.zip
 .DESCRIPTION
-    Moves log files older than specified days to an 'old' subfolder
+    Runs automatically on toolkit startup. Moves log files older than 7 days
+    into Old_Logs.zip to keep the logs folder clean while preserving history.
 .PARAMETER DaysOld
     Number of days - logs older than this will be archived (default: 7)
 .PARAMETER LogPath
@@ -14,74 +15,82 @@ param(
     [string]$LogPath = (Join-Path $PSScriptRoot "logs")
 )
 
+$ErrorActionPreference = 'SilentlyContinue'
+
 try {
     # Ensure logs folder exists
     if (-not (Test-Path $LogPath)) {
-        Write-Warning "Logs folder not found: $LogPath"
         exit 0
-    }
-
-    # Create 'old' subfolder if it doesn't exist
-    $oldFolder = Join-Path $LogPath "old"
-    if (-not (Test-Path $oldFolder)) {
-        New-Item -ItemType Directory -Path $oldFolder -Force | Out-Null
-        Write-Host "Created archive folder: $oldFolder" -ForegroundColor Green
     }
 
     # Calculate cutoff date
     $cutoffDate = (Get-Date).AddDays(-$DaysOld)
     Write-Host "Archiving logs older than: $($cutoffDate.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
 
-    # Get all log files (excluding the old folder)
-    $logFiles = Get-ChildItem -Path $LogPath -File -Recurse:$false | Where-Object {
+    # Get cutoff date
+    $cutoffDate = (Get-Date).AddDays(-$DaysOld)
+
+    # Get log files older than specified days
+    $oldLogs = Get-ChildItem -Path $LogPath -File -Filter "*.log" | Where-Object {
         $_.LastWriteTime -lt $cutoffDate
     }
 
-    if ($logFiles.Count -eq 0) {
-        Write-Host "No old logs to archive." -ForegroundColor Yellow
+    if ($oldLogs.Count -eq 0) {
+        # No old logs to archive - exit silently
         exit 0
     }
 
-    # Move old logs to archive folder
-    $movedCount = 0
-    foreach ($logFile in $logFiles) {
+    # Archive path
+    $archivePath = Join-Path $LogPath 'Old_Logs.zip'
+
+    # Load compression assembly
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    # Open or create the zip file
+    if (Test-Path $archivePath) {
+        $zip = [System.IO.Compression.ZipFile]::Open($archivePath, 'Update')
+    } else {
+        $zip = [System.IO.Compression.ZipFile]::Open($archivePath, 'Create')
+    }
+
+    $archived = 0
+    foreach ($log in $oldLogs) {
         try {
-            $destination = Join-Path $oldFolder $logFile.Name
+            # Check if file already exists in zip
+            $entryName = $log.Name
+            $existingEntry = $zip.Entries | Where-Object { $_.Name -eq $entryName }
 
-            # If file already exists in old folder, append timestamp to avoid conflicts
-            if (Test-Path $destination) {
-                $timestamp = $logFile.LastWriteTime.ToString('yyyyMMdd-HHmmss')
-                $baseName = [System.IO.Path]::GetFileNameWithoutExtension($logFile.Name)
-                $extension = [System.IO.Path]::GetExtension($logFile.Name)
-                $destination = Join-Path $oldFolder "$baseName-$timestamp$extension"
+            if (-not $existingEntry) {
+                # Add file to zip
+                [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                    $zip,
+                    $log.FullName,
+                    $entryName,
+                    [System.IO.Compression.CompressionLevel]::Optimal
+                ) | Out-Null
+
+                # Delete original file after successful archive
+                Remove-Item $log.FullName -Force
+                $archived++
+            } else {
+                # File already archived, just delete it
+                Remove-Item $log.FullName -Force
+                $archived++
             }
-
-            Move-Item -Path $logFile.FullName -Destination $destination -Force
-            Write-Host "  Archived: $($logFile.Name) -> old/$([System.IO.Path]::GetFileName($destination))" -ForegroundColor Gray
-            $movedCount++
         } catch {
-            Write-Warning "Failed to archive $($logFile.Name): $_"
+            # Skip this file if there's an error
+            continue
         }
     }
 
-    Write-Host "`nArchived $movedCount log file(s)." -ForegroundColor Green
+    $zip.Dispose()
 
-    # Optional: Clean up very old files in archive folder (older than 90 days)
-    $veryOldCutoff = (Get-Date).AddDays(-90)
-    $veryOldFiles = Get-ChildItem -Path $oldFolder -File | Where-Object {
-        $_.LastWriteTime -lt $veryOldCutoff
-    }
-
-    if ($veryOldFiles.Count -gt 0) {
-        Write-Host "`nCleaning up logs older than 90 days..." -ForegroundColor Cyan
-        foreach ($file in $veryOldFiles) {
-            Remove-Item $file.FullName -Force
-            Write-Host "  Deleted: $($file.Name)" -ForegroundColor DarkGray
-        }
-        Write-Host "Deleted $($veryOldFiles.Count) very old log file(s)." -ForegroundColor Green
-    }
+    # Only show message if logs were archived (don't clutter startup)
+    # Silent operation for better UX
 
 } catch {
-    Write-Error "Log archival failed: $_"
-    exit 1
+    # Silently fail - don't interrupt toolkit startup
+    if ($zip) { $zip.Dispose() }
 }
+
+exit 0
