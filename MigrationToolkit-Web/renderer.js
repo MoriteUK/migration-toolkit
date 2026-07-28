@@ -1,5 +1,57 @@
 // Migration Toolkit - Renderer Process (UI Logic)
 
+// ---------------------------------------------------------------------------
+// File browser helper — opens a native CSV file-open dialog and writes the
+// chosen path into the given input element.  Works for any Browse button.
+// ---------------------------------------------------------------------------
+async function openFileBrowser(inputEl, opts) {
+  try {
+    const result = await window.electronAPI.showOpenDialog(Object.assign({
+      properties: ['openFile'],
+      filters: [
+        { name: 'CSV Files', extensions: ['csv'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    }, opts || {}));
+    if (!result.canceled && result.filePaths.length > 0) {
+      inputEl.value = result.filePaths[0];
+      inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  } catch (err) {
+    console.error('File dialog error:', err);
+  }
+}
+
+// Event delegation — handles every Browse button that sits inside an
+// .input-with-button container (all views, current and future).
+// Buttons may carry data-extensions="xlsx" (or other comma-separated exts)
+// to override the default CSV filter.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.input-with-button button');
+  if (!btn) return;
+  const input = btn.closest('.input-with-button')?.querySelector('input');
+  if (!input) return;
+  const exts = btn.dataset.extensions;
+  if (btn.dataset.folder) {
+    window.electronAPI.showOpenDialog({ properties: ['openDirectory'] }).then(result => {
+      if (!result.canceled && result.filePaths.length > 0) {
+        input.value = result.filePaths[0];
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }).catch(err => console.error('Folder dialog error:', err));
+  } else if (exts) {
+    const extList = exts.split(',').map(s => s.trim());
+    openFileBrowser(input, {
+      filters: [
+        { name: extList.map(x => x.toUpperCase()).join('/') + ' Files', extensions: extList },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+  } else {
+    openFileBrowser(input);
+  }
+});
+
 console.log('=== RENDERER.JS LOADING ===');
 console.log('Document ready state:', document.readyState);
 
@@ -9,10 +61,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('Migration Toolkit loaded');
   console.log('electronAPI available:', !!window.electronAPI);
 
-  // Test if clicks work at all
-  document.body.addEventListener('click', (e) => {
-    console.log('!!! BODY CLICK DETECTED !!!', e.target.tagName, e.target.className);
-  });
 
   if (!window.electronAPI) {
     console.error('FATAL: electronAPI not available! Preload script may not be working.');
@@ -143,6 +191,107 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // Discovery domain combobox
+  (function initDomainCombobox() {
+    const input  = document.getElementById('discoveryDomain');
+    const btn    = document.getElementById('domainDropdownBtn');
+    const panel  = document.getElementById('domainDropdownPanel');
+    const list   = document.getElementById('domainDropdownList');
+    if (!input || !btn || !panel || !list) return;
+
+    let highlightedIndex = -1;
+
+    function selectDomain(domain) {
+      input.value = domain;
+      const vbuInput = document.getElementById('discoveryVbuId');
+      if (vbuInput) vbuInput.value = _vbuMap[domain.toLowerCase()] || '';
+      closePanel();
+    }
+
+    function getVisibleItems() {
+      return Array.from(list.querySelectorAll('.domain-dropdown-item'));
+    }
+
+    function setHighlight(index) {
+      const items = getVisibleItems();
+      items.forEach(el => el.classList.remove('highlighted'));
+      if (index >= 0 && index < items.length) {
+        items[index].classList.add('highlighted');
+        items[index].scrollIntoView({ block: 'nearest' });
+      }
+      highlightedIndex = index;
+    }
+
+    function renderItems(filter) {
+      highlightedIndex = -1;
+      const q = (filter || '').toLowerCase();
+      const rows = _vbuRows.filter(r => !q || r.domain.includes(q) || (r.vbuName && r.vbuName.toLowerCase().includes(q)));
+      if (rows.length === 0) {
+        list.innerHTML = `<div class="domain-dropdown-empty">No matches</div>`;
+      } else {
+        list.innerHTML = rows.map(r =>
+          `<div class="domain-dropdown-item" data-domain="${r.domain}">
+            <span class="di-domain">${r.domain}</span>
+            ${r.vbuName ? `<span class="di-vbu">${r.vbuName}</span>` : ''}
+          </div>`
+        ).join('');
+        list.querySelectorAll('.domain-dropdown-item').forEach(el => {
+          el.addEventListener('mousedown', e => { e.preventDefault(); selectDomain(el.dataset.domain); });
+        });
+      }
+    }
+
+    function openPanel() {
+      // Don't show panel if no data is loaded — just let user type freely
+      if (_vbuRows.length === 0) { closePanel(); return; }
+      renderItems(input.value);
+      panel.classList.remove('hidden');
+    }
+
+    function closePanel() {
+      panel.classList.add('hidden');
+      highlightedIndex = -1;
+    }
+
+    btn.addEventListener('click', () => {
+      if (_vbuRows.length === 0) { input.focus(); return; }
+      if (panel.classList.contains('hidden')) { input.focus(); openPanel(); } else { closePanel(); }
+    });
+
+    input.addEventListener('input', () => { openPanel(); });
+    input.addEventListener('focus', () => { openPanel(); });
+    input.addEventListener('blur', () => {
+      setTimeout(() => {
+        closePanel();
+        // auto-fill VBU if exact match
+        const domain = input.value.trim().toLowerCase();
+        const vbuInput = document.getElementById('discoveryVbuId');
+        if (vbuInput && _vbuMap[domain] !== undefined) vbuInput.value = _vbuMap[domain];
+      }, 150);
+    });
+
+    input.addEventListener('keydown', e => {
+      if (panel.classList.contains('hidden')) return;
+      const items = getVisibleItems();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlight(Math.min(highlightedIndex + 1, items.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlight(Math.max(highlightedIndex - 1, 0));
+      } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+        e.preventDefault();
+        selectDomain(items[highlightedIndex].dataset.domain);
+      } else if (e.key === 'Escape') {
+        closePanel();
+      }
+    });
+
+    document.addEventListener('click', e => {
+      if (!input.contains(e.target) && !btn.contains(e.target) && !panel.contains(e.target)) closePanel();
+    });
+  })();
+
   // Discovery - License Report button
   const licenseReportBtn = document.getElementById('licenseReportBtn');
   if (licenseReportBtn) {
@@ -165,32 +314,61 @@ document.addEventListener('DOMContentLoaded', async () => {
   const startDiscoveryBtn = document.getElementById('startDiscoveryBtn');
   if (startDiscoveryBtn) {
     startDiscoveryBtn.addEventListener('click', async () => {
-      const domain = document.getElementById('discoveryDomain').value.trim();
+      const domainMode = document.querySelector('input[name="domainMode"]:checked')?.value || 'single';
       const vbuId = document.getElementById('discoveryVbuId').value.trim();
       const skipPP = document.getElementById('skipPowerPlatform').checked;
       const hybrid = document.getElementById('hybrid').checked;
       const members = document.getElementById('includeMembers').checked;
       const continueOnError = document.getElementById('continueOnError').checked;
+      const outputFolder = document.getElementById('outputFolder').value.trim() || 'E:\\Work\\Jolera\\Volaris\\Discovery';
 
-      if (!domain) {
-        alert('Please enter a domain name');
-        return;
+      let domainsToRun = [];
+      if (domainMode === 'single') {
+        const domain = document.getElementById('discoveryDomain').value.trim();
+        if (!domain) { alert('Please enter a domain name'); return; }
+        domainsToRun = [domain];
+      } else {
+        domainsToRun = (document.getElementById('discoveryDomains').value || '')
+          .split('\n').map(d => d.trim().toLowerCase()).filter(d => d && !d.startsWith('#') && d.includes('.'));
+        if (domainsToRun.length === 0) { alert('Please enter at least one domain name'); return; }
       }
 
       // Show log section
       const logSection = document.getElementById('discoveryLog');
       const logOutput = document.getElementById('discoveryLogOutput');
       logSection.classList.remove('hidden');
-      logOutput.textContent = `Starting discovery for ${domain}...\n`;
-      logOutput.textContent += `VBU ID: ${vbuId || 'Not specified'}\n`;
-      logOutput.textContent += `Skip Power Platform: ${skipPP}\n`;
-      logOutput.textContent += `Hybrid Mode: ${hybrid}\n`;
-      logOutput.textContent += `Include Members: ${members}\n`;
-      logOutput.textContent += `Continue on Error: ${continueOnError}\n\n`;
-      logOutput.textContent += `Launching PowerShell discovery script...\n`;
+      logOutput.textContent = `Starting discovery for: ${domainsToRun.join(', ')}\n`;
+      if (vbuId) logOutput.textContent += `VBU ID: ${vbuId}\n`;
+      logOutput.textContent += `Options: SkipPP=${skipPP}  Hybrid=${hybrid}  Members=${members}\n`;
+      logOutput.textContent += `Output: ${outputFolder}\n\n`;
 
-      // Launch the actual PowerShell script
-      await launchScript('discovery-menu.ps1', startDiscoveryBtn);
+      startDiscoveryBtn.disabled = true;
+      startDiscoveryBtn.textContent = 'Running...';
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+
+      let lastResult;
+      try {
+        for (const domain of domainsToRun) {
+          if (domainsToRun.length > 1) logOutput.textContent += `\n=== ${domain} ===\n`;
+          const args = ['-Domain', domain, '-OutputPath', outputFolder];
+          if (vbuId) args.push('-BusinessUnitId', vbuId);
+          if (skipPP) args.push('-SkipPowerPlatform');
+          if (hybrid) args.push('-Hybrid');
+          if (members) args.push('-IncludeMembers');
+          lastResult = await window.electronAPI.streamPowerShell('search-domain.ps1', args);
+          if (!lastResult.success && !continueOnError) break;
+        }
+        logOutput.textContent += lastResult?.success ? '\n✓ Discovery complete\n' : `\n✗ Failed (exit ${lastResult?.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\n✗ Error: ${err.message}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        startDiscoveryBtn.disabled = false;
+        startDiscoveryBtn.textContent = 'Start Discovery';
+      }
     });
   }
 
@@ -257,6 +435,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const td1 = document.createElement('td');
     const td2 = document.createElement('td');
     const td3 = document.createElement('td');
+    const td4 = document.createElement('td');
 
     const input1 = document.createElement('input');
     input1.type = 'text';
@@ -270,19 +449,46 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const input3 = document.createElement('input');
     input3.type = 'text';
-    input3.className = 'form-input form-input-compact customer-spo';
-    input3.placeholder = 'https://tenant-admin.sharepoint.com';
+    input3.className = 'form-input form-input-compact customer-domain';
+    input3.placeholder = 'e.g. mbufara';
+
+    const input4 = document.createElement('input');
+    input4.type = 'text';
+    input4.className = 'form-input form-input-compact customer-spo';
+    input4.placeholder = 'https://tenant-admin.sharepoint.com';
 
     td1.appendChild(input1);
     td2.appendChild(input2);
     td3.appendChild(input3);
+    td4.appendChild(input4);
 
     newRow.appendChild(td1);
     newRow.appendChild(td2);
     newRow.appendChild(td3);
+    newRow.appendChild(td4);
 
     tbody.appendChild(newRow);
   }
+
+  // Auto-populate domain and SPO from account name (e.g. admin@contoso.onmicrosoft.com → contoso)
+  function autoFillCustomerRow(accountInput) {
+    const row = accountInput.closest('tr');
+    if (!row) return;
+    const domainInput = row.querySelector('.customer-domain');
+    const spoInput    = row.querySelector('.customer-spo');
+    if (!domainInput || !spoInput) return;
+
+    const m = accountInput.value.trim().match(/@([^@]+)\.onmicrosoft\.com$/i);
+    if (!m) return;
+    const tenant = m[1];
+
+    if (!domainInput.value.trim()) domainInput.value = tenant;
+    if (!spoInput.value.trim())    spoInput.value    = `https://${tenant}-admin.sharepoint.com`;
+  }
+
+  document.getElementById('customerTableBody')?.addEventListener('input', (e) => {
+    if (e.target.classList.contains('customer-account')) autoFillCustomerRow(e.target);
+  });
 
   // Add/Remove customer rows
   document.getElementById('addCustomerBtn')?.addEventListener('click', () => {
@@ -306,6 +512,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
   document.getElementById('testConnectionBtn').addEventListener('click', testConnection);
   document.getElementById('checkUpdatesBtn').addEventListener('click', manualCheckUpdates);
+  document.getElementById('settingsAosSignInBtn').addEventListener('click', settingsAosSignIn);
 
   // Install update button
   document.getElementById('installUpdateBtn').addEventListener('click', installUpdate);
@@ -319,6 +526,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Monitor functionality
   let monitorTimer = null;
+  let lastMonitorData = null;
   const monitorRefreshBtn = document.getElementById('monitorRefreshBtn');
   const monitorAutoRefresh = document.getElementById('monitorAutoRefresh');
   const monitorInterval = document.getElementById('monitorInterval');
@@ -326,6 +534,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const monitorStatus = document.getElementById('monitorStatus');
   const monitorTableBody = document.getElementById('monitorTableBody');
   const monitorConnection = document.getElementById('monitorConnection');
+  let _cachedPortalUrl = null;
 
   if (monitorRefreshBtn) {
     monitorRefreshBtn.addEventListener('click', async () => {
@@ -361,6 +570,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (result.success && result.data) {
         const data = result.data;
+        lastMonitorData = data;
         monitorTableBody.innerHTML = '';
 
         // Display each workload
@@ -382,9 +592,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           const warnings = wl.Warnings || 0;
 
           const row = document.createElement('tr');
+          const projectFound = wl.ProjectFound !== false;
+          row.style.cursor = 'pointer';
+          row.title = projectFound ? 'Click to open in Fly portal' : 'Project not yet created';
 
           // Apply row styling based on status
-          if (failed > 0) {
+          if (!projectFound) {
+            row.style.opacity = '0.45';
+          } else if (failed > 0) {
             row.classList.add('monitor-row-failed');
           } else if (warnings > 0) {
             row.classList.add('monitor-row-warning');
@@ -398,14 +613,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             <td>${notStarted}</td>
             <td>${inProgress}</td>
             <td>${complete}</td>
-            <td>${failed}</td>
             <td>${warnings}</td>
+            <td>${failed}</td>
             <td>${now}</td>
           `;
+
+          row.addEventListener('click', async () => {
+            if (!projectFound) return;
+            if (_cachedPortalUrl === null) {
+              try {
+                const cfg = await window.electronAPI.getConfig();
+                _cachedPortalUrl = (cfg.success && cfg.config?.PortalUrl) ? cfg.config.PortalUrl : '';
+              } catch (_) { _cachedPortalUrl = ''; }
+            }
+            if (!_cachedPortalUrl) return;
+            const wlPaths = {
+              Exchange: 'exchange', SharePoint: 'sharepoint', OneDrive: 'onedrive',
+              Teams: 'teams', TeamChat: 'teamchat', Groups: 'm365group'
+            };
+            const origin = _cachedPortalUrl.replace(/#.*$/, '').replace(/\/$/, '');
+            const projectId = wl.ProjectId;
+            const flyUrl = projectId
+              ? `${origin}/#/project/${projectId}/mappings`
+              : origin;
+            await window.electronAPI.openExternal(flyUrl);
+          });
           monitorTableBody.appendChild(row);
         });
 
-        monitorStatus.textContent = `Last refresh: ${now}`;
+        monitorStatus.textContent = `Last refresh: ${now} — click a row to open in Fly`;
         updateConnectionStatus('connected');
       } else {
         monitorTableBody.innerHTML = '<tr class="monitor-empty-row"><td colspan="8">Failed to load data - check console for details</td></tr>';
@@ -419,6 +655,156 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateConnectionStatus('failed');
       console.error('Monitor refresh exception:', error);
     }
+  }
+
+  // ── Monitor detail modal ──────────────────────────────────────────────────
+  const monitorDetailOverlay = document.getElementById('monitorDetailOverlay');
+  const monitorDetailTitle   = document.getElementById('monitorDetailTitle');
+  const monitorDetailBody    = document.getElementById('monitorDetailBody');
+  const monitorDetailClose   = document.getElementById('monitorDetailClose');
+
+  if (monitorDetailClose) {
+    monitorDetailClose.addEventListener('click', () => monitorDetailOverlay.classList.add('hidden'));
+  }
+  if (monitorDetailOverlay) {
+    monitorDetailOverlay.addEventListener('click', (e) => {
+      if (e.target === monitorDetailOverlay) monitorDetailOverlay.classList.add('hidden');
+    });
+  }
+
+  function showMonitorDetail(workloadName, data) {
+    if (!data || !monitorDetailOverlay) return;
+
+    monitorDetailTitle.textContent = `${monitorProject.value.trim()} — ${workloadName}`;
+
+    const failed    = (data.FailedItems    || []).filter(i => i.Workload === workloadName);
+    const warnings  = (data.WarningItems   || []).filter(i => i.Workload === workloadName);
+    const inProg    = (data.InProgressItems|| []).filter(i => i.Workload === workloadName);
+    const completed = (data.CompletedItems || []).filter(i => i.Workload === workloadName);
+
+    // Store items by index so expand click handlers can look them up
+    window._monitorItems = [...failed, ...warnings, ...inProg, ...completed];
+
+    // Columns whose values we skip when hunting for error text (source/dest/status noise)
+    const _noiseCol = /^(source|target|destination|.*principal.*name|upn|stage.?status|job.?progress|workload|project|status|state)$/i;
+
+    // Finds the most meaningful error text for an item.
+    // Strategy: captured Exception field → error-named AllFields key → longest AllFields value (≥60 chars) → Error/Warning fallback
+    function findErrorText(item) {
+      if (item.Exception && item.Exception.trim()) return item.Exception.trim();
+
+      const af = item.AllFields || {};
+      let bestNamed = '';   // longest value from a key matching error/exception/fail/reason/message/detail
+      let longestVal = '';  // longest value overall (real error messages are much longer than status codes/emails)
+
+      for (const [k, v] of Object.entries(af)) {
+        if (_noiseCol.test(k)) continue;
+        const s = String(v).trim();
+        if (!s || s === '0' || s === '-') continue;
+        if (/error|exception|fail|reason|message|detail/i.test(k) && s.length > bestNamed.length) bestNamed = s;
+        if (s.length >= 60 && s.length > longestVal.length) longestVal = s;
+      }
+
+      return bestNamed || longestVal || item.Error || item.Warning || '';
+    }
+
+    // Returns summary text for the collapsed row (first line, truncated)
+    function bestErrorSummary(item) {
+      const full = findErrorText(item);
+      if (!full) return item.Status || '';
+      const firstLine = full.split(/\r?\n/)[0].trim();
+      return firstLine.length > 160 ? firstLine.substring(0, 157) + '…' : firstLine;
+    }
+
+    // Builds the inline expanded detail — status info + Fly link
+    function buildInlineDetail(item, flyUrl) {
+      const isFailed = item.Status === 'Failed';
+      const color = isFailed ? '#dc2626' : '#d97706';
+      const errCount = item.ErrorCount > 0 ? ` (${item.ErrorCount} item${item.ErrorCount !== 1 ? 's' : ''} affected)` : '';
+      const msg = isFailed
+        ? `Migration failed${errCount} — open in Fly portal for full error details`
+        : `Completed with exceptions${errCount} — open in Fly portal for details`;
+
+      const msgHtml = flyUrl
+        ? `<span style="font-size:12px;color:${color};flex:1;">${msg}</span>`
+        : `<span style="font-size:12px;color:#6b7280;flex:1;">Error details only available in the Fly portal.</span>`;
+
+      const flyLinkHtml = flyUrl
+        ? `<a class="detail-fly-link" href="#" style="font-size:12px;font-weight:600;color:#2563eb;text-decoration:underline;white-space:nowrap;flex-shrink:0;padding-top:1px;">↗ Open in Fly</a>`
+        : '';
+
+      return `<div style="padding:7px 14px 9px 32px;background:#f9fafb;border-bottom:2px solid #e5e7eb;display:flex;gap:14px;align-items:flex-start;">
+        ${msgHtml}
+        ${flyLinkHtml}
+      </div>`;
+    }
+
+    function section(title, color, items, renderRow) {
+      if (!items.length) return '';
+      const rows = items.map(renderRow).join('');
+      return `
+        <h3 style="margin:16px 0 8px; font-size:13px; font-weight:600; color:${color};">${title} (${items.length})</h3>
+        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    const tdStyle = 'padding:5px 8px; border-bottom:1px solid #f0f0f0; word-break:break-all;';
+
+    const html = [
+      section('Failed', '#dc2626', failed, i => {
+        const idx = window._monitorItems.indexOf(i);
+        const summary = bestErrorSummary(i);
+        return `<tr class="monitor-item-row" data-item-idx="${idx}" style="cursor:pointer;" title="Open in Fly portal">
+          <td style="${tdStyle} width:38%">${i.Name}</td>
+          <td style="${tdStyle} color:#dc2626;">${summary}</td></tr>`;
+      }),
+      section('Warnings', '#d97706', warnings, i => {
+        const idx = window._monitorItems.indexOf(i);
+        const summary = bestErrorSummary(i);
+        return `<tr class="monitor-item-row" data-item-idx="${idx}" style="cursor:pointer;" title="Open in Fly portal">
+          <td style="${tdStyle} width:38%">${i.Name}</td>
+          <td style="${tdStyle} color:#d97706;">${summary || i.Warning || i.Status}</td></tr>`;
+      }),
+      section('In Progress', '#2563eb', inProg, i =>
+        `<tr style="cursor:default;"><td style="${tdStyle} width:38%">${i.Name}</td><td style="${tdStyle} color:#2563eb">${i.Status}</td><td style="${tdStyle} color:#9ca3af;font-size:11px;">currently running</td></tr>`),
+      section('Recently Completed', '#16a34a', completed, i =>
+        `<tr><td style="${tdStyle} width:38%">${i.Name}</td><td style="${tdStyle} color:#16a34a">${i.Status}</td></tr>`)
+    ].join('');
+
+    monitorDetailBody.innerHTML = html ||
+      '<p style="color:#6b7280; font-size:13px;">No detail items available for this workload.</p>';
+
+    const workloadPaths = {
+      Exchange: 'exchange', SharePoint: 'sharepoint', OneDrive: 'onedrive',
+      Teams: 'teams', TeamChat: 'teamchat', Groups: 'm365group'
+    };
+
+    monitorDetailBody.querySelectorAll('.monitor-item-row').forEach(row => {
+      row.addEventListener('mouseenter', () => { row.style.backgroundColor = '#f9fafb'; });
+      row.addEventListener('mouseleave', () => { row.style.backgroundColor = ''; });
+      row.addEventListener('click', async () => {
+        const idx  = parseInt(row.getAttribute('data-item-idx'), 10);
+        const item = window._monitorItems[idx];
+
+        if (_cachedPortalUrl === null) {
+          try {
+            const cfg = await window.electronAPI.getConfig();
+            _cachedPortalUrl = (cfg.success && cfg.config?.PortalUrl) ? cfg.config.PortalUrl : '';
+          } catch (_) { _cachedPortalUrl = ''; }
+        }
+        if (!_cachedPortalUrl) return;
+
+        const origin = _cachedPortalUrl.replace(/#.*$/, '').replace(/\/$/, '');
+        const flyUrl = item.ProjectId
+          ? `${origin}/#/project/${item.ProjectId}/mappings`
+          : origin;
+
+        await window.electronAPI.openExternal(flyUrl);
+      });
+    });
+
+    monitorDetailOverlay.classList.remove('hidden');
   }
 
   function updateConnectionStatus(status) {
@@ -448,6 +834,61 @@ document.addEventListener('DOMContentLoaded', async () => {
       refreshMonitor();
     }, ms);
   }
+
+  // ── Monitor table sorting ──────────────────────────────────────────────────
+  let _monitorSortCol = -1;
+  let _monitorSortAsc = true;
+
+  function getMonitorCellValue(row, col) {
+    const cells = row.querySelectorAll('td');
+    if (!cells[col]) return '';
+    const text = cells[col].textContent.trim();
+    // Numeric columns (1-7 except 7 which is time string)
+    if (col >= 1 && col <= 6) return parseInt(text, 10) || 0;
+    return text.toLowerCase();
+  }
+
+  function applyMonitorSort() {
+    if (_monitorSortCol < 0) return;
+    const tbody = monitorTableBody;
+    const rows = Array.from(tbody.querySelectorAll('tr:not(.monitor-empty-row)'));
+    if (!rows.length) return;
+    rows.sort((a, b) => {
+      const va = getMonitorCellValue(a, _monitorSortCol);
+      const vb = getMonitorCellValue(b, _monitorSortCol);
+      if (va < vb) return _monitorSortAsc ? -1 : 1;
+      if (va > vb) return _monitorSortAsc ? 1 : -1;
+      return 0;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+    // Update arrow indicators
+    document.querySelectorAll('#monitorTableHead th').forEach(th => {
+      const arrow = th.querySelector('.sort-arrow');
+      if (!arrow) return;
+      const col = parseInt(th.getAttribute('data-col'), 10);
+      arrow.textContent = col === _monitorSortCol ? (_monitorSortAsc ? ' ▲' : ' ▼') : '';
+    });
+  }
+
+  document.getElementById('monitorTableHead')?.addEventListener('click', (e) => {
+    const th = e.target.closest('th[data-col]');
+    if (!th) return;
+    const col = parseInt(th.getAttribute('data-col'), 10);
+    if (_monitorSortCol === col) {
+      _monitorSortAsc = !_monitorSortAsc;
+    } else {
+      _monitorSortCol = col;
+      _monitorSortAsc = col === 0; // text column → A-Z first; numeric → desc first
+    }
+    applyMonitorSort();
+  });
+
+  // Re-apply sort after every refresh
+  const _origRefreshMonitor = refreshMonitor;
+  refreshMonitor = async function() {
+    await _origRefreshMonitor();
+    applyMonitorSort();
+  };
 
   function stopMonitorTimer() {
     if (monitorTimer) {
@@ -528,7 +969,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const config = await window.electronAPI.getConfig();
       if (config.success && config.config && config.config.Customers) {
-        const customers = config.config.Customers;
+        const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
         dashboardDomainSelect.innerHTML = '<option value="">Select migration...</option>';
 
         customers.forEach(customer => {
@@ -675,44 +1116,69 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateWorkloadBars();
   }
 
+  function buildBarGradient(completed, inProgress, failed) {
+    const filled = completed + inProgress + failed;
+    if (filled === 0) return null;
+
+    // Segment boundaries as % of the filled portion
+    const gEnd = (completed   / filled) * 100;
+    const oEnd = ((completed + inProgress) / filled) * 100;
+    const blend = 7; // blend overlap in percentage points
+
+    // Single-colour fast paths
+    if (inProgress === 0 && failed === 0) return 'linear-gradient(90deg, #16a34a, #22c55e)';
+    if (completed  === 0 && failed === 0) return 'linear-gradient(90deg, #ea580c, #f97316)';
+    if (completed  === 0 && inProgress === 0) return 'linear-gradient(90deg, #dc2626, #ef4444)';
+
+    const stops = [];
+    if (completed > 0) {
+      stops.push('#22c55e 0%');
+      stops.push(`#22c55e ${Math.max(gEnd - blend, 0).toFixed(1)}%`);
+    }
+    if (inProgress > 0) {
+      stops.push(`#f97316 ${(completed > 0 ? Math.min(gEnd + blend, oEnd) : 0).toFixed(1)}%`);
+      if (failed > 0) {
+        stops.push(`#f97316 ${Math.max(oEnd - blend, gEnd).toFixed(1)}%`);
+      } else {
+        stops.push('#f97316 100%');
+      }
+    }
+    if (failed > 0) {
+      stops.push(`#ef4444 ${((completed > 0 || inProgress > 0) ? Math.min(oEnd + blend, 100) : 0).toFixed(1)}%`);
+      stops.push('#ef4444 100%');
+    }
+    return `linear-gradient(90deg, ${stops.join(', ')})`;
+  }
+
   function updateWorkloadBars() {
     workloadBars.innerHTML = '';
 
-    // Use real workload data from currentStatData
     const workloadsData = currentStatData.workloads || {};
 
-    // If no workload data, show nothing
     if (Object.keys(workloadsData).length === 0) {
       workloadBars.innerHTML = '<p style="color: #6c757d; padding: 20px; text-align: center;">No workload data available</p>';
       return;
     }
 
-    // Process each workload from real data
     Object.keys(workloadsData).forEach(workloadName => {
-      const wlData = workloadsData[workloadName];
-      const total = wlData.Total || 0;
-      const completed = wlData.Completed || 0;
-      const failed = wlData.Failed || 0;
-      const warnings = wlData.Warnings || 0;
+      const wlData     = workloadsData[workloadName];
+      const total      = wlData.Total      || 0;
+      const completed  = wlData.Completed  || 0;
+      const failed     = wlData.Failed     || 0;
       const inProgress = wlData.InProgress || 0;
-      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-      let statusClass = 'status-ontrack';
-      let statusBadge = 'On track';
-      let badgeClass = 'badge-ontrack';
+      const filledPct  = total > 0 ? ((completed + inProgress + failed) / total) * 100 : 0;
+      const gradient   = buildBarGradient(completed, inProgress, failed);
+      const fillStyle  = gradient
+        ? `width:${filledPct.toFixed(1)}%; background:${gradient};`
+        : `width:0%;`;
 
-      if (failed > 0) {
-        statusClass = 'status-failed';
-        statusBadge = `${failed} failed`;
-        badgeClass = 'badge-failed';
-      } else if (warnings > 0) {
-        statusClass = 'status-warning';
-        statusBadge = `${warnings} warnings`;
-        badgeClass = 'badge-warning';
-      } else if (inProgress > 0) {
-        statusBadge = `${inProgress} in progress`;
-        badgeClass = 'badge-ontrack';
-      }
+      // Status badge — show all active counts
+      const parts = [];
+      if (completed > 0)  parts.push(`<span class="status-badge badge-ontrack">${completed} done</span>`);
+      if (inProgress > 0) parts.push(`<span class="status-badge badge-warning">${inProgress} in progress</span>`);
+      if (failed > 0)     parts.push(`<span class="status-badge badge-failed">${failed} failed</span>`);
+      if (parts.length === 0 && total > 0) parts.push(`<span class="status-badge badge-neutral">Not started</span>`);
 
       const bar = document.createElement('div');
       bar.className = 'workload-bar-item';
@@ -721,12 +1187,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       bar.innerHTML = `
         <div class="workload-bar-name">${workloadName}</div>
         <div class="workload-bar-progress">
-          <div class="workload-bar-fill ${statusClass}" style="width: ${progress}%"></div>
+          <div class="workload-bar-fill" style="${fillStyle}"></div>
         </div>
         <div class="workload-bar-count">${completed}/${total}</div>
-        <div class="workload-bar-status">
-          <span class="status-badge ${badgeClass}">${statusBadge}</span>
-        </div>
+        <div class="workload-bar-status">${parts.join('')}</div>
       `;
 
       workloadBars.appendChild(bar);
@@ -993,7 +1457,7 @@ async function loadOneDriveTenants() {
     console.log('Config loaded:', config);
 
     if (config.success && config.config && config.config.Customers) {
-      const customers = config.config.Customers;
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
       console.log('Customers found:', customers.length);
       onedriveTenantUrl.innerHTML = '<option value="">Select tenant...</option>';
 
@@ -1021,7 +1485,7 @@ async function loadMonitorProjects() {
 
     const config = await window.electronAPI.getConfig();
     if (config.success && config.config && config.config.Customers) {
-      const customers = config.config.Customers;
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
       monitorProject.innerHTML = '<option value="">Select project...</option>';
 
       customers.forEach(customer => {
@@ -1038,31 +1502,19 @@ async function loadMonitorProjects() {
   }
 }
 
-// Load AOS configuration into the AOS Setup view
+// Load saved AOS tenant details into the AOS Setup view
 async function loadAosConfig() {
   try {
-    const aosUrl = document.getElementById('aosUrl');
-    const aosClientId = document.getElementById('aosClientId');
-    const aosClientSecret = document.getElementById('aosClientSecret');
-
-    if (!aosUrl || !aosClientId || !aosClientSecret) {
-      console.log('AOS elements not found');
-      return;
-    }
-
-    const config = await window.electronAPI.getConfig();
-
-    if (config.success && config.config) {
-      aosUrl.value = config.config.Url || '';
-      aosClientId.value = config.config.ClientId || '';
-
-      // Show placeholder for secret if it exists
-      if (config.config.EncSecret) {
-        aosClientSecret.placeholder = '••••••••••••••••';
-      } else {
-        aosClientSecret.placeholder = 'No secret configured';
-      }
-    }
+    const result = await window.electronAPI.getSharedConfig();
+    if (!result.success || !result.config) return;
+    const cfg = result.config;
+    const dn = document.getElementById('aosDisplayName');
+    const sc = document.getElementById('aosSearchCode');
+    const pn = document.getElementById('aosProfileName');
+    if (dn && cfg.TenantName)   dn.value = cfg.TenantName;
+    if (sc && cfg.TenantSearch) sc.value = cfg.TenantSearch;
+    if (pn && cfg.AppProfileName) pn.value = cfg.AppProfileName;
+    else if (pn && cfg.TenantName && !pn.value) pn.value = cfg.TenantName + ' App';
   } catch (error) {
     console.error('Error loading AOS config:', error);
   }
@@ -1080,7 +1532,7 @@ async function loadConnectionsCustomers() {
     const config = await window.electronAPI.getConfig();
 
     if (config.success && config.config && config.config.Customers) {
-      const customers = config.config.Customers;
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
       console.log('Loading customers into dropdown:', customers.length);
 
       psCustomerPrefix.innerHTML = '<option value="">Select customer...</option>';
@@ -1101,6 +1553,113 @@ async function loadConnectionsCustomers() {
   }
 }
 
+function fitConnectionsLog() {
+  const logPre = document.getElementById('connMappingsLogPre');
+  const view   = document.getElementById('avepointConnectionsView');
+  if (!logPre || !view || view.classList.contains('hidden')) return;
+  requestAnimationFrame(() => {
+    const top     = logPre.getBoundingClientRect().top;
+    const content = document.querySelector('.content');
+    const padBot  = content ? (parseInt(getComputedStyle(content).paddingBottom) || 40) : 40;
+    const height  = window.innerHeight - top - padBot;
+    logPre.style.height = Math.max(80, height) + 'px';
+  });
+}
+
+window.addEventListener('resize', fitConnectionsLog);
+
+// Show full error/exception detail for a single migration item
+async function showItemDetail(item) {
+  if (!item) return;
+  const overlay = document.getElementById('itemDetailOverlay');
+  const title   = document.getElementById('itemDetailTitle');
+  const body    = document.getElementById('itemDetailBody');
+  if (!overlay) return;
+
+  title.textContent = item.Name || 'Item Details';
+  body.innerHTML = '<p style="color:#6b7280;font-size:13px;">Loading...</p>';
+  overlay.classList.remove('hidden');
+
+  // Get portal URL for the Fly link
+  let portalUrl = null;
+  try {
+    const cfg = await window.electronAPI.getConfig();
+    if (cfg.success && cfg.config) portalUrl = cfg.config.PortalUrl || null;
+  } catch (_) {}
+
+  // Workload → Fly portal URL path segment
+  const workloadPaths = {
+    Exchange: 'exchange', SharePoint: 'sharepoint', OneDrive: 'onedrive',
+    Teams: 'teams', TeamChat: 'teamchat', Groups: 'm365group'
+  };
+  const flyUrl = portalUrl
+    ? `${portalUrl.replace(/\/$/, '')}` +
+      (workloadPaths[item.Workload] ? `/migration/${workloadPaths[item.Workload]}/projects` : '')
+    : null;
+
+  function field(label, value, color) {
+    if (!value) return '';
+    return `<div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">${label}</div>
+      <div style="font-size:13px;color:${color || '#1c1c20'};word-break:break-word;">${value}</div>
+    </div>`;
+  }
+
+  const errorValue = item.Error || item.Warning || '';
+  const errorColor = item.Error ? '#dc2626' : item.Warning ? '#d97706' : '#1c1c20';
+
+  // Build "All Fly Fields" section from the raw CSV row — this shows every column
+  // AvePoint Fly exported, including error codes and exception detail regardless of column naming
+  const skipKeys = new Set(['Name','Destination','Workload','Project','Status','Error','Warning',
+    'Exception','TotalItems','MigratedItems','FailedItemCount','LastRunTime','AllFields']);
+  let allFieldsHtml = '';
+  const allFields = item.AllFields || {};
+  const flyFieldEntries = Object.entries(allFields).filter(([k]) => !skipKeys.has(k) && k !== 'SourceUserPrincipalName');
+  if (flyFieldEntries.length) {
+    const rows = flyFieldEntries.map(([k, v]) => {
+      const isError = /error|exception|fail/i.test(k);
+      const color = isError ? (item.Error ? '#dc2626' : '#d97706') : '#374151';
+      return `<tr>
+        <td style="padding:4px 10px 4px 0;font-size:11px;font-weight:600;color:#6b7280;white-space:nowrap;vertical-align:top;">${k}</td>
+        <td style="padding:4px 0;font-size:12px;color:${color};word-break:break-word;">${v}</td>
+      </tr>`;
+    }).join('');
+    allFieldsHtml = `<div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Fly Migration Data</div>
+      <table style="width:100%;border-collapse:collapse;">${rows}</table>
+    </div>`;
+  }
+
+  const flyLinkHtml = flyUrl ? `
+    <div style="margin-bottom:16px;">
+      <button id="openInFlyBtn" class="btn btn-secondary btn-compact" style="font-size:12px;">
+        ↗ Open in AvePoint Fly
+      </button>
+    </div>` : '';
+
+  body.innerHTML = `
+    <div>
+      ${flyLinkHtml}
+      ${field('Source', item.Name)}
+      ${field('Destination', item.Destination)}
+      ${item.Project ? field('Project', item.Project) : ''}
+      ${field('Workload', item.Workload)}
+      ${field('Status / Error', errorValue, errorColor)}
+      ${item.Exception ? `<div style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Exception</div>
+        <pre style="font-size:11px;background:#1a1b26;color:#cdd4e6;padding:14px;border-radius:6px;overflow-x:auto;white-space:pre-wrap;word-break:break-word;margin:0;line-height:1.5;">${item.Exception}</pre>
+      </div>` : ''}
+      ${allFieldsHtml}
+      ${field('Last Run', item.LastRunTime)}
+    </div>`;
+
+  if (flyUrl) {
+    document.getElementById('openInFlyBtn')?.addEventListener('click', async () => {
+      await window.electronAPI.openExternal(flyUrl);
+    });
+  }
+}
+
 // Switch between views
 function switchView(viewName) {
   console.log('Switching to view:', viewName);
@@ -1113,6 +1672,8 @@ function switchView(viewName) {
   const viewMap = {
     'dashboard': 'dashboardView',
     'discovery': 'discoveryView',
+    // Discovery sub-views
+    'discovery-tenant-licenses': 'discoveryTenantLicensesView',
     // AvePoint Fly sub-views
     'avepoint-appreg': 'avepointAppRegView',
     'avepoint-aos': 'avepointAosView',
@@ -1120,14 +1681,24 @@ function switchView(viewName) {
     'avepoint-reports': 'avepointReportsView',
     'avepoint-monitor': 'avepointMonitorView',
     // Misc Scripts sub-views
+    'misc-baseline': 'miscBaselineView',
     'misc-onedrive': 'miscOneDriveView',
     'misc-teams': 'miscTeamsView',
+    'misc-deduplicate': 'miscDeduplicateView',
+    'misc-purge-spo':     'miscPurgeSpoView',
+    'misc-domain-devices': 'miscDomainDevicesView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
     'domain-onprem': 'domainOnPremView',
     'domain-cloud': 'domainCloudView',
-    'domain-hide': 'domainHideView'
+    'domain-hide': 'domainHideView',
+    'domain-clear-employeeid': 'domainClearEmployeeIdView',
+    'domain-alias': 'domainAliasView',
+    'domain-sip': 'domainSIPView',
+    'domain-devices': 'domainDevicesView',
+    'domain-retire-devices': 'domainRetireDevicesView',
+    'domain-entra-remove': 'domainEntraRemoveView'
   };
 
   const targetViewId = viewMap[viewName];
@@ -1137,7 +1708,9 @@ function switchView(viewName) {
       targetView.classList.remove('hidden');
 
       // Load dropdowns when specific views are shown
-      if (viewName === 'misc-onedrive') {
+      if (viewName === 'discovery') {
+        loadDiscoveryDomains();
+      } else if (viewName === 'misc-onedrive') {
         loadOneDriveTenants();
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
@@ -1145,6 +1718,7 @@ function switchView(viewName) {
         loadAosConfig();
       } else if (viewName === 'avepoint-connections') {
         loadConnectionsCustomers();
+        fitConnectionsLog();
       } else if (viewName === 'dashboard') {
         // Restart dashboard auto-refresh when returning to dashboard
         const domain = dashboardDomainSelect?.value;
@@ -1158,6 +1732,27 @@ function switchView(viewName) {
   // Stop dashboard auto-refresh when navigating away from dashboard
   if (viewName !== 'dashboard') {
     stopDashboardAutoRefresh();
+  }
+}
+
+// ── Discovery: domain/VBU dropdown ───────────────────────────────────────────
+let _vbuMap = {};
+let _vbuRows = [];
+
+async function loadDiscoveryDomains() {
+  try {
+    const cfgResult = await window.electronAPI.getConfig();
+    const csvPath = cfgResult?.config?.VbuCsvPath;
+    if (!csvPath) return;
+
+    const result = await window.electronAPI.readVbuCsv(csvPath);
+    if (!result.success || !result.rows.length) return;
+
+    _vbuMap = {};
+    _vbuRows = result.rows;
+    result.rows.forEach(r => { _vbuMap[r.domain] = r.vbuId; });
+  } catch (err) {
+    console.error('loadDiscoveryDomains failed:', err);
   }
 }
 
@@ -1228,34 +1823,69 @@ async function checkForUpdates() {
   }
 }
 
-// Manual check for updates (from settings)
+// AOS sign-in from Settings Config tab
+async function settingsAosSignIn() {
+  const btn = document.getElementById('settingsAosSignInBtn');
+  const statusSpan = document.getElementById('settingsAosSessionStatus');
+  btn.disabled = true;
+  btn.textContent = 'Opening browser...';
+  statusSpan.style.color = 'var(--color-text-muted)';
+  statusSpan.textContent = 'Waiting for sign-in...';
+  try {
+    await window.electronAPI.streamPowerShell('Login-AOS.ps1', []);
+    statusSpan.style.color = 'var(--color-success, #4caf50)';
+    statusSpan.textContent = 'Session saved';
+  } catch (err) {
+    statusSpan.style.color = 'var(--color-error, #f44336)';
+    statusSpan.textContent = `Failed: ${err.message || err}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign in to AOS';
+  }
+}
+
+// Manual check for updates (from settings) — streams output so user can see progress
 async function manualCheckUpdates() {
   const statusSpan = document.getElementById('updateStatus');
+  const logPre = document.getElementById('updateLog');
   const btn = document.getElementById('checkUpdatesBtn');
 
+  btn.disabled = true;
+  statusSpan.textContent = 'Checking...';
+  statusSpan.style.color = '#6c757d';
+  logPre.textContent = '';
+  logPre.style.display = 'block';
+
+  let accumulated = '';
+
+  const onOutput = (text) => {
+    accumulated += text;
+    logPre.textContent += text;
+    logPre.scrollTop = logPre.scrollHeight;
+  };
+
+  window.electronAPI.onPsOutput(onOutput);
+
   try {
-    btn.disabled = true;
-    statusSpan.textContent = 'Checking...';
-    statusSpan.style.color = '#6c757d';
+    const result = await window.electronAPI.streamPowerShell('Check-Updates.ps1', ['-Force']);
 
-    const result = await window.electronAPI.checkUpdates();
-
-    if (result.success) {
-      if (result.output && result.output.includes('UPDATE_AVAILABLE')) {
-        statusSpan.textContent = '✓ Update available! Restart to install.';
+    if (result.success || result.code === 0) {
+      if (accumulated.includes('UPDATE_AVAILABLE')) {
+        statusSpan.textContent = '✓ Update available!';
         statusSpan.style.color = '#28a745';
       } else {
-        statusSpan.textContent = '✓ You have the latest version';
+        statusSpan.textContent = '✓ Already up to date';
         statusSpan.style.color = '#28a745';
       }
     } else {
-      statusSpan.textContent = `❌ ${result.error || 'Check failed'}`;
+      statusSpan.textContent = `❌ Check failed (exit ${result.code ?? '?'})`;
       statusSpan.style.color = '#dc3545';
     }
   } catch (error) {
     statusSpan.textContent = `❌ Error: ${error.message}`;
     statusSpan.style.color = '#dc3545';
   } finally {
+    window.electronAPI.offPsOutput(onOutput);
     btn.disabled = false;
   }
 }
@@ -1306,6 +1936,7 @@ async function openSettings() {
       document.getElementById('sharePointAdminUrl').value = result.config.SharePointAdminUrl || '';
       document.getElementById('secretExpiry').value = result.config.SecretExpiry || '';
       document.getElementById('discoveryOutputPath').value = result.config.DiscoveryOutputPath || '';
+      document.getElementById('vbuCsvPath').value = result.config.VbuCsvPath || '';
 
       // Load customers into table
       const customerTableBody = document.getElementById('customerTableBody');
@@ -1319,8 +1950,8 @@ async function openSettings() {
           const td1 = document.createElement('td');
           const td2 = document.createElement('td');
           const td3 = document.createElement('td');
+          const td4 = document.createElement('td');
 
-          // Create inputs properly to avoid HTML escaping issues
           const input1 = document.createElement('input');
           input1.type = 'text';
           input1.className = 'form-input form-input-compact customer-prefix';
@@ -1335,17 +1966,25 @@ async function openSettings() {
 
           const input3 = document.createElement('input');
           input3.type = 'text';
-          input3.className = 'form-input form-input-compact customer-spo';
-          input3.value = customer.SharePointAdminUrl || '';
-          input3.placeholder = 'https://tenant-admin.sharepoint.com';
+          input3.className = 'form-input form-input-compact customer-domain';
+          input3.value = customer.Domain || '';
+          input3.placeholder = 'e.g. mbufara';
+
+          const input4 = document.createElement('input');
+          input4.type = 'text';
+          input4.className = 'form-input form-input-compact customer-spo';
+          input4.value = customer.SharePointAdminUrl || '';
+          input4.placeholder = 'https://tenant-admin.sharepoint.com';
 
           td1.appendChild(input1);
           td2.appendChild(input2);
           td3.appendChild(input3);
+          td4.appendChild(input4);
 
           row.appendChild(td1);
           row.appendChild(td2);
           row.appendChild(td3);
+          row.appendChild(td4);
 
           customerTableBody.appendChild(row);
         });
@@ -1381,6 +2020,7 @@ async function saveSettings() {
     const sharePointAdminUrl = document.getElementById('sharePointAdminUrl').value.trim();
     const secretExpiry = document.getElementById('secretExpiry').value.trim();
     const discoveryOutputPath = document.getElementById('discoveryOutputPath').value.trim();
+    const vbuCsvPath = document.getElementById('vbuCsvPath').value.trim();
 
     // Collect customer data from table
     const customerRows = document.querySelectorAll('#customerTableBody tr');
@@ -1389,12 +2029,14 @@ async function saveSettings() {
     customerRows.forEach(row => {
       const prefix = row.querySelector('.customer-prefix').value.trim();
       const accountName = row.querySelector('.customer-account').value.trim();
+      const domain = row.querySelector('.customer-domain')?.value.trim() || '';
       const spoUrl = row.querySelector('.customer-spo').value.trim();
 
-      if (prefix) {  // Only add if prefix is not empty
+      if (prefix) {
         customers.push({
           Prefix: prefix,
           AccountName: accountName,
+          Domain: domain,
           SharePointAdminUrl: spoUrl
         });
       }
@@ -1409,6 +2051,7 @@ async function saveSettings() {
       SharePointAdminUrl: sharePointAdminUrl,
       SecretExpiry: secretExpiry,
       DiscoveryOutputPath: discoveryOutputPath,
+      VbuCsvPath: vbuCsvPath,
       Customers: customers
     };
 
@@ -1425,10 +2068,10 @@ async function saveSettings() {
       alert('Settings saved successfully');
       closeSettings();
 
-      // Reload customer domains in dashboard
-      if (typeof loadCustomerDomains === 'function') {
-        loadCustomerDomains();
-      }
+      // Reload customer data in all views that cache it
+      if (typeof loadCustomerDomains === 'function') loadCustomerDomains();
+      if (typeof loadMonitorProjects === 'function') loadMonitorProjects();
+      if (typeof loadConnectionsCustomers === 'function') loadConnectionsCustomers();
     } else {
       alert(`Failed to save settings:\n${result.error}`);
     }
@@ -1511,155 +2154,342 @@ async function saveSettings() {
     }
   }
 
+// Wire up item detail modal close
+document.addEventListener('DOMContentLoaded', () => {
+  const itemOverlay = document.getElementById('itemDetailOverlay');
+  document.getElementById('itemDetailClose')?.addEventListener('click', () => {
+    itemOverlay?.classList.add('hidden');
+  });
+  itemOverlay?.addEventListener('click', (e) => {
+    if (e.target === itemOverlay) itemOverlay.classList.add('hidden');
+  });
+});
+
 // PowerShell Automation - needs to be called during DOMContentLoaded
 // Initialize after DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  const psCustomerPrefix = document.getElementById('psCustomerPrefix');
-  const psWorkload = document.getElementById('psWorkload');
-  const psMappingFile = document.getElementById('psMappingFile');
-  const psBrowseMappingBtn = document.getElementById('psBrowseMappingBtn');
-  const psCreateProjectBtn = document.getElementById('psCreateProjectBtn');
+  const psCustomerPrefix    = document.getElementById('psCustomerPrefix');
+  const psCreateProjectBtn  = document.getElementById('psCreateProjectBtn');
   const psImportMappingsBtn = document.getElementById('psImportMappingsBtn');
-  const psStartWorkflowBtn = document.getElementById('psStartWorkflowBtn');
-  const psViewDocsBtn = document.getElementById('psViewDocsBtn');
+  const psCreateSitesBtn    = document.getElementById('psCreateSitesBtn');
+  const psVerifyBtn         = document.getElementById('psVerifyBtn');
+  const psPreScanBtn        = document.getElementById('psPreScanBtn');
+  const psFullMigrBtn       = document.getElementById('psFullMigrBtn');
+  const psIncrMigrBtn       = document.getElementById('psIncrMigrBtn');
+  const psStartWorkflowBtn  = document.getElementById('psStartWorkflowBtn');
+  const psStopJobsBtn       = document.getElementById('psStopJobsBtn');
+  const psClearMappingsBtn  = document.getElementById('psClearMappingsBtn');
+  const psViewDocsBtn       = document.getElementById('psViewDocsBtn');
+  const connMappingsLog     = document.getElementById('connMappingsLog');
+  const connMappingsLogPre  = document.getElementById('connMappingsLogPre');
 
-  if (psBrowseMappingBtn) {
-    psBrowseMappingBtn.addEventListener('click', async () => {
-      // TODO: Implement file browser dialog
-      alert('File browser not yet implemented. Please type the path manually for now.');
-    });
+  function appendConnLog(text) {
+    if (!connMappingsLogPre) return;
+    connMappingsLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    connMappingsLogPre.scrollTop = connMappingsLogPre.scrollHeight;
+  }
+
+  function showConnLog(clearFirst) {
+    if (connMappingsLog) connMappingsLog.style.display = '';
+    if (clearFirst && connMappingsLogPre) connMappingsLogPre.textContent = '';
+    fitConnectionsLog();
+  }
+
+  const connWorkloadDefs = [
+    { id: 'exchangeMapping',   workload: 'Exchange'   },
+    { id: 'onedriveMapping',   workload: 'OneDrive'   },
+    { id: 'sharepointMapping', workload: 'SharePoint' },
+    { id: 'teamsMapping',      workload: 'Teams'      },
+    { id: 'teamschatsMapping', workload: 'TeamChat'   },
+    { id: 'groupsMapping',     workload: 'Groups'     },
+  ];
+
+  function getFilledWorkloads() {
+    return connWorkloadDefs
+      .map(w => ({ ...w, file: document.getElementById(w.id)?.value?.trim() }))
+      .filter(w => w.file);
+  }
+
+  function getSelectedWorkloads() {
+    return connWorkloadDefs
+      .filter(w => document.getElementById(`wlChk-${w.workload}`)?.checked)
+      .map(w => w.workload);
   }
 
   if (psCreateProjectBtn) {
     psCreateProjectBtn.addEventListener('click', async () => {
-      const prefix = psCustomerPrefix.value.trim();
-      const workload = psWorkload.value;
+      const prefix = psCustomerPrefix?.value?.trim();
+      if (!prefix) { alert('Please select a customer first.'); return; }
 
-      if (!prefix || !workload) {
-        alert('Please enter Customer Prefix and select Workload');
+      const cfgResult = await window.electronAPI.getConfig();
+      const cfg = cfgResult.success ? cfgResult.config : {};
+
+      const sourceConnMap = {
+        Exchange:   'OurVolaris - EXO',
+        OneDrive:   'OurVolaris - OneDrive',
+        SharePoint: 'OurVolaris - SPO',
+        Teams:      'OurVolaris - MS Teams',
+        TeamChat:   'OurVolaris - Teams Chats',
+        Groups:     'OurVolaris - M365 Groups',
+      };
+
+      const customer = (cfg.Customers || []).find(c => c.Prefix === prefix);
+      const customerDomain = customer?.Domain?.trim() || '';
+      if (!customerDomain) {
+        alert(`No domain found for customer "${prefix}".\n\nAdd the customer's domain in Settings → Customer.`);
         return;
       }
 
-      const projectName = `${prefix} - ${workload}`;
-      const confirmed = confirm(`Create project: ${projectName}?`);
-      if (!confirmed) return;
-
       psCreateProjectBtn.disabled = true;
       psCreateProjectBtn.textContent = 'Creating...';
+      showConnLog(true);
+      appendConnLog(`=== Creating Projects for ${prefix} ===\n\n`);
 
+      window.electronAPI.onPsOutput(appendConnLog);
       try {
-        const result = await window.electronAPI.executePowerShell('New-FlyProject.ps1', [
-          '-ProjectName', projectName,
-          '-Workload', workload
-        ]);
-
-        if (result.success) {
-          alert(`✓ Project created successfully!\n\n${result.output}`);
-        } else {
-          alert(`✗ Failed to create project:\n\n${result.error}`);
+        for (const item of connWorkloadDefs) {
+          const projectName = `${prefix} - ${item.workload}`;
+          appendConnLog(`\n--- ${projectName} ---\n`);
+          const result = await window.electronAPI.streamPowerShell('New-FlyProject.ps1', [
+            '-ProjectName',      projectName,
+            '-Workload',         item.workload,
+            '-SourceConnection', sourceConnMap[item.workload],
+            '-CustomerDomain',   customerDomain
+          ]);
+          appendConnLog(result.success ? `\n✓ Done\n` : `\n✗ Failed (exit ${result.code})\n`);
         }
-      } catch (error) {
-        alert(`Error: ${error.message}`);
+        appendConnLog('\n=== Finished ===\n');
+      } catch (err) {
+        appendConnLog(`\nError: ${err.message || err}\n`);
       } finally {
+        window.electronAPI.offPsOutput();
         psCreateProjectBtn.disabled = false;
-        psCreateProjectBtn.textContent = '📁 Create Project';
+        psCreateProjectBtn.textContent = '📁 Create Projects';
       }
     });
   }
 
   if (psImportMappingsBtn) {
     psImportMappingsBtn.addEventListener('click', async () => {
-      const prefix = psCustomerPrefix.value.trim();
-      const workload = psWorkload.value;
-      const mappingFile = psMappingFile.value.trim();
+      const prefix = psCustomerPrefix?.value?.trim();
+      if (!prefix) { alert('Please select a customer first.'); return; }
 
-      if (!prefix || !workload || !mappingFile) {
-        alert('Please enter Customer Prefix, Workload, and Mapping File');
-        return;
-      }
-
-      const projectName = `${prefix} - ${workload}`;
-      const confirmed = confirm(`Import mappings to: ${projectName}?\n\nFile: ${mappingFile}`);
-      if (!confirmed) return;
+      const toImport = getFilledWorkloads();
+      if (toImport.length === 0) { alert('Please browse for at least one mapping file.'); return; }
 
       psImportMappingsBtn.disabled = true;
       psImportMappingsBtn.textContent = 'Importing...';
+      showConnLog(true);
+      appendConnLog(`=== Importing Mappings for ${prefix} ===\n\n`);
 
+      window.electronAPI.onPsOutput(appendConnLog);
       try {
-        const result = await window.electronAPI.executePowerShell('Import-FlyMappings.ps1', [
-          '-ProjectName', projectName,
-          '-Workload', workload,
-          '-MappingFile', mappingFile
-        ]);
-
-        if (result.success) {
-          alert(`✓ Mappings imported successfully!\n\n${result.output}`);
-        } else {
-          alert(`✗ Failed to import mappings:\n\n${result.error}`);
+        for (const item of toImport) {
+          const projectName = `${prefix} - ${item.workload}`;
+          appendConnLog(`\n--- ${item.workload} ---\n`);
+          psImportMappingsBtn.textContent = `Importing ${item.workload}…`;
+          const result = await window.electronAPI.streamPowerShell('Import-FlyMappings.ps1', [
+            '-ProjectName', projectName,
+            '-Workload',    item.workload,
+            '-MappingFile', item.file
+          ]);
+          appendConnLog(result.success ? `\n✓ Done\n` : `\n✗ Failed (exit ${result.code})\n`);
         }
-      } catch (error) {
-        alert(`Error: ${error.message}`);
+        appendConnLog('\n=== Finished ===\n');
+      } catch (err) {
+        appendConnLog(`\nError: ${err.message || err}\n`);
       } finally {
+        window.electronAPI.offPsOutput();
         psImportMappingsBtn.disabled = false;
         psImportMappingsBtn.textContent = '📥 Import Mappings';
       }
     });
   }
 
-  if (psStartWorkflowBtn) {
-    psStartWorkflowBtn.addEventListener('click', async () => {
-      const prefix = psCustomerPrefix.value.trim();
-      const workload = psWorkload.value;
-      const mappingFile = psMappingFile.value.trim();
+  if (psCreateSitesBtn) {
+    psCreateSitesBtn.addEventListener('click', async () => {
+      const prefix = psCustomerPrefix?.value?.trim();
+      if (!prefix) { alert('Please select a customer first.'); return; }
 
-      if (!prefix || !workload || !mappingFile) {
-        alert('Please enter Customer Prefix, Workload, and Mapping File');
+      const spFile = document.getElementById('sharepointMapping')?.value?.trim();
+      if (!spFile) {
+        alert('Please browse for the SharePoint mapping CSV file first.');
         return;
       }
 
-      const confirmed = confirm(
-        `Run FULL migration workflow?\n\n` +
-        `Customer: ${prefix}\n` +
-        `Workload: ${workload}\n` +
-        `Mapping: ${mappingFile}\n\n` +
-        `This will:\n` +
-        `1. Create project\n` +
-        `2. Import mappings\n` +
-        `3. Run pre-scan\n` +
-        `4. Run verification\n` +
-        `5. Start migration\n\n` +
-        `Continue?`
-      );
-      if (!confirmed) return;
+      const cfgResult = await window.electronAPI.getConfig();
+      const cfg = cfgResult.success ? cfgResult.config : {};
+      const customer = (cfg.Customers || []).find(c => c.Prefix === prefix);
+      const ownerEmail = customer?.AccountName?.trim();
+      if (!ownerEmail) {
+        alert(`No AccountName found for customer "${prefix}".\n\nAdd the destination admin email in Settings → Customer.`);
+        return;
+      }
+
+      psCreateSitesBtn.disabled = true;
+      psCreateSitesBtn.textContent = 'Creating Sites...';
+      showConnLog(true);
+      appendConnLog(`=== Create SharePoint Sites — ${prefix} ===\n`);
+      appendConnLog(`Site owner: ${ownerEmail}\n\n`);
+
+      window.electronAPI.onPsOutput(appendConnLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('New-SharePointSites.ps1', [
+          '-MappingFile', spFile,
+          '-SiteOwner',   ownerEmail
+        ]);
+        appendConnLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+        appendConnLog('\n=== Finished ===\n');
+      } catch (err) {
+        appendConnLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        psCreateSitesBtn.disabled = false;
+        psCreateSitesBtn.textContent = '🌐 Create Sites';
+      }
+    });
+  }
+
+  async function runMigrationStage(stage, label, btn, originalLabel) {
+    const prefix = psCustomerPrefix?.value?.trim();
+    if (!prefix) { alert('Please select a customer first.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = `${label}…`;
+    showConnLog(true);
+    appendConnLog(`=== ${label} — ${prefix} ===\n\n`);
+
+    window.electronAPI.onPsOutput(appendConnLog);
+    try {
+      const args = ['-CustomerPrefix', prefix, '-Stage', stage];
+      // Only pass -Workloads when a non-empty subset is explicitly ticked;
+      // if nothing (or everything) is ticked, let the PS script run all workloads
+      // and skip any projects that don't exist automatically.
+      const selected = getSelectedWorkloads();
+      if (selected.length > 0 && selected.length < connWorkloadDefs.length) {
+        args.push('-Workloads', selected.join(','));
+      }
+      const result = await window.electronAPI.streamPowerShell('Start-FlyMigrationStage.ps1', args);
+      appendConnLog(result.success ? `\n✓ Done\n` : `\n✗ Failed (exit ${result.code})\n`);
+      appendConnLog('\n=== Finished ===\n');
+    } catch (err) {
+      appendConnLog(`\nError: ${err.message || err}\n`);
+    } finally {
+      window.electronAPI.offPsOutput();
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  }
+
+  if (psVerifyBtn) {
+    psVerifyBtn.addEventListener('click', () =>
+      runMigrationStage('Verify', 'Verify', psVerifyBtn, '✓ Verify'));
+  }
+
+  if (psPreScanBtn) {
+    psPreScanBtn.addEventListener('click', () =>
+      runMigrationStage('PreScan', 'Pre-Scan', psPreScanBtn, '🔍 Pre-Scan'));
+  }
+
+  if (psFullMigrBtn) {
+    psFullMigrBtn.addEventListener('click', () =>
+      runMigrationStage('FullMigration', 'Full Migration', psFullMigrBtn, '▶ Full'));
+  }
+
+  if (psIncrMigrBtn) {
+    psIncrMigrBtn.addEventListener('click', () =>
+      runMigrationStage('IncrementalMigration', 'Incremental Migration', psIncrMigrBtn, '↺ Incremental'));
+  }
+
+  if (psStopJobsBtn) {
+    psStopJobsBtn.addEventListener('click', async () => {
+      const prefix = psCustomerPrefix?.value?.trim();
+      if (!prefix) { alert('Please select a customer first.'); return; }
+      if (!confirm(`Stop all in-progress jobs for "${prefix}"?`)) return;
+
+      psStopJobsBtn.disabled = true;
+      psStopJobsBtn.textContent = 'Stopping…';
+      showConnLog(true);
+      appendConnLog(`=== Stop Jobs — ${prefix} ===\n\n`);
+
+      window.electronAPI.onPsOutput(appendConnLog);
+      try {
+        const args = ['-CustomerPrefix', prefix];
+        const selected = getSelectedWorkloads();
+        if (selected.length > 0 && selected.length < connWorkloadDefs.length) {
+          args.push('-Workloads', selected.join(','));
+        }
+        const result = await window.electronAPI.streamPowerShell('Stop-FlyMigrationStage.ps1', args);
+        appendConnLog(result.success ? `\n✓ Done\n` : `\n✗ Failed (exit ${result.code})\n`);
+        appendConnLog('\n=== Finished ===\n');
+      } catch (err) {
+        appendConnLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        psStopJobsBtn.disabled = false;
+        psStopJobsBtn.textContent = '⏹ Stop Jobs';
+      }
+    });
+  }
+
+  if (psStartWorkflowBtn) {
+    psStartWorkflowBtn.addEventListener('click', async () => {
+      const prefix = psCustomerPrefix?.value?.trim();
+      if (!prefix) { alert('Please select a customer first.'); return; }
+
+      const toRun = getFilledWorkloads();
+      if (toRun.length === 0) { alert('Please browse for at least one mapping file.'); return; }
+
+      const cfgResult2 = await window.electronAPI.getConfig();
+      const cfg2 = cfgResult2.success ? cfgResult2.config : {};
+      const wfCustomer = (cfg2.Customers || []).find(c => c.Prefix === prefix);
+      const wfDomain = wfCustomer?.Domain?.trim() || '';
 
       psStartWorkflowBtn.disabled = true;
-      psStartWorkflowBtn.textContent = 'Running Workflow...';
+      psStartWorkflowBtn.textContent = 'Running...';
+      showConnLog(true);
+      appendConnLog(`=== Full Migration Workflow for ${prefix} ===\n\n`);
 
+      window.electronAPI.onPsOutput(appendConnLog);
       try {
-        const result = await window.electronAPI.executePowerShell('Start-FlyMigrationWorkflow.ps1', [
-          '-CustomerPrefix', prefix,
-          '-Workload', workload,
-          '-MappingFile', mappingFile
-        ]);
-
-        if (result.success) {
-          alert(`✓ Workflow completed successfully!\n\n${result.output}`);
-        } else {
-          alert(`✗ Workflow failed:\n\n${result.error}`);
+        for (const item of toRun) {
+          appendConnLog(`\n--- ${item.workload} ---\n`);
+          psStartWorkflowBtn.textContent = `Running ${item.workload}…`;
+          const wfArgs = [
+            '-CustomerPrefix', prefix,
+            '-Workload',       item.workload,
+            '-MappingFile',    item.file
+          ];
+          if (wfDomain) { wfArgs.push('-CustomerDomain', wfDomain); }
+          const result = await window.electronAPI.streamPowerShell('Start-FlyMigrationWorkflow.ps1', wfArgs);
+          appendConnLog(result.success ? `\n✓ Done\n` : `\n✗ Failed (exit ${result.code})\n`);
         }
-      } catch (error) {
-        alert(`Error: ${error.message}`);
+        appendConnLog('\n=== Finished ===\n');
+      } catch (err) {
+        appendConnLog(`\nError: ${err.message || err}\n`);
       } finally {
+        window.electronAPI.offPsOutput();
         psStartWorkflowBtn.disabled = false;
-        psStartWorkflowBtn.textContent = '🚀 Run Full Workflow';
+        psStartWorkflowBtn.textContent = '🚀 Full Workflow';
       }
+    });
+  }
+
+  if (psClearMappingsBtn) {
+    psClearMappingsBtn.addEventListener('click', () => {
+      connWorkloadDefs.forEach(w => {
+        const el = document.getElementById(w.id);
+        if (el) el.value = '';
+      });
+      if (connMappingsLogPre) connMappingsLogPre.textContent = '';
+      if (connMappingsLog)    connMappingsLog.style.display = 'none';
     });
   }
 
   if (psViewDocsBtn) {
     psViewDocsBtn.addEventListener('click', async () => {
       try {
-        await window.electronAPI.openExternal('file:///C:/Temp/Scripts/VGMigrations/POWERSHELL-AUTOMATION.md');
+        await window.electronAPI.openExternal('https://docs.avepoint.com/fly/');
       } catch (error) {
         alert(`Error opening documentation: ${error.message}`);
       }
@@ -1672,6 +2502,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const createAppRegBtn = document.getElementById('createAppRegBtn');
   const viewAppRegDocsBtn = document.getElementById('viewAppRegDocsBtn');
   const appRegStatus = document.getElementById('appRegStatus');
+
+  const appRegLog    = document.getElementById('appRegLog');
+  const appRegLogPre = document.getElementById('appRegLogPre');
+
+  function appendAppRegLog(text) {
+    if (!appRegLogPre) return;
+    const clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+    // Detect ##OPEN_FILE:<path>## signal from the PS script and open via Electron
+    const fileMarker = clean.match(/##OPEN_FILE:(.+?)##/);
+    if (fileMarker) {
+      window.electronAPI.openFile(fileMarker[1].trim());
+      appRegLogPre.textContent += clean.replace(/##OPEN_FILE:.+?##/g, '').replace(/^\n/, '');
+    } else {
+      appRegLogPre.textContent += clean;
+    }
+    appRegLogPre.scrollTop = appRegLogPre.scrollHeight;
+  }
 
   if (createAppRegBtn) {
     createAppRegBtn.addEventListener('click', async () => {
@@ -1706,39 +2553,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
       createAppRegBtn.disabled = true;
       createAppRegBtn.textContent = 'Creating...';
+
+      if (appRegLog)    { appRegLog.style.display = 'block'; }
+      if (appRegLogPre) { appRegLogPre.textContent = ''; }
       appRegStatus.style.display = 'block';
       appRegStatus.style.color = '#6c757d';
-      appRegStatus.textContent = '⏳ PowerShell window will show a device code. Copy it and visit https://microsoft.com/devicelogin';
+      appRegStatus.textContent = '⏳ Running — device code will appear in the log below. Copy it and visit https://microsoft.com/devicelogin';
+
+      appendAppRegLog('Starting app registration...\n\n');
+
+      // Stream output line-by-line so the device code appears immediately
+      window.electronAPI.onPsOutput((data) => appendAppRegLog(data));
 
       try {
-        const result = await window.electronAPI.executePowerShell('New-AzureAppRegistration.ps1', [
+        const result = await window.electronAPI.streamPowerShell('New-AzureAppRegistration.ps1', [
           '-TenantId', tenantId,
-          '-AppName', appName
+          '-AppName', appName,
+          '-SkipSavePrompt'
         ]);
 
         if (result.success) {
+          appendAppRegLog('\n✓ Completed successfully.\n');
           appRegStatus.style.color = '#28a745';
-          appRegStatus.textContent = '✓ App registration created! Check the PowerShell window for credentials.';
-          alert(
-            `✓ App Registration Created!\n\n` +
-            `IMPORTANT: Copy the credentials from the PowerShell window.\n\n` +
-            `Next Steps:\n` +
-            `1. Copy the Client ID and Secret from PowerShell\n` +
-            `2. Grant admin consent in Azure Portal\n` +
-            `3. Enter credentials in Settings > Config tab\n` +
-            `4. Test connection\n\n` +
-            `See PowerShell window for full details.`
-          );
+          appRegStatus.textContent = '✓ App registration created — see log above for credentials.';
         } else {
+          appendAppRegLog('\n✗ Failed (exit code ' + result.code + ').\n');
           appRegStatus.style.color = '#dc3545';
-          appRegStatus.textContent = `✗ Failed: ${result.error}`;
-          alert(`✗ Failed to create app registration:\n\n${result.error}`);
+          appRegStatus.textContent = '✗ Failed — see log above for details.';
         }
       } catch (error) {
+        appendAppRegLog('\n✗ Error: ' + (error.message || error) + '\n');
         appRegStatus.style.color = '#dc3545';
-        appRegStatus.textContent = `✗ Error: ${error.message}`;
-        alert(`Error: ${error.message}`);
+        appRegStatus.textContent = `✗ Error: ${error.message || error}`;
       } finally {
+        window.electronAPI.offPsOutput();
         createAppRegBtn.disabled = false;
         createAppRegBtn.textContent = '🚀 Create App Registration';
       }
@@ -1756,37 +2604,150 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // AOS Setup handlers
-  const aosLaunchSetupBtn = document.getElementById('aosLaunchSetupBtn');
-  const aosOpenSettingsBtn = document.getElementById('aosOpenSettingsBtn');
-  const aosTestConnectionBtn = document.getElementById('aosTestConnectionBtn');
-  const aosConnectionStatus = document.getElementById('aosConnectionStatus');
-
-  if (aosLaunchSetupBtn) {
-    aosLaunchSetupBtn.addEventListener('click', async () => {
-      aosLaunchSetupBtn.disabled = true;
-      aosLaunchSetupBtn.textContent = 'Launching...';
-
-      try {
-        await window.electronAPI.launchScript('Launch-AosSetup.ps1');
-        // Reload config after setup completes
-        setTimeout(() => {
-          loadAosConfig();
-        }, 1000);
-      } catch (error) {
-        alert(`Error launching AOS Setup:\n${error.message}`);
-      } finally {
-        aosLaunchSetupBtn.disabled = false;
-        aosLaunchSetupBtn.textContent = '🚀 Launch AOS Setup Wizard';
+  const aosDisplayNameInput = document.getElementById('aosDisplayName');
+  if (aosDisplayNameInput) {
+    aosDisplayNameInput.addEventListener('input', () => {
+      const pn = document.getElementById('aosProfileName');
+      if (pn && (!pn.value || pn.value.endsWith(' App'))) {
+        pn.value = aosDisplayNameInput.value.trim() ? aosDisplayNameInput.value.trim() + ' App' : '';
       }
     });
   }
 
-  if (aosOpenSettingsBtn) {
-    aosOpenSettingsBtn.addEventListener('click', () => {
-      openSettings();
+  // ── Step 1: Assign Exchange Administrator role ────────────────────────────
+  const aosAddExchangeAdminBtn = document.getElementById('aosAddExchangeAdminBtn');
+  if (aosAddExchangeAdminBtn) {
+    aosAddExchangeAdminBtn.addEventListener('click', async () => {
+      const upn = (document.getElementById('aosExchangeAdminUpn') || {}).value?.trim();
+      if (!upn) { alert('Enter the UPN of the account to assign the Exchange Administrator role to.'); return; }
+
+      const logDiv = document.getElementById('aosExchangeAdminLog');
+      const logPre = document.getElementById('aosExchangeAdminLogPre');
+      if (logDiv) logDiv.style.display = 'block';
+      if (logPre) logPre.textContent = '';
+
+      aosAddExchangeAdminBtn.disabled = true;
+      aosAddExchangeAdminBtn.textContent = 'Assigning…';
+
+      window.electronAPI.onPsOutput((data) => {
+        if (logPre) {
+          logPre.textContent += data.replace(/\x1b\[[0-9;]*m/g, '');
+          logPre.scrollTop = logPre.scrollHeight;
+        }
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Add-ExchangeAdmin.ps1', ['-UPN', upn]);
+        if (logPre) logPre.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        if (logPre) logPre.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        aosAddExchangeAdminBtn.disabled = false;
+        aosAddExchangeAdminBtn.textContent = 'Assign Role';
+      }
     });
   }
 
+  const aosLog    = document.getElementById('aosLog');
+  const aosLogPre = document.getElementById('aosLogPre');
+
+  function appendAosLog(text) {
+    if (!aosLogPre) return;
+    aosLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    aosLogPre.scrollTop = aosLogPre.scrollHeight;
+  }
+
+  function showAosStatus(msg, type) {
+    const el = document.getElementById('aosStatus');
+    if (!el) return;
+    el.style.display = 'block';
+    el.style.color = type === 'error' ? '#dc3545' : type === 'warning' ? '#856404' : '#0064b4';
+    el.textContent = msg;
+  }
+
+  function aosGetFields() {
+    return {
+      displayName: (document.getElementById('aosDisplayName') || {}).value?.trim() || '',
+      searchCode:  (document.getElementById('aosSearchCode')  || {}).value?.trim() || '',
+      profileName: (document.getElementById('aosProfileName') || {}).value?.trim() || ''
+    };
+  }
+
+  const aosSignInBtn = document.getElementById('aosSignInBtn');
+  if (aosSignInBtn) {
+    aosSignInBtn.addEventListener('click', async () => {
+      const { displayName, searchCode, profileName } = aosGetFields();
+      if (!displayName || !searchCode) {
+        showAosStatus('Enter Display Name and Search Code first.', 'warning');
+        return;
+      }
+      aosSignInBtn.disabled = true;
+      aosSignInBtn.textContent = 'Signing in...';
+      if (aosLog)    { aosLog.style.display = 'block'; }
+      if (aosLogPre) { aosLogPre.textContent = ''; }
+      showAosStatus('Opening browser for AOS sign-in...', 'info');
+      appendAosLog('Starting sign-in...\n\n');
+      window.electronAPI.onPsOutput((data) => appendAosLog(data));
+      try {
+        await window.electronAPI.saveSharedConfig({ TenantName: displayName, TenantSearch: searchCode, AppProfileName: profileName });
+        const result = await window.electronAPI.streamPowerShell('Aos-SignIn.ps1');
+        if (result.success) {
+          appendAosLog('\n✓ Sign-in complete.\n');
+          showAosStatus('✓ Signed in. Session saved.', 'info');
+        } else {
+          appendAosLog('\n✗ Sign-in failed (exit code ' + result.code + ').\n');
+          showAosStatus('✗ Sign-in failed — see log above.', 'error');
+        }
+      } catch (error) {
+        appendAosLog('\n✗ Error: ' + (error.message || error) + '\n');
+        showAosStatus('Error: ' + (error.message || error), 'error');
+      } finally {
+        window.electronAPI.offPsOutput();
+        aosSignInBtn.disabled = false;
+        aosSignInBtn.textContent = '🔐 Sign in to AOS';
+      }
+    });
+  }
+
+  const aosRunSetupBtn = document.getElementById('aosRunSetupBtn');
+  if (aosRunSetupBtn) {
+    aosRunSetupBtn.addEventListener('click', async () => {
+      const { displayName, searchCode, profileName } = aosGetFields();
+      if (!displayName || !searchCode || !profileName) {
+        showAosStatus('Please fill in all three fields before running setup.', 'warning');
+        return;
+      }
+      aosRunSetupBtn.disabled = true;
+      aosRunSetupBtn.textContent = 'Running...';
+      if (aosLog)    { aosLog.style.display = 'block'; }
+      if (aosLogPre) { aosLogPre.textContent = ''; }
+      showAosStatus('Browser automation running — approve any consent prompts that appear.', 'info');
+      appendAosLog('Starting app profile setup...\n\n');
+      window.electronAPI.onPsOutput((data) => appendAosLog(data));
+      try {
+        await window.electronAPI.saveSharedConfig({ TenantName: displayName, TenantSearch: searchCode, AppProfileName: profileName });
+        const result = await window.electronAPI.streamPowerShell('Aos-Setup.ps1');
+        if (result.success) {
+          appendAosLog('\n✓ Setup complete.\n');
+          showAosStatus('✓ App profile created and consent granted.', 'info');
+        } else {
+          appendAosLog('\n✗ Setup failed (exit code ' + result.code + ').\n');
+          showAosStatus('✗ Setup failed — see log above.', 'error');
+        }
+      } catch (error) {
+        appendAosLog('\n✗ Error: ' + (error.message || error) + '\n');
+        showAosStatus('Error: ' + (error.message || error), 'error');
+      } finally {
+        window.electronAPI.offPsOutput();
+        aosRunSetupBtn.disabled = false;
+        aosRunSetupBtn.textContent = '🚀 Create App Profile & Grant Consent';
+      }
+    });
+  }
+
+  // --- dead code kept for reference, remove this block if aosTestConnectionBtn no longer exists ---
+  const aosTestConnectionBtn = document.getElementById('aosTestConnectionBtn');
+  const aosConnectionStatus  = document.getElementById('aosConnectionStatus');
   if (aosTestConnectionBtn) {
     aosTestConnectionBtn.addEventListener('click', async () => {
       aosTestConnectionBtn.disabled = true;
@@ -1814,5 +2775,845 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+});
+
+// ── Misc Scripts handlers ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+
+  // ── Provision OneDrives ───────────────────────────────────────────────────
+  const provisionOneDriveBtn      = document.getElementById('provisionOneDriveBtn');
+  const checkOneDriveStatusBtn    = document.getElementById('checkOneDriveStatusBtn');
+  const onedriveTenantUrl         = document.getElementById('onedriveTenantUrl');
+  const onedriveAdHocUrl          = document.getElementById('onedriveAdHocUrl');
+  const onedriveMappingFile       = document.getElementById('onedriveMappingFile');
+  const onedriveColumnOverride    = document.getElementById('onedriveColumnOverride');
+  const onedriveWhatIf            = document.getElementById('onedriveWhatIf');
+  const onedriveExportClean       = document.getElementById('onedriveExportClean');
+  const onedriveExportCleanBrowse = document.getElementById('onedriveExportCleanBrowse');
+  const provisionOneDriveLog      = document.getElementById('provisionOneDriveLog');
+  const provisionOneDriveLogPre   = document.getElementById('provisionOneDriveLogPre');
+
+  function appendProvLog(text) {
+    if (!provisionOneDriveLogPre) return;
+    provisionOneDriveLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    provisionOneDriveLogPre.scrollTop = provisionOneDriveLogPre.scrollHeight;
+  }
+
+  if (provisionOneDriveBtn) {
+    provisionOneDriveBtn.addEventListener('click', async () => {
+      const adminUrl = onedriveAdHocUrl?.value?.trim() || onedriveTenantUrl?.value?.trim();
+      const mapFile  = onedriveMappingFile?.value?.trim();
+      if (!adminUrl) { alert('Please select an SPO Admin URL or enter a one-off URL.'); return; }
+      if (!mapFile)  { alert('Please browse for a mapping file.'); return; }
+
+      provisionOneDriveBtn.disabled = true;
+      provisionOneDriveBtn.textContent = 'Running…';
+      if (provisionOneDriveLog) provisionOneDriveLog.style.display = '';
+      if (provisionOneDriveLogPre) provisionOneDriveLogPre.textContent = '';
+
+      const args = ['-MappingFile', mapFile, '-AdminUrl', adminUrl];
+      const col  = onedriveColumnOverride?.value?.trim();
+      if (col) args.push('-Column', col);
+      if (onedriveWhatIf?.checked) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput(appendProvLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Provision-OneDrives.ps1', args);
+        appendProvLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendProvLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        provisionOneDriveBtn.disabled = false;
+        provisionOneDriveBtn.textContent = '▶ Start Provisioning';
+      }
+    });
+  }
+
+  if (onedriveExportCleanBrowse) {
+    onedriveExportCleanBrowse.addEventListener('click', async () => {
+      const mapFile = onedriveMappingFile?.value?.trim() || '';
+      const defaultName = mapFile
+        ? mapFile.replace(/(\.[^.]+)$/, '_clean$1')
+        : 'mapping_clean.csv';
+      const result = await window.electronAPI.showSaveDialog({
+        defaultPath: defaultName,
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }, { name: 'All Files', extensions: ['*'] }]
+      });
+      if (!result.canceled && result.filePath) {
+        onedriveExportClean.value = result.filePath;
+      }
+    });
+  }
+
+  if (checkOneDriveStatusBtn) {
+    checkOneDriveStatusBtn.addEventListener('click', async () => {
+      const adminUrl = onedriveAdHocUrl?.value?.trim() || onedriveTenantUrl?.value?.trim();
+      const mapFile  = onedriveMappingFile?.value?.trim();
+      if (!adminUrl) { alert('Please select an SPO Admin URL or enter a one-off URL.'); return; }
+      if (!mapFile)  { alert('Please browse for a mapping file.'); return; }
+
+      checkOneDriveStatusBtn.disabled = true;
+      provisionOneDriveBtn.disabled   = true;
+      checkOneDriveStatusBtn.textContent = 'Checking…';
+      if (provisionOneDriveLog) provisionOneDriveLog.style.display = '';
+      if (provisionOneDriveLogPre) provisionOneDriveLogPre.textContent = '';
+
+      const args = ['-MappingFile', mapFile, '-AdminUrl', adminUrl];
+      const col  = onedriveColumnOverride?.value?.trim();
+      if (col) args.push('-Column', col);
+      const exportPath = onedriveExportClean?.value?.trim();
+      if (exportPath) args.push('-ExportCleanCsv', exportPath);
+
+      window.electronAPI.onPsOutput(appendProvLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Check-OneDriveStatus.ps1', args);
+        appendProvLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendProvLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        checkOneDriveStatusBtn.disabled = false;
+        provisionOneDriveBtn.disabled   = false;
+        checkOneDriveStatusBtn.textContent = 'Check Status';
+      }
+    });
+  }
+
+  // ── Tenant Baseline Config ────────────────────────────────────────────────
+  const baselineRunBtn   = document.getElementById('baselineRunBtn');
+  const baselineAdminUpn = document.getElementById('baselineAdminUpn');
+  const baselineLogPre   = document.getElementById('baselineLogPre');
+
+  function appendBaselineLog(text) {
+    if (!baselineLogPre) return;
+    baselineLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    baselineLogPre.scrollTop = baselineLogPre.scrollHeight;
+  }
+
+  if (baselineRunBtn) {
+    baselineRunBtn.addEventListener('click', async () => {
+      const adminUpn = baselineAdminUpn?.value?.trim();
+      if (!adminUpn) { alert('Please enter the Exchange Online admin UPN.'); return; }
+
+      baselineRunBtn.disabled = true;
+      baselineRunBtn.textContent = 'Running…';
+      if (baselineLogPre) baselineLogPre.textContent = '';
+
+      // -Restarted skips the script's self-relaunch/process-kill logic so it
+      // runs inline in this already-clean pwsh child process and streams here.
+      const args = ['-Restarted', '-AdminUPN', adminUpn];
+
+      window.electronAPI.onPsOutput(appendBaselineLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Invoke-TenantBaseline.ps1', args);
+        appendBaselineLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendBaselineLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        baselineRunBtn.disabled = false;
+        baselineRunBtn.textContent = '▶ Run Baseline Config';
+      }
+    });
+  }
+
+  // ── Deduplicate Inventory ─────────────────────────────────────────────────
+  const deduplicateRunBtn   = document.getElementById('deduplicateRunBtn');
+  const deduplicateWorkbook = document.getElementById('deduplicateWorkbook');
+  const deduplicateLogPre   = document.getElementById('deduplicateLogPre');
+
+  function appendDeduplicateLog(text) {
+    if (!deduplicateLogPre) return;
+    deduplicateLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    deduplicateLogPre.scrollTop = deduplicateLogPre.scrollHeight;
+  }
+
+  if (deduplicateRunBtn) {
+    deduplicateRunBtn.addEventListener('click', async () => {
+      const workbook = deduplicateWorkbook?.value?.trim();
+      if (!workbook) { alert('Please browse for a discovery workbook.'); return; }
+
+      deduplicateRunBtn.disabled = true;
+      deduplicateRunBtn.textContent = 'Running…';
+      if (deduplicateLogPre) deduplicateLogPre.textContent = '';
+
+      const args = ['-SourceWorkbook', workbook];
+
+      window.electronAPI.onPsOutput(appendDeduplicateLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Deduplicate-Inventory.ps1', args);
+        appendDeduplicateLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendDeduplicateLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        deduplicateRunBtn.disabled = false;
+        deduplicateRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Purge Deleted SPO Sites ───────────────────────────────────────────────
+  const purgeSpoRunBtn     = document.getElementById('purgeSpoRunBtn');
+  const purgeSpoMappingFile = document.getElementById('purgeSpoMappingFile');
+  const purgeSpoLogPre     = document.getElementById('purgeSpoLogPre');
+
+  if (purgeSpoRunBtn) {
+    purgeSpoRunBtn.addEventListener('click', async () => {
+      const mappingFile = purgeSpoMappingFile?.value?.trim();
+      if (!mappingFile) { alert('Please browse for the SharePoint mapping CSV file.'); return; }
+
+      purgeSpoRunBtn.disabled = true;
+      purgeSpoRunBtn.textContent = 'Purging…';
+      if (purgeSpoLogPre) purgeSpoLogPre.textContent = '';
+
+      const appendLog = text => {
+        if (!purgeSpoLogPre) return;
+        purgeSpoLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+        purgeSpoLogPre.scrollTop = purgeSpoLogPre.scrollHeight;
+      };
+
+      window.electronAPI.onPsOutput(appendLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Remove-DeletedSharePointSites.ps1', [
+          '-MappingFile', mappingFile
+        ]);
+        appendLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        purgeSpoRunBtn.disabled = false;
+        purgeSpoRunBtn.textContent = '🗑 Purge Deleted Sites';
+      }
+    });
+  }
+
+  // ── Set Teams Owners ──────────────────────────────────────────────────────
+  const setTeamsOwnersBtn  = document.getElementById('setTeamsOwnersBtn');
+  const teamsOwnerUpn      = document.getElementById('teamsOwnerUpn');
+  const teamsCsvFile       = document.getElementById('teamsCsvFile');
+  const teamsWhatIf        = document.getElementById('teamsWhatIf');
+  const teamsOwnersLog     = document.getElementById('teamsOwnersLog');
+  const teamsOwnersLogPre  = document.getElementById('teamsOwnersLogPre');
+
+  function appendTeamsLog(text) {
+    if (!teamsOwnersLogPre) return;
+    teamsOwnersLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    teamsOwnersLogPre.scrollTop = teamsOwnersLogPre.scrollHeight;
+  }
+
+  if (setTeamsOwnersBtn) {
+    setTeamsOwnersBtn.addEventListener('click', async () => {
+      const ownerUpn = teamsOwnerUpn?.value?.trim();
+      const csvFile  = teamsCsvFile?.value?.trim();
+      if (!ownerUpn) { alert('Please enter the owner UPN.'); return; }
+      if (!csvFile)  { alert('Please browse for a CSV file.'); return; }
+
+      setTeamsOwnersBtn.disabled = true;
+      setTeamsOwnersBtn.textContent = 'Running…';
+      if (teamsOwnersLog) teamsOwnersLog.style.display = '';
+      if (teamsOwnersLogPre) teamsOwnersLogPre.textContent = '';
+
+      const args = ['-CsvFile', csvFile, '-OwnerUpn', ownerUpn];
+      if (teamsWhatIf?.checked) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput(appendTeamsLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Set-TeamsOwners-Run.ps1', args);
+        appendTeamsLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendTeamsLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        setTeamsOwnersBtn.disabled = false;
+        setTeamsOwnersBtn.textContent = '▶ Add Owner';
+      }
+    });
+  }
+
+  // ── Get Domain Devices ────────────────────────────────────────────────────
+  const getDomainDevicesBtn = document.getElementById('getDomainDevicesBtn');
+  if (getDomainDevicesBtn) {
+    getDomainDevicesBtn.addEventListener('click', async () => {
+      await launchScript('Get-DomainDevices.ps1', getDomainDevicesBtn);
+    });
+  }
+
+  // ── Tenant License Report ─────────────────────────────────────────────────
+  const tenantLicensesRunBtn = document.getElementById('tenantLicensesRunBtn');
+  const tenantLicensesCsvFile = document.getElementById('tenantLicensesCsvFile');
+  const tenantLicensesLogPre = document.getElementById('tenantLicensesLogPre');
+
+  function appendTenantLicensesLog(text) {
+    if (!tenantLicensesLogPre) return;
+    const clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+    // Detect ##OPEN_FILE:<path>## signal from the PS script and open via Electron —
+    // pops the finished CSV report open on screen (same convention as App Registration).
+    const fileMarker = clean.match(/##OPEN_FILE:(.+?)##/);
+    if (fileMarker) {
+      window.electronAPI.openFile(fileMarker[1].trim());
+      tenantLicensesLogPre.textContent += clean.replace(/##OPEN_FILE:.+?##/g, '').replace(/^\n/, '');
+    } else {
+      tenantLicensesLogPre.textContent += clean;
+    }
+    tenantLicensesLogPre.scrollTop = tenantLicensesLogPre.scrollHeight;
+  }
+
+  if (tenantLicensesRunBtn) {
+    tenantLicensesRunBtn.addEventListener('click', async () => {
+      const csvFile = tenantLicensesCsvFile?.value?.trim();
+      if (!csvFile) { alert('Please browse for the tenants CSV file.'); return; }
+
+      tenantLicensesRunBtn.disabled = true;
+      tenantLicensesRunBtn.textContent = 'Running…';
+      if (tenantLicensesLogPre) tenantLicensesLogPre.textContent = '';
+
+      window.electronAPI.onPsOutput(appendTenantLicensesLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Get-TenantLicenseReport.ps1', ['-TenantsFile', csvFile]);
+        appendTenantLicensesLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendTenantLicensesLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        tenantLicensesRunBtn.disabled = false;
+        tenantLicensesRunBtn.textContent = '▶ Run License Report';
+      }
+    });
+  }
+
+  // ── Clear Employee ID (On-Prem AD) ────────────────────────────────────────
+  const clearEmployeeIdRunBtn = document.getElementById('clearEmployeeIdRunBtn');
+  const clearEmployeeIdCsvFile = document.getElementById('clearEmployeeIdCsvFile');
+  const clearEmployeeIdWhatIf = document.getElementById('clearEmployeeIdWhatIf');
+  const clearEmployeeIdLogPre = document.getElementById('clearEmployeeIdLogPre');
+
+  function appendClearEmployeeIdLog(text) {
+    if (!clearEmployeeIdLogPre) return;
+    clearEmployeeIdLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    clearEmployeeIdLogPre.scrollTop = clearEmployeeIdLogPre.scrollHeight;
+  }
+
+  if (clearEmployeeIdRunBtn) {
+    clearEmployeeIdRunBtn.addEventListener('click', async () => {
+      const csvFile = clearEmployeeIdCsvFile?.value?.trim();
+      if (!csvFile) { alert('Please browse for the AvePoint mapping CSV file.'); return; }
+
+      clearEmployeeIdRunBtn.disabled = true;
+      clearEmployeeIdRunBtn.textContent = 'Running…';
+      if (clearEmployeeIdLogPre) clearEmployeeIdLogPre.textContent = '';
+
+      const args = ['-MappingFile', csvFile];
+      if (clearEmployeeIdWhatIf?.checked) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput(appendClearEmployeeIdLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Clear-EmployeeId.ps1', args);
+        appendClearEmployeeIdLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendClearEmployeeIdLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        clearEmployeeIdRunBtn.disabled = false;
+        clearEmployeeIdRunBtn.textContent = '▶ Clear Employee ID';
+      }
+    });
+  }
+
+  // ── Reports → redirect to Monitor ────────────────────────────────────────
+  const reportsGoToMonitorBtn = document.getElementById('reportsGoToMonitorBtn');
+  if (reportsGoToMonitorBtn) {
+    reportsGoToMonitorBtn.addEventListener('click', () => {
+      switchView('avepoint-monitor');
+    });
+  }
+
+  // ── Remove Domain — browse & run ──────────────────────────────────────────
+  const removeBrowseBtn = document.getElementById('removeBrowseBtn');
+  if (removeBrowseBtn) {
+    removeBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('removeDiscoveryFolder').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const removeRunBtn = document.getElementById('removeRunBtn');
+  if (removeRunBtn) {
+    removeRunBtn.addEventListener('click', async () => {
+      const folder    = document.getElementById('removeDiscoveryFolder').value.trim();
+      const oldDomain = document.getElementById('removeOldDomain').value.trim();
+      const newDomain = document.getElementById('removeNewDomain').value.trim();
+      const whatIf    = document.getElementById('removeWhatIf').checked;
+      const checked   = [...document.querySelectorAll('.remove-section:checked')].map(cb => cb.value);
+
+      if (!folder)    { alert('Please select a Discovery folder.'); return; }
+      if (!oldDomain) { alert('Please enter the Old Domain (rename from).'); return; }
+      if (!newDomain) { alert('Please enter the New Domain (rename to).'); return; }
+      if (checked.length === 0) { alert('Please select at least one object type.'); return; }
+
+      const logSection = document.getElementById('removeLog');
+      const logOutput  = document.getElementById('removeLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      removeRunBtn.disabled = true;
+      removeRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder, '-OldDomain', oldDomain, '-NewDomain', newDomain,
+                    '-Sections', checked.join(',')];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Rename-DomainObjects.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        removeRunBtn.disabled = false;
+        removeRunBtn.textContent = '▶ Rename Domain';
+      }
+    });
+  }
+
+  // ── Update On-Prem UPNs ───────────────────────────────────────────────────
+  const onpremCsvBrowseBtn = document.getElementById('onpremCsvBrowseBtn');
+  if (onpremCsvBrowseBtn) {
+    onpremCsvBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (!result.canceled && result.filePaths.length > 0) {
+        document.getElementById('onpremCsvFolder').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const onpremRunBtn = document.getElementById('onpremRunBtn');
+  if (onpremRunBtn) {
+    onpremRunBtn.addEventListener('click', async () => {
+      const folder = document.getElementById('onpremCsvFolder').value.trim();
+      const src    = document.getElementById('onpremSourceDomain').value.trim();
+      const tgt    = document.getElementById('onpremTargetDomain').value.trim();
+      const whatIf = document.getElementById('onpremWhatIf').checked;
+
+      if (!folder) { alert('Please select a CSV folder.'); return; }
+      if (!src || !tgt) { alert('Please enter both source and target domains.'); return; }
+
+      const logSection = document.getElementById('onpremLog');
+      const logOutput  = document.getElementById('onpremLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      onpremRunBtn.disabled = true;
+      onpremRunBtn.textContent = 'Running…';
+
+      const args = ['-CSVFolder', folder, '-SourceDomain', src, '-TargetDomain', tgt];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Update-OnPremUPN.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        onpremRunBtn.disabled = false;
+        onpremRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Update Cloud UPNs ─────────────────────────────────────────────────────
+  const cloudRunBtn = document.getElementById('cloudRunBtn');
+  if (cloudRunBtn) {
+    cloudRunBtn.addEventListener('click', async () => {
+      const oldDomain = document.getElementById('cloudOldDomain').value.trim();
+      const newDomain = document.getElementById('cloudNewDomain').value.trim();
+      const whatIf    = document.getElementById('cloudWhatIf').checked;
+
+      if (!oldDomain || !newDomain) { alert('Please enter both old and new domains.'); return; }
+
+      const logSection = document.getElementById('cloudLog');
+      const logOutput  = document.getElementById('cloudLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      cloudRunBtn.disabled = true;
+      cloudRunBtn.textContent = 'Running…';
+
+      const args = ['-OldDomain', oldDomain, '-NewDomain', newDomain];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Update-UPN.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        cloudRunBtn.disabled = false;
+        cloudRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Hide from Address Book ────────────────────────────────────────────────
+  const hideBrowseBtn = document.getElementById('hideBrowseBtn');
+  if (hideBrowseBtn) {
+    hideBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (!result.canceled && result.filePaths.length > 0) {
+        document.getElementById('hideDiscoveryFolder').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const hideRunBtn = document.getElementById('hideRunBtn');
+  if (hideRunBtn) {
+    hideRunBtn.addEventListener('click', async () => {
+      const folder = document.getElementById('hideDiscoveryFolder').value.trim();
+      const whatIf = document.getElementById('hideWhatIf').checked;
+
+      if (!folder) { alert('Please select a discovery folder.'); return; }
+
+      const logSection = document.getElementById('hideLog');
+      const logOutput  = document.getElementById('hideLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      hideRunBtn.disabled = true;
+      hideRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Hide-AddressBook.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        hideRunBtn.disabled = false;
+        hideRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Remove Alias Addresses ────────────────────────────────────────────────
+  const aliasBrowseBtn = document.getElementById('aliasBrowseBtn');
+  if (aliasBrowseBtn) {
+    aliasBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (!result.canceled && result.filePaths.length > 0) {
+        document.getElementById('aliasDiscoveryFolder').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const aliasRunBtn = document.getElementById('aliasRunBtn');
+  if (aliasRunBtn) {
+    aliasRunBtn.addEventListener('click', async () => {
+      const folder         = document.getElementById('aliasDiscoveryFolder').value.trim();
+      const domain         = document.getElementById('aliasDomain').value.trim();
+      const removeAliases  = document.getElementById('aliasRemoveAliases').checked;
+      const removeSIP      = document.getElementById('aliasRemoveSIP').checked;
+      const whatIf         = document.getElementById('aliasWhatIf').checked;
+
+      if (!folder) { alert('Please select a discovery folder.'); return; }
+      if (!removeAliases && !removeSIP) { alert('Select at least one address type to remove.'); return; }
+
+      const logSection = document.getElementById('aliasLog');
+      const logOutput  = document.getElementById('aliasLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      aliasRunBtn.disabled = true;
+      aliasRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder];
+      if (!removeAliases) args.push('-SkipAliases');
+      if (!removeSIP)     args.push('-SkipSIP');
+      if (domain) args.push('-Domain', domain);
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Remove-AliasAddresses.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        aliasRunBtn.disabled = false;
+        aliasRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── SIP / IM Addresses — mode toggle ──────────────────────────────────────
+  const sipModeEl = document.getElementById('sipMode');
+  if (sipModeEl) {
+    const sipToggle = () => {
+      const isRemove = sipModeEl.value === 'Remove';
+      document.getElementById('sipRemoveFields').style.display   = isRemove ? '' : 'none';
+      document.getElementById('sipNewDomainGroup').style.display = isRemove ? 'none' : '';
+    };
+    sipModeEl.addEventListener('change', sipToggle);
+    sipToggle();
+  }
+
+  // ── SIP / IM Addresses — run ───────────────────────────────────────────────
+  const sipRunBtn = document.getElementById('sipRunBtn');
+  if (sipRunBtn) {
+    sipRunBtn.addEventListener('click', async () => {
+      const mode      = document.getElementById('sipMode').value;
+      const oldDomain = document.getElementById('sipOldDomain').value.trim();
+      const newDomain = document.getElementById('sipNewDomain').value.trim();
+      const skuId     = document.getElementById('sipLicenceSkuId').value.trim();
+      const waitMins  = parseInt(document.getElementById('sipWaitMinutes').value, 10) || 5;
+      const whatIf    = document.getElementById('sipWhatIf').checked;
+
+      if (!oldDomain) { alert('Please enter the old domain.'); return; }
+      if (mode === 'Replace' && !newDomain) { alert('Please enter the new domain.'); return; }
+
+      const logSection = document.getElementById('sipLog');
+      const logOutput  = document.getElementById('sipLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      sipRunBtn.disabled = true;
+      sipRunBtn.textContent = 'Running…';
+
+      const args = ['-OldDomain', oldDomain, '-Mode', mode];
+      if (mode === 'Replace') {
+        args.push('-NewDomain', newDomain);
+      } else {
+        if (skuId) args.push('-LicenseSkuId', skuId);
+        args.push('-WaitMinutes', String(waitMins));
+      }
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Update-SIPDomain.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        sipRunBtn.disabled = false;
+        sipRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Remove Devices ────────────────────────────────────────────────────────
+  const devicesFolderBrowseBtn = document.getElementById('devicesFolderBrowseBtn');
+  if (devicesFolderBrowseBtn) {
+    devicesFolderBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('devicesDiscoveryFolder').value = result.filePaths[0];
+        document.getElementById('devicesCsvFile').value = '';
+      }
+    });
+  }
+
+  const devicesCsvBrowseBtn = document.getElementById('devicesCsvBrowseBtn');
+  if (devicesCsvBrowseBtn) {
+    devicesCsvBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({
+        properties: ['openFile'],
+        filters: [{ name: 'CSV Files', extensions: ['csv'] }]
+      });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('devicesCsvFile').value = result.filePaths[0];
+        document.getElementById('devicesDiscoveryFolder').value = '';
+      }
+    });
+  }
+
+  const devicesRunBtn = document.getElementById('devicesRunBtn');
+  if (devicesRunBtn) {
+    devicesRunBtn.addEventListener('click', async () => {
+      const folder  = document.getElementById('devicesDiscoveryFolder').value.trim();
+      const csvFile = document.getElementById('devicesCsvFile').value.trim();
+      const whatIf  = document.getElementById('devicesWhatIf').checked;
+
+      if (!folder && !csvFile) { alert('Please select a discovery folder or a specific CSV file.'); return; }
+
+      const logSection = document.getElementById('devicesLog');
+      const logOutput  = document.getElementById('devicesLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      devicesRunBtn.disabled = true;
+      devicesRunBtn.textContent = 'Running…';
+
+      const args = [];
+      if (csvFile)  args.push('-CsvFile', csvFile);
+      else          args.push('-DiscoveryFolder', folder);
+      if (whatIf)   args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Remove-devices.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        devicesRunBtn.disabled = false;
+        devicesRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Retire Devices ────────────────────────────────────────────────────────
+  const retireFolderBrowseBtn = document.getElementById('retireFolderBrowseBtn');
+  if (retireFolderBrowseBtn) {
+    retireFolderBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('retireDiscoveryFolder').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const retireCsvBrowseBtn = document.getElementById('retireCsvBrowseBtn');
+  if (retireCsvBrowseBtn) {
+    retireCsvBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({
+        properties: ['openFile'],
+        filters: [{ name: 'CSV files', extensions: ['csv'] }, { name: 'All files', extensions: ['*'] }]
+      });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('retireCsvFile').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const retireRunBtn = document.getElementById('retireRunBtn');
+  if (retireRunBtn) {
+    retireRunBtn.addEventListener('click', async () => {
+      const folder  = document.getElementById('retireDiscoveryFolder').value.trim();
+      const csvFile = document.getElementById('retireCsvFile').value.trim();
+      const whatIf  = document.getElementById('retireWhatIf').checked;
+
+      if (!folder && !csvFile) { alert('Please select a Discovery folder or CSV file.'); return; }
+
+      const logSection = document.getElementById('retireLog');
+      const logOutput  = document.getElementById('retireLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      retireRunBtn.disabled = true;
+      retireRunBtn.textContent = 'Running…';
+
+      const args = [];
+      if (csvFile)  args.push('-CsvFile', csvFile);
+      else          args.push('-DiscoveryFolder', folder);
+      if (whatIf)   args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Retire-Devices.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        retireRunBtn.disabled = false;
+        retireRunBtn.textContent = '▶ Retire Devices';
+      }
+    });
+  }
+
+  // ── Remove Entra Users (last resort) ─────────────────────────────────────
+  const entraRemoveBrowseBtn = document.getElementById('entraRemoveBrowseBtn');
+  if (entraRemoveBrowseBtn) {
+    entraRemoveBrowseBtn.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        document.getElementById('entraRemoveOutputFolder').value = result.filePaths[0];
+      }
+    });
+  }
+
+  const entraRemoveRunBtn = document.getElementById('entraRemoveRunBtn');
+  if (entraRemoveRunBtn) {
+    entraRemoveRunBtn.addEventListener('click', async () => {
+      const domain       = document.getElementById('entraRemoveDomain').value.trim();
+      const outputFolder = document.getElementById('entraRemoveOutputFolder').value.trim();
+      const whatIf       = document.getElementById('entraRemoveWhatIf').checked;
+
+      if (!domain) { alert('Please enter the domain to target.'); return; }
+
+      const logSection = document.getElementById('entraRemoveLog');
+      const logOutput  = document.getElementById('entraRemoveLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      entraRemoveRunBtn.disabled = true;
+      entraRemoveRunBtn.textContent = 'Running…';
+
+      const args = ['-Domain', domain];
+      if (outputFolder) args.push('-OutputFolder', outputFolder);
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Remove-EntraUsers.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        entraRemoveRunBtn.disabled = false;
+        entraRemoveRunBtn.textContent = '▶ Export & Remove';
+      }
+    });
+  }
+
+  // ── Workflow step navigation buttons ──────────────────────────────────────
+  document.querySelectorAll('.workflow-nav-btn[data-view]').forEach((btn) => {
+    btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
+  });
 
 });
