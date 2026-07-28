@@ -99,7 +99,7 @@ try {
             @{
                 ResourceAppId = "00000003-0000-0000-c000-000000000000" # MS Graph
                 ResourceAccess = @(
-                    @{ Id = "dbb9058a-0e50-45d7-ae91-66909b5d4664"; Type = "Role" } # Domain.Read.All
+                    @{ Id = "7e05723c-0bb0-42da-be95-ae9f08a6e53c"; Type = "Role" } # Domain.ReadWrite.All
                 )
             }
         )
@@ -134,13 +134,13 @@ try {
     }
 
     # Grant admin consent
-    Write-Log "Granting admin consent for Domain.Read.All..."
+    Write-Log "Granting admin consent for Domain.ReadWrite.All..."
     $graphSP = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
     try {
         New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -BodyParameter @{
             PrincipalId = $sp.Id
             ResourceId = $graphSP.Id
-            AppRoleId = "dbb9058a-0e50-45d7-ae91-66909b5d4664" # Domain.Read.All
+            AppRoleId = "7e05723c-0bb0-42da-be95-ae9f08a6e53c" # Domain.ReadWrite.All
         } -ErrorAction SilentlyContinue | Out-Null
         Write-Log "Admin consent granted" "SUCCESS"
     } catch {
