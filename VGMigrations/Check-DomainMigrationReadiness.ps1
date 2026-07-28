@@ -3,32 +3,32 @@
 .SYNOPSIS
     Checks if domains are added to target tenant and if DNS verification records are ready
 .DESCRIPTION
-    For each domain in the source tenant:
+    Reads source and destination tenants from Tenant IDs.xlsx:
+    - Column P: Source tenant(s) - can be comma-separated for multiple sources
+    - Column Q: Destination tenant
+
+    For each domain in the source tenant(s):
     1. Checks if domain exists in target tenant
     2. If not, checks if MS-verify TXT record exists in public DNS
     3. Reports readiness status for each domain
-.PARAMETER SourceTenantId
-    Source tenant ID or domain (where domains currently exist)
-.PARAMETER TargetTenantId
-    Target tenant ID or domain (where domains should be migrated to)
-.PARAMETER DomainList
-    Optional: Specific domains to check. If omitted, checks all domains from source tenant.
+.PARAMETER TenantIDsPath
+    Path to the Tenant IDs.xlsx file. Defaults to the standard location.
 .PARAMETER OutputPath
     Path where the report will be saved
+.PARAMETER ProcessAll
+    Process all rows. If false (default), skips rows with "Yes" in column J or N
 .EXAMPLE
-    .\Check-DomainMigrationReadiness.ps1 -SourceTenantId "contoso.onmicrosoft.com" -TargetTenantId "fabrikam.onmicrosoft.com"
+    .\Check-DomainMigrationReadiness.ps1
+.EXAMPLE
+    .\Check-DomainMigrationReadiness.ps1 -ProcessAll
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$SourceTenantId,
+    [string]$TenantIDsPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations\Tenant IDs.xlsx",
 
-    [Parameter(Mandatory=$true)]
-    [string]$TargetTenantId,
+    [string]$OutputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations",
 
-    [string[]]$DomainList,
-
-    [string]$OutputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations"
+    [switch]$ProcessAll
 )
 
 $ErrorActionPreference = 'Stop'
@@ -84,8 +84,13 @@ function Get-DNSVerificationRecord {
 }
 
 Write-Log "=== Domain Migration Readiness Check Started ==="
-Write-Log "Source Tenant: $SourceTenantId"
-Write-Log "Target Tenant: $TargetTenantId"
+Write-Log "Tenant IDs file: $TenantIDsPath"
+
+# Check if file exists
+if (-not (Test-Path $TenantIDsPath)) {
+    Write-Log "ERROR: Tenant IDs file not found: $TenantIDsPath" "ERROR"
+    exit 1
+}
 
 # Check if Microsoft Graph module is available
 if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Authentication)) {
@@ -93,138 +98,262 @@ if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Authentication)) {
     exit 1
 }
 
-# Connect to source tenant to get domains
-Write-Log ""
-Write-Log "=== Connecting to Source Tenant ==="
+# Read Excel file using COM
+Write-Log "Opening Excel file..."
+$excel = $null
+$workbook = $null
+$migrationPairs = [System.Collections.Generic.List[object]]::new()
+
 try {
-    Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-    Connect-MgGraph -TenantId $SourceTenantId -Scopes "Domain.Read.All" -NoWelcome
-    Write-Log "Connected to source tenant"
+    $excel = New-Object -ComObject Excel.Application
+    $excel.Visible = $false
+    $excel.DisplayAlerts = $false
 
-    # Get source tenant info
-    $sourceOrg = Get-MgOrganization
-    $sourceTenantName = $sourceOrg.DisplayName
-    Write-Log "Source tenant name: $sourceTenantName"
+    $workbook = $excel.Workbooks.Open($TenantIDsPath)
+    $worksheet = $workbook.Worksheets.Item(1)
+    $usedRange = $worksheet.UsedRange
 
-    # Get domains from source tenant
-    if ($DomainList) {
-        Write-Log "Using provided domain list: $($DomainList -join ', ')"
-        $sourceDomains = $DomainList | ForEach-Object {
-            [PSCustomObject]@{
-                Id = $_
-                IsDefault = $false
-                IsVerified = $true
+    $rowCount = $usedRange.Rows.Count
+    $colCount = $usedRange.Columns.Count
+
+    Write-Log "Found $rowCount rows and $colCount columns"
+
+    # Read headers from row 1
+    $headers = @{}
+    for ($col = 1; $col -le $colCount; $col++) {
+        $headerValue = $usedRange.Cells.Item(1, $col).Text
+        if ($headerValue) {
+            $headers[$col] = $headerValue
+        }
+    }
+
+    # Process data rows (starting from row 2)
+    for ($row = 2; $row -le $rowCount; $row++) {
+        $tenantName = $usedRange.Cells.Item($row, 1).Text.Trim()
+
+        # Skip empty rows
+        if ([string]::IsNullOrWhiteSpace($tenantName)) {
+            continue
+        }
+
+        # Check column J (column 10) and column N (column 14) for "Yes"
+        if (-not $ProcessAll) {
+            $columnJValue = $usedRange.Cells.Item($row, 10).Text.Trim()
+            $columnNValue = $usedRange.Cells.Item($row, 14).Text.Trim()
+
+            # Skip if column J OR column N has "Yes" (case-insensitive)
+            if ($columnJValue.ToLower() -eq "yes" -or $columnNValue.ToLower() -eq "yes") {
+                $whichCol = if ($columnNValue.ToLower() -eq "yes") { "N" } elseif ($columnJValue.ToLower() -eq "yes") { "J" } else { "" }
+                Write-Log "Row $row : [$tenantName] - Skipping (Column $whichCol = Yes)"
+                continue
             }
         }
-    } else {
-        Write-Log "Retrieving all domains from source tenant..."
+
+        # Read column P (source tenant - column 16) and Q (destination tenant - column 17)
+        $sourceTenants = $usedRange.Cells.Item($row, 16).Text.Trim()
+        $destinationTenant = $usedRange.Cells.Item($row, 17).Text.Trim()
+
+        # Skip if no source or destination
+        if ([string]::IsNullOrWhiteSpace($sourceTenants) -or [string]::IsNullOrWhiteSpace($destinationTenant)) {
+            Write-Log "Row $row : [$tenantName] - Skipping (No source/destination in columns P/Q)"
+            continue
+        }
+
+        # Split source tenants by comma if multiple
+        $sourceList = $sourceTenants -split ',' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+        foreach ($source in $sourceList) {
+            $migrationPairs.Add([PSCustomObject]@{
+                TenantName = $tenantName
+                SourceTenant = $source
+                DestinationTenant = $destinationTenant
+                Row = $row
+            })
+
+            Write-Log "Row $row : [$tenantName] - Source: $source -> Destination: $destinationTenant"
+        }
+    }
+
+} catch {
+    Write-Log "ERROR reading Excel file: $_" "ERROR"
+    throw
+} finally {
+    if ($workbook) {
+        $workbook.Close($false)
+        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($workbook) | Out-Null
+    }
+    if ($excel) {
+        $excel.Quit()
+        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
+    }
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+}
+
+Write-Log "Found $($migrationPairs.Count) source->destination migration pairs to process"
+
+if ($migrationPairs.Count -eq 0) {
+    Write-Log "No migration pairs found to process. Exiting." "WARN"
+    exit 0
+}
+
+# Results collection
+$allResults = [System.Collections.Generic.List[object]]::new()
+
+# Process each migration pair
+foreach ($pair in $migrationPairs) {
+    Write-Log ""
+    Write-Log "=== Processing: $($pair.TenantName) ===" "INFO"
+    Write-Log "Source: $($pair.SourceTenant)"
+    Write-Log "Destination: $($pair.DestinationTenant)"
+
+    # Connect to source tenant to get domains
+    Write-Log "Connecting to source tenant..."
+    try {
+        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+        Connect-MgGraph -TenantId $pair.SourceTenant -Scopes "Domain.Read.All" -NoWelcome
+
+        # Get source tenant info
+        $sourceOrg = Get-MgOrganization
+        $sourceTenantName = $sourceOrg.DisplayName
+        Write-Log "Source tenant: $sourceTenantName"
+
+        # Get domains from source tenant
+        Write-Log "Retrieving domains from source tenant..."
         $sourceDomains = Get-MgDomain | Where-Object {
             # Skip .onmicrosoft.com domains
             $_.Id -notmatch '\.onmicrosoft\.com$'
         }
         Write-Log "Found $($sourceDomains.Count) custom domains in source tenant"
+
+        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+
+    } catch {
+        Write-Log "ERROR connecting to source tenant: $_" "ERROR"
+
+        # Add error record and continue to next pair
+        $allResults.Add([PSCustomObject]@{
+            TenantName = $pair.TenantName
+            SourceTenant = $pair.SourceTenant
+            DestinationTenant = $pair.DestinationTenant
+            Domain = "N/A"
+            InSourceTenant = $false
+            InTargetTenant = $false
+            DNSVerifyRecordFound = $false
+            DNSVerifyRecord = $null
+            ReadinessStatus = "Error"
+            Recommendation = "Failed to connect to source tenant"
+            Notes = "Error: $_"
+        })
+        continue
     }
 
-    Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+    # Connect to target tenant
+    Write-Log "Connecting to destination tenant..."
+    try {
+        Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -NoWelcome
 
-} catch {
-    Write-Log "ERROR connecting to source tenant: $_" "ERROR"
-    exit 1
-}
+        # Get target tenant info
+        $targetOrg = Get-MgOrganization
+        $targetTenantName = $targetOrg.DisplayName
+        Write-Log "Destination tenant: $targetTenantName"
 
-# Connect to target tenant
-Write-Log ""
-Write-Log "=== Connecting to Target Tenant ==="
-try {
-    Connect-MgGraph -TenantId $TargetTenantId -Scopes "Domain.Read.All" -NoWelcome
-    Write-Log "Connected to target tenant"
+        # Get domains from target tenant
+        Write-Log "Retrieving domains from destination tenant..."
+        $targetDomains = Get-MgDomain
+        $targetDomainNames = $targetDomains | Select-Object -ExpandProperty Id
+        Write-Log "Found $($targetDomains.Count) total domains in destination tenant"
 
-    # Get target tenant info
-    $targetOrg = Get-MgOrganization
-    $targetTenantName = $targetOrg.DisplayName
-    Write-Log "Target tenant name: $targetTenantName"
+        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
 
-    # Get domains from target tenant
-    Write-Log "Retrieving domains from target tenant..."
-    $targetDomains = Get-MgDomain
-    $targetDomainNames = $targetDomains | Select-Object -ExpandProperty Id
-    Write-Log "Found $($targetDomains.Count) total domains in target tenant"
+    } catch {
+        Write-Log "ERROR connecting to destination tenant: $_" "ERROR"
 
-    Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-
-} catch {
-    Write-Log "ERROR connecting to target tenant: $_" "ERROR"
-    exit 1
-}
-
-# Check each domain
-Write-Log ""
-Write-Log "=== Checking Domain Readiness ==="
-$results = [System.Collections.Generic.List[object]]::new()
-
-foreach ($domain in $sourceDomains) {
-    $domainName = $domain.Id
-    Write-Log ""
-    Write-Log "Checking: $domainName"
-
-    $result = [PSCustomObject]@{
-        Domain = $domainName
-        InSourceTenant = $true
-        InTargetTenant = $false
-        DNSVerifyRecordFound = $false
-        DNSVerifyRecord = $null
-        ReadinessStatus = ""
-        Recommendation = ""
-        Notes = ""
+        # Add error record and continue to next pair
+        $allResults.Add([PSCustomObject]@{
+            TenantName = $pair.TenantName
+            SourceTenant = $pair.SourceTenant
+            DestinationTenant = $pair.DestinationTenant
+            Domain = "N/A"
+            InSourceTenant = $false
+            InTargetTenant = $false
+            DNSVerifyRecordFound = $false
+            DNSVerifyRecord = $null
+            ReadinessStatus = "Error"
+            Recommendation = "Failed to connect to destination tenant"
+            Notes = "Error: $_"
+        })
+        continue
     }
 
-    # Check if domain exists in target tenant
-    if ($targetDomainNames -contains $domainName) {
-        Write-Log "  ✓ Domain exists in target tenant" "SUCCESS"
-        $result.InTargetTenant = $true
-        $result.ReadinessStatus = "Already Added"
-        $result.Recommendation = "Domain is already in target tenant"
+    # Check each domain
+    Write-Log "Checking domain readiness..."
+    foreach ($domain in $sourceDomains) {
+        $domainName = $domain.Id
+        Write-Log "  Checking: $domainName"
 
-        # Check verification status in target
-        $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainName }
-        if ($targetDomain.IsVerified) {
-            $result.Notes = "Verified in target tenant"
-        } else {
-            $result.Notes = "Added but NOT verified in target tenant"
-            $result.ReadinessStatus = "Added - Needs Verification"
-            $result.Recommendation = "Complete domain verification in target tenant"
+        $result = [PSCustomObject]@{
+            TenantName = $pair.TenantName
+            SourceTenant = $pair.SourceTenant
+            DestinationTenant = $pair.DestinationTenant
+            Domain = $domainName
+            InSourceTenant = $true
+            InTargetTenant = $false
+            DNSVerifyRecordFound = $false
+            DNSVerifyRecord = $null
+            ReadinessStatus = ""
+            Recommendation = ""
+            Notes = ""
         }
-    } else {
-        Write-Log "  ✗ Domain NOT in target tenant" "WARN"
-        $result.InTargetTenant = $false
 
-        # Check DNS for verification record
-        Write-Log "  Checking DNS for MS verification record..."
-        $dnsCheck = Get-DNSVerificationRecord -Domain $domainName
+        # Check if domain exists in target tenant
+        if ($targetDomainNames -contains $domainName) {
+            Write-Log "    ✓ Domain exists in destination tenant" "SUCCESS"
+            $result.InTargetTenant = $true
+            $result.ReadinessStatus = "Already Added"
+            $result.Recommendation = "Domain is already in destination tenant"
 
-        if ($dnsCheck.Found) {
-            Write-Log "  ✓ MS verification record found in DNS: $($dnsCheck.Record)" "SUCCESS"
-            $result.DNSVerifyRecordFound = $true
-            $result.DNSVerifyRecord = $dnsCheck.Record
-            $result.ReadinessStatus = "Ready to Add"
-            $result.Recommendation = "Add domain to target tenant and verify"
-            $result.Notes = "MS verification TXT record present in DNS"
-        } else {
-            Write-Log "  ✗ No MS verification record found in DNS" "WARN"
-            $result.DNSVerifyRecordFound = $false
-            $result.DNSVerifyRecord = $dnsCheck.Record
-            $result.ReadinessStatus = "Not Ready"
-            $result.Recommendation = "Add domain to target tenant to get verification record, then add TXT record to DNS"
-
-            if ($dnsCheck.Record) {
-                $result.Notes = "DNS issue: $($dnsCheck.Record)"
+            # Check verification status in target
+            $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainName }
+            if ($targetDomain.IsVerified) {
+                $result.Notes = "Verified in destination tenant"
             } else {
-                $result.Notes = "No MS verification TXT record found in public DNS"
+                $result.Notes = "Added but NOT verified in destination tenant"
+                $result.ReadinessStatus = "Added - Needs Verification"
+                $result.Recommendation = "Complete domain verification in destination tenant"
+            }
+        } else {
+            Write-Log "    ✗ Domain NOT in destination tenant" "WARN"
+            $result.InTargetTenant = $false
+
+            # Check DNS for verification record
+            Write-Log "    Checking DNS for MS verification record..."
+            $dnsCheck = Get-DNSVerificationRecord -Domain $domainName
+
+            if ($dnsCheck.Found) {
+                Write-Log "    ✓ MS verification record found in DNS: $($dnsCheck.Record)" "SUCCESS"
+                $result.DNSVerifyRecordFound = $true
+                $result.DNSVerifyRecord = $dnsCheck.Record
+                $result.ReadinessStatus = "Ready to Add"
+                $result.Recommendation = "Add domain to destination tenant and verify"
+                $result.Notes = "MS verification TXT record present in DNS"
+            } else {
+                Write-Log "    ✗ No MS verification record found in DNS" "WARN"
+                $result.DNSVerifyRecordFound = $false
+                $result.DNSVerifyRecord = $dnsCheck.Record
+                $result.ReadinessStatus = "Not Ready"
+                $result.Recommendation = "Add domain to destination tenant to get verification record, then add TXT record to DNS"
+
+                if ($dnsCheck.Record) {
+                    $result.Notes = "DNS issue: $($dnsCheck.Record)"
+                } else {
+                    $result.Notes = "No MS verification TXT record found in public DNS"
+                }
             }
         }
-    }
 
-    $results.Add($result)
+        $allResults.Add($result)
+    }
 }
 
 # Generate report
@@ -236,75 +365,101 @@ $reportFile = Join-Path $OutputPath "DomainMigrationReadiness_$timestamp.csv"
 $summaryFile = Join-Path $OutputPath "DomainMigrationReadiness_$timestamp.txt"
 
 # Export detailed CSV
-$results | Export-Csv -Path $reportFile -NoTypeInformation -Encoding UTF8
+$allResults | Export-Csv -Path $reportFile -NoTypeInformation -Encoding UTF8
 Write-Log "Detailed report saved: $reportFile"
 
 # Generate summary
-$alreadyAdded = ($results | Where-Object { $_.ReadinessStatus -eq "Already Added" }).Count
-$readyToAdd = ($results | Where-Object { $_.ReadinessStatus -eq "Ready to Add" }).Count
-$notReady = ($results | Where-Object { $_.ReadinessStatus -eq "Not Ready" }).Count
-$needsVerification = ($results | Where-Object { $_.ReadinessStatus -eq "Added - Needs Verification" }).Count
+$totalDomains = $allResults.Count
+$alreadyAdded = ($allResults | Where-Object { $_.ReadinessStatus -eq "Already Added" }).Count
+$readyToAdd = ($allResults | Where-Object { $_.ReadinessStatus -eq "Ready to Add" }).Count
+$notReady = ($allResults | Where-Object { $_.ReadinessStatus -eq "Not Ready" }).Count
+$needsVerification = ($allResults | Where-Object { $_.ReadinessStatus -eq "Added - Needs Verification" }).Count
+$errors = ($allResults | Where-Object { $_.ReadinessStatus -eq "Error" }).Count
 
 $summary = @"
 === DOMAIN MIGRATION READINESS SUMMARY ===
 Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 
-SOURCE TENANT: $sourceTenantName ($SourceTenantId)
-TARGET TENANT: $targetTenantName ($TargetTenantId)
-
-TOTAL DOMAINS CHECKED: $($results.Count)
+TOTAL MIGRATION PAIRS PROCESSED: $($migrationPairs.Count)
+TOTAL DOMAINS CHECKED: $totalDomains
 
 STATUS BREAKDOWN:
-  ✓ Already Added to Target: $alreadyAdded
+  ✓ Already Added to Destination: $alreadyAdded
   ⚠ Added - Needs Verification: $needsVerification
   ✓ Ready to Add (DNS verified): $readyToAdd
   ✗ Not Ready (DNS not configured): $notReady
+  ⚠ Errors: $errors
 
-=== DETAILED STATUS ===
+=== DETAILED STATUS BY TENANT ===
 
 "@
 
-# Already Added
-if ($alreadyAdded -gt 0) {
-    $summary += "`n--- ALREADY IN TARGET TENANT ($alreadyAdded) ---`n"
-    foreach ($r in $results | Where-Object { $_.ReadinessStatus -eq "Already Added" }) {
-        $summary += "  ✓ $($r.Domain)`n"
-        $summary += "    Status: $($r.Notes)`n"
-    }
-}
+# Group by tenant name
+$groupedResults = $allResults | Group-Object -Property TenantName
 
-# Needs Verification
-if ($needsVerification -gt 0) {
-    $summary += "`n--- ADDED BUT NEEDS VERIFICATION ($needsVerification) ---`n"
-    foreach ($r in $results | Where-Object { $_.ReadinessStatus -eq "Added - Needs Verification" }) {
-        $summary += "  ⚠ $($r.Domain)`n"
-        $summary += "    Action: Complete domain verification in target tenant`n"
-    }
-}
+foreach ($group in $groupedResults) {
+    $summary += "`n--- $($group.Name) ---`n"
 
-# Ready to Add
-if ($readyToAdd -gt 0) {
-    $summary += "`n--- READY TO ADD TO TARGET ($readyToAdd) ---`n"
-    foreach ($r in $results | Where-Object { $_.ReadinessStatus -eq "Ready to Add" }) {
-        $summary += "  ✓ $($r.Domain)`n"
-        $summary += "    DNS Record: $($r.DNSVerifyRecord)`n"
-        $summary += "    Action: Add domain to target tenant and verify`n"
-    }
-}
+    # Show source -> destination mapping
+    $firstResult = $group.Group[0]
+    $summary += "  Source: $($firstResult.SourceTenant)`n"
+    $summary += "  Destination: $($firstResult.DestinationTenant)`n"
+    $summary += "  Domains: $($group.Count)`n`n"
 
-# Not Ready
-if ($notReady -gt 0) {
-    $summary += "`n--- NOT READY ($notReady) ---`n"
-    foreach ($r in $results | Where-Object { $_.ReadinessStatus -eq "Not Ready" }) {
-        $summary += "  ✗ $($r.Domain)`n"
-        $summary += "    Issue: $($r.Notes)`n"
-        $summary += "    Action: $($r.Recommendation)`n"
+    # Already Added
+    $addedDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Already Added" }
+    if ($addedDomains) {
+        $summary += "  ALREADY IN DESTINATION ($($addedDomains.Count)):`n"
+        foreach ($r in $addedDomains) {
+            $summary += "    ✓ $($r.Domain) - $($r.Notes)`n"
+        }
+        $summary += "`n"
+    }
+
+    # Needs Verification
+    $needsVerifyDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Added - Needs Verification" }
+    if ($needsVerifyDomains) {
+        $summary += "  ADDED - NEEDS VERIFICATION ($($needsVerifyDomains.Count)):`n"
+        foreach ($r in $needsVerifyDomains) {
+            $summary += "    ⚠ $($r.Domain)`n"
+        }
+        $summary += "`n"
+    }
+
+    # Ready to Add
+    $readyDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Ready to Add" }
+    if ($readyDomains) {
+        $summary += "  READY TO ADD ($($readyDomains.Count)):`n"
+        foreach ($r in $readyDomains) {
+            $summary += "    ✓ $($r.Domain) - DNS: $($r.DNSVerifyRecord)`n"
+        }
+        $summary += "`n"
+    }
+
+    # Not Ready
+    $notReadyDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Not Ready" }
+    if ($notReadyDomains) {
+        $summary += "  NOT READY ($($notReadyDomains.Count)):`n"
+        foreach ($r in $notReadyDomains) {
+            $summary += "    ✗ $($r.Domain) - $($r.Notes)`n"
+        }
+        $summary += "`n"
+    }
+
+    # Errors
+    $errorDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Error" }
+    if ($errorDomains) {
+        $summary += "  ERRORS ($($errorDomains.Count)):`n"
+        foreach ($r in $errorDomains) {
+            $summary += "    ⚠ $($r.Notes)`n"
+        }
+        $summary += "`n"
     }
 }
 
 $summary += "`n=== NEXT STEPS ===`n"
-$summary += "1. For 'Ready to Add' domains: Add to target tenant and verify`n"
-$summary += "2. For 'Not Ready' domains: Add to target tenant, get TXT record, update DNS`n"
+$summary += "1. For 'Ready to Add' domains: Add to destination tenant and verify`n"
+$summary += "2. For 'Not Ready' domains: Add to destination tenant, get TXT record, update DNS`n"
 $summary += "3. For 'Added - Needs Verification': Complete verification process`n"
 $summary += "4. For 'Already Added': No action needed`n"
 
