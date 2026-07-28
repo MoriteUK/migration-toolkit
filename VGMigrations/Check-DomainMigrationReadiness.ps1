@@ -242,91 +242,25 @@ foreach ($pair in $migrationPairs) {
         TenantName = $pair.TenantName
         DomainName = $domainToCheck
         DestinationTenant = $pair.DestinationTenant
-        InTargetTenant = $false
-        DNSVerifyRecordFound = $false
         DNSVerifyRecord = $null
         ReadinessStatus = ""
-        Recommendation = ""
         Notes = ""
     }
 
-    # STEP 1: Check DNS for verification record FIRST
+    # Check DNS for MS verification record
     Write-Log "Checking DNS for MS verification record..."
     $dnsCheck = Get-DNSVerificationRecord -Domain $domainToCheck
 
     if ($dnsCheck.Found) {
-        Write-Log "  ✓ MS verification record found in DNS: $($dnsCheck.Record)" "SUCCESS"
-        $result.DNSVerifyRecordFound = $true
+        Write-Log "  ✓ MS verification record found: $($dnsCheck.Record)" "SUCCESS"
         $result.DNSVerifyRecord = $dnsCheck.Record
+        $result.ReadinessStatus = "✓ Ready"
+        $result.Notes = "DNS verification record present"
     } else {
         Write-Log "  ✗ No MS verification record found in DNS" "WARN"
-        $result.DNSVerifyRecordFound = $false
-    }
-
-    # STEP 2: Connect to target tenant and check if domain is added
-    Write-Log "Connecting to destination tenant..."
-    try {
-        # Use login credential from Column R if provided
-        if (-not [string]::IsNullOrWhiteSpace($pair.LoginCredential)) {
-            Write-Log "Using credentials: $($pair.LoginCredential)"
-            Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome -AccountId $pair.LoginCredential
-        } else {
-            Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome
-        }
-
-        # Get target tenant info
-        $targetOrg = Get-MgOrganization
-        $targetTenantName = $targetOrg.DisplayName
-        Write-Log "Destination tenant: $targetTenantName"
-
-        # Get domains from target tenant
-        Write-Log "Checking if domain is added to destination tenant..."
-        $targetDomains = Get-MgDomain
-        $targetDomainNames = $targetDomains | Select-Object -ExpandProperty Id
-
-        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-
-    } catch {
-        Write-Log "ERROR connecting to destination tenant: $_" "ERROR"
-        $result.ReadinessStatus = "Error"
-        $result.Recommendation = "Failed to connect to destination tenant"
-        $result.Notes = "Error: $_"
-        $allResults.Add($result)
-        continue
-    }
-
-    # Determine readiness status based on DNS and target tenant checks
-    if ($targetDomainNames -contains $domainToCheck) {
-        Write-Log "  ✓ Domain ADDED to destination tenant" "SUCCESS"
-        $result.InTargetTenant = $true
-
-        # Check verification status in target
-        $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainToCheck }
-        if ($targetDomain.IsVerified) {
-            Write-Log "  ✓ Domain is VERIFIED in destination tenant" "SUCCESS"
-            $result.ReadinessStatus = "✓ Complete - Added & Verified"
-            $result.Recommendation = "Domain is fully configured"
-            $result.Notes = "Domain added and verified in destination"
-        } else {
-            Write-Log "  ⚠ Domain added but NOT verified in destination" "WARN"
-            $result.ReadinessStatus = "⚠ Added - Needs Verification"
-            $result.Recommendation = "Complete domain verification in destination tenant"
-            $result.Notes = "Domain added but pending verification"
-        }
-    } else {
-        Write-Log "  ✗ Domain NOT added to destination tenant" "WARN"
-        $result.InTargetTenant = $false
-
-        # Determine status based on DNS check
-        if ($result.DNSVerifyRecordFound) {
-            $result.ReadinessStatus = "✓ Ready to Add"
-            $result.Recommendation = "Add domain to destination tenant (DNS verify record already present)"
-            $result.Notes = "MS verification TXT record found in DNS: $($result.DNSVerifyRecord)"
-        } else {
-            $result.ReadinessStatus = "✗ Not Ready"
-            $result.Recommendation = "1) Add domain to destination tenant, 2) Get MS verify TXT record, 3) Add to DNS, 4) Verify"
-            $result.Notes = "No MS verification TXT record in DNS yet"
-        }
+        $result.DNSVerifyRecord = ""
+        $result.ReadinessStatus = "✗ Not Ready"
+        $result.Notes = "No DNS verification record found"
     }
 
     $allResults.Add($result)
@@ -346,25 +280,18 @@ Write-Log "Detailed report saved: $reportFile"
 
 # Generate summary
 $totalDomains = $allResults.Count
-$alreadyAdded = ($allResults | Where-Object { $_.ReadinessStatus -eq "Already Added" }).Count
-$readyToAdd = ($allResults | Where-Object { $_.ReadinessStatus -eq "Ready to Add" }).Count
-$notReady = ($allResults | Where-Object { $_.ReadinessStatus -eq "Not Ready" }).Count
-$needsVerification = ($allResults | Where-Object { $_.ReadinessStatus -eq "Added - Needs Verification" }).Count
-$errors = ($allResults | Where-Object { $_.ReadinessStatus -eq "Error" }).Count
+$ready = ($allResults | Where-Object { $_.ReadinessStatus -eq "✓ Ready" }).Count
+$notReady = ($allResults | Where-Object { $_.ReadinessStatus -eq "✗ Not Ready" }).Count
 
 $summary = @"
 === DOMAIN MIGRATION READINESS SUMMARY ===
 Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 
-TOTAL MIGRATION PAIRS PROCESSED: $($migrationPairs.Count)
 TOTAL DOMAINS CHECKED: $totalDomains
 
 STATUS BREAKDOWN:
-  ✓ Already Added to Destination: $alreadyAdded
-  ⚠ Added - Needs Verification: $needsVerification
-  ✓ Ready to Add (DNS verified): $readyToAdd
+  ✓ Ready (DNS verified): $ready
   ✗ Not Ready (DNS not configured): $notReady
-  ⚠ Errors: $errors
 
 === DETAILED STATUS BY TENANT ===
 
@@ -376,68 +303,35 @@ $groupedResults = $allResults | Group-Object -Property TenantName
 foreach ($group in $groupedResults) {
     $summary += "`n--- $($group.Name) ---`n"
 
-    # Show source -> destination mapping
+    # Show destination mapping
     $firstResult = $group.Group[0]
-    $summary += "  Source: $($firstResult.SourceTenant)`n"
     $summary += "  Destination: $($firstResult.DestinationTenant)`n"
     $summary += "  Domains: $($group.Count)`n`n"
 
-    # Already Added
-    $addedDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Already Added" }
-    if ($addedDomains) {
-        $summary += "  ALREADY IN DESTINATION ($($addedDomains.Count)):`n"
-        foreach ($r in $addedDomains) {
-            $summary += "    ✓ $($r.Domain) - $($r.Notes)`n"
-        }
-        $summary += "`n"
-    }
-
-    # Needs Verification
-    $needsVerifyDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Added - Needs Verification" }
-    if ($needsVerifyDomains) {
-        $summary += "  ADDED - NEEDS VERIFICATION ($($needsVerifyDomains.Count)):`n"
-        foreach ($r in $needsVerifyDomains) {
-            $summary += "    ⚠ $($r.Domain)`n"
-        }
-        $summary += "`n"
-    }
-
-    # Ready to Add
-    $readyDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Ready to Add" }
+    # Ready
+    $readyDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "✓ Ready" }
     if ($readyDomains) {
-        $summary += "  READY TO ADD ($($readyDomains.Count)):`n"
+        $summary += "  ✓ READY ($($readyDomains.Count)):`n"
         foreach ($r in $readyDomains) {
-            $summary += "    ✓ $($r.Domain) - DNS: $($r.DNSVerifyRecord)`n"
+            $summary += "    $($r.DomainName) - $($r.DNSVerifyRecord)`n"
         }
         $summary += "`n"
     }
 
     # Not Ready
-    $notReadyDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Not Ready" }
+    $notReadyDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "✗ Not Ready" }
     if ($notReadyDomains) {
-        $summary += "  NOT READY ($($notReadyDomains.Count)):`n"
+        $summary += "  ✗ NOT READY ($($notReadyDomains.Count)):`n"
         foreach ($r in $notReadyDomains) {
-            $summary += "    ✗ $($r.Domain) - $($r.Notes)`n"
-        }
-        $summary += "`n"
-    }
-
-    # Errors
-    $errorDomains = $group.Group | Where-Object { $_.ReadinessStatus -eq "Error" }
-    if ($errorDomains) {
-        $summary += "  ERRORS ($($errorDomains.Count)):`n"
-        foreach ($r in $errorDomains) {
-            $summary += "    ⚠ $($r.Notes)`n"
+            $summary += "    $($r.DomainName) - $($r.Notes)`n"
         }
         $summary += "`n"
     }
 }
 
 $summary += "`n=== NEXT STEPS ===`n"
-$summary += "1. For 'Ready to Add' domains: Add to destination tenant and verify`n"
-$summary += "2. For 'Not Ready' domains: Add to destination tenant, get TXT record, update DNS`n"
-$summary += "3. For 'Added - Needs Verification': Complete verification process`n"
-$summary += "4. For 'Already Added': No action needed`n"
+$summary += "✓ Ready domains: DNS verification record is configured, ready for migration cutover`n"
+$summary += "✗ Not Ready domains: Add DNS MS-verify TXT record for these domains`n"
 
 # Save summary
 $summary | Out-File -FilePath $summaryFile -Encoding UTF8
