@@ -237,7 +237,7 @@ foreach ($pair in $migrationPairs) {
     Write-Log "Connecting to source tenant..."
     try {
         Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-        Connect-MgGraph -TenantId $pair.SourceTenant -Scopes "Domain.Read.All" -NoWelcome
+        Connect-MgGraph -TenantId $pair.SourceTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome
 
         # Get source tenant info
         $sourceOrg = Get-MgOrganization
@@ -277,7 +277,7 @@ foreach ($pair in $migrationPairs) {
     # Connect to target tenant
     Write-Log "Connecting to destination tenant..."
     try {
-        Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -NoWelcome
+        Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome
 
         # Get target tenant info
         $targetOrg = Get-MgOrganization
