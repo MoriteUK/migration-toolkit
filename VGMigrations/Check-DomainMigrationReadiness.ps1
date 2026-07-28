@@ -51,108 +51,28 @@ function Write-Log {
     Write-Host $line
 }
 
-function Get-OrCreateAppRegistration {
+function Get-AppCredentials {
     param(
         [string]$TenantId,
-        [string]$TenantName,
-        [string]$AppName,
-        [string]$LoginHint
+        [string]$TenantName
     )
 
-    Write-Log "Checking app registration for $TenantName..."
-
-    try {
-        # Check if we already have stored credentials
-        $credFile = Join-Path $CredentialStorePath "domaincheck_$($TenantId).json"
-        if (Test-Path $credFile) {
-            $creds = Get-Content $credFile | ConvertFrom-Json
-            Write-Log "Using stored credentials (App: $($creds.AppId))"
-            return $creds
-        }
-
-        # Need to create app registration - connect with device code
-        Write-Log "First time setup - please authenticate as admin" "WARN"
-        if ($LoginHint) {
-            Write-Log "Login with account: $LoginHint" "WARN"
-        }
-        Write-Log "Opening browser for authentication..." "WARN"
-
-        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-        Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -UseDeviceCode -NoWelcome
-
-        # Check if app exists
-        $existingApp = Get-MgApplication -Filter "displayName eq '$AppName'" -ErrorAction SilentlyContinue
-
-        if ($existingApp) {
-            Write-Log "App exists: $($existingApp.AppId)"
-            $appId = $existingApp.AppId
-            $objectId = $existingApp.Id
-        } else {
-            Write-Log "Creating app registration..."
-
-            # Required permissions for domain checking
-            $requiredResourceAccess = @(
-                @{
-                    ResourceAppId = "00000003-0000-0000-c000-000000000000" # MS Graph
-                    ResourceAccess = @(
-                        @{ Id = "dbb9058a-0e50-45d7-ae91-66909b5d4664"; Type = "Role" } # Domain.Read.All
-                    )
-                }
-            )
-
-            $newApp = New-MgApplication -DisplayName $AppName -SignInAudience "AzureADMyOrg" -RequiredResourceAccess $requiredResourceAccess
-            $appId = $newApp.AppId
-            $objectId = $newApp.Id
-            Write-Log "App created: $appId"
-            Start-Sleep -Seconds 3
-        }
-
-        # Create client secret
-        Write-Log "Creating client secret..."
-        $passwordCred = @{
-            DisplayName = "Auto-$(Get-Date -Format 'yyyyMMdd')"
-            EndDateTime = (Get-Date).AddYears(2)
-        }
-        $secret = Add-MgApplicationPassword -ApplicationId $objectId -PasswordCredential $passwordCred
-        $clientSecret = $secret.SecretText
-
-        # Ensure service principal exists
-        $sp = Get-MgServicePrincipal -Filter "appId eq '$appId'" -ErrorAction SilentlyContinue
-        if (-not $sp) {
-            $sp = New-MgServicePrincipal -AppId $appId
-            Start-Sleep -Seconds 2
-        }
-
-        # Grant admin consent
-        Write-Log "Granting admin consent..."
-        $graphSP = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
-        try {
-            New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -BodyParameter @{
-                PrincipalId = $sp.Id
-                ResourceId = $graphSP.Id
-                AppRoleId = "dbb9058a-0e50-45d7-ae91-66909b5d4664" # Domain.Read.All
-            } -ErrorAction SilentlyContinue | Out-Null
-        } catch {}
-
-        # Store credentials
-        $credObject = @{
-            TenantId = $TenantId
-            TenantName = $TenantName
-            AppId = $appId
-            ClientSecret = $clientSecret
-            SecretExpires = $secret.EndDateTime
-            CreatedDate = Get-Date
-        }
-        $credObject | ConvertTo-Json | Out-File -FilePath $credFile -Encoding UTF8 -Force
-        Write-Log "Credentials saved for future runs" "SUCCESS"
-
-        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-        return [PSCustomObject]$credObject
-
-    } catch {
-        Write-Log "Failed to create app registration: $_" "ERROR"
-        throw
+    # Check if we have stored credentials
+    $credFile = Join-Path $CredentialStorePath "domaincheck_$($TenantId).json"
+    if (Test-Path $credFile) {
+        $creds = Get-Content $credFile | ConvertFrom-Json
+        Write-Log "Using stored credentials (App: $($creds.AppId))"
+        return $creds
     }
+
+    # No credentials found - need setup
+    Write-Log "No app registration found for $TenantName" "ERROR"
+    Write-Log "" "ERROR"
+    Write-Log "FIRST TIME SETUP REQUIRED:" "ERROR"
+    Write-Log "Run this command in PowerShell 7:" "ERROR"
+    Write-Log "  .\Setup-DomainReadinessApp.ps1 -TenantId '$TenantId' -TenantName '$TenantName'" "ERROR"
+    Write-Log "" "ERROR"
+    throw "App registration not found - run Setup-DomainReadinessApp.ps1 first"
 }
 
 function Connect-WithAppCredentials {
@@ -376,11 +296,11 @@ foreach ($pair in $migrationPairs) {
         Notes = ""
     }
 
-    # STEP 1: Get or create app registration for this tenant
+    # STEP 1: Get app credentials and connect
     Write-Log "Connecting to destination tenant: $($pair.DestinationTenant)"
     try {
-        # Get app credentials (creates app on first run, reuses thereafter)
-        $appCreds = Get-OrCreateAppRegistration -TenantId $pair.DestinationTenant -TenantName $pair.TenantName -AppName $AppName -LoginHint $pair.LoginCredential
+        # Get app credentials (must be set up via Setup-DomainReadinessApp.ps1 first)
+        $appCreds = Get-AppCredentials -TenantId $pair.DestinationTenant -TenantName $pair.TenantName
 
         # Connect using app credentials
         Connect-WithAppCredentials -TenantId $appCreds.TenantId -AppId $appCreds.AppId -ClientSecret $appCreds.ClientSecret
