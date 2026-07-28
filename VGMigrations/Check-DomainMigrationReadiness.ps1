@@ -161,27 +161,32 @@ try {
         }
 
         # Read column P (source tenant - column 16) and Q (destination tenant - column 17)
-        $sourceTenants = $usedRange.Cells.Item($row, 16).Text.Trim()
+        # Column P = Domain names (comma-separated)
+        # Column Q = Target tenant ID
+        # Column R = Login credentials (optional)
+        $domainNames = $usedRange.Cells.Item($row, 16).Text.Trim()
         $destinationTenant = $usedRange.Cells.Item($row, 17).Text.Trim()
+        $loginCredential = $usedRange.Cells.Item($row, 18).Text.Trim()
 
-        # Skip if no source or destination
-        if ([string]::IsNullOrWhiteSpace($sourceTenants) -or [string]::IsNullOrWhiteSpace($destinationTenant)) {
-            Write-Log "Row $row : [$tenantName] - Skipping (No source/destination in columns P/Q)"
+        # Skip if no domain or destination
+        if ([string]::IsNullOrWhiteSpace($domainNames) -or [string]::IsNullOrWhiteSpace($destinationTenant)) {
+            Write-Log "Row $row : [$tenantName] - Skipping (No domain/destination in columns P/Q)"
             continue
         }
 
-        # Split source tenants by comma if multiple
-        $sourceList = $sourceTenants -split ',' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        # Split domains by comma if multiple
+        $domainList = $domainNames -split ',' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
-        foreach ($source in $sourceList) {
+        foreach ($domain in $domainList) {
             $migrationPairs.Add([PSCustomObject]@{
                 TenantName = $tenantName
-                SourceTenant = $source
+                DomainName = $domain
                 DestinationTenant = $destinationTenant
+                LoginCredential = $loginCredential
                 Row = $row
             })
 
-            Write-Log "Row $row : [$tenantName] - Source: $source -> Destination: $destinationTenant"
+            Write-Log "Row $row : [$tenantName] - Domain: $domain -> Destination: $destinationTenant"
         }
     }
 
@@ -228,62 +233,15 @@ $allResults = [System.Collections.Generic.List[object]]::new()
 foreach ($pair in $migrationPairs) {
     Write-Log ""
     Write-Log "=== Processing: $($pair.TenantName) ===" "INFO"
-    Write-Log "Domain: $($pair.SourceTenant)"
+    Write-Log "Domain: $($pair.DomainName)"
     Write-Log "Destination: $($pair.DestinationTenant)"
 
-    # Use the source tenant value as the domain name (from column P)
-    # No need to connect to source - we already have the domain name
-    $domainToCheck = $pair.SourceTenant
-    Write-Log "Checking domain: $domainToCheck"
-
-    # Connect to target tenant
-    Write-Log "Connecting to destination tenant..."
-    try {
-        Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome
-
-        # Get target tenant info
-        $targetOrg = Get-MgOrganization
-        $targetTenantName = $targetOrg.DisplayName
-        Write-Log "Destination tenant: $targetTenantName"
-
-        # Get domains from target tenant
-        Write-Log "Retrieving domains from destination tenant..."
-        $targetDomains = Get-MgDomain
-        $targetDomainNames = $targetDomains | Select-Object -ExpandProperty Id
-        Write-Log "Found $($targetDomains.Count) total domains in destination tenant"
-
-        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-
-    } catch {
-        Write-Log "ERROR connecting to destination tenant: $_" "ERROR"
-
-        # Add error record and continue to next pair
-        $allResults.Add([PSCustomObject]@{
-            TenantName = $pair.TenantName
-            SourceTenant = $pair.SourceTenant
-            DestinationTenant = $pair.DestinationTenant
-            Domain = "N/A"
-            InSourceTenant = $false
-            InTargetTenant = $false
-            DNSVerifyRecordFound = $false
-            DNSVerifyRecord = $null
-            ReadinessStatus = "Error"
-            Recommendation = "Failed to connect to destination tenant"
-            Notes = "Error: $_"
-        })
-        continue
-    }
-
-    # Check the domain
-    Write-Log "Checking domain readiness..."
-    Write-Log "  Checking: $domainToCheck"
+    $domainToCheck = $pair.DomainName
 
     $result = [PSCustomObject]@{
         TenantName = $pair.TenantName
-        SourceTenant = $pair.SourceTenant
+        DomainName = $domainToCheck
         DestinationTenant = $pair.DestinationTenant
-        Domain = $domainToCheck
-        InSourceTenant = $true
         InTargetTenant = $false
         DNSVerifyRecordFound = $false
         DNSVerifyRecord = $null
@@ -292,50 +250,83 @@ foreach ($pair in $migrationPairs) {
         Notes = ""
     }
 
-    # Check if domain exists in target tenant
-    if ($targetDomainNames -contains $domainToCheck) {
-            Write-Log "    ✓ Domain exists in destination tenant" "SUCCESS"
-            $result.InTargetTenant = $true
-            $result.ReadinessStatus = "Already Added"
-            $result.Recommendation = "Domain is already in destination tenant"
+    # STEP 1: Check DNS for verification record FIRST
+    Write-Log "Checking DNS for MS verification record..."
+    $dnsCheck = Get-DNSVerificationRecord -Domain $domainToCheck
 
-            # Check verification status in target
-            $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainToCheck }
-            if ($targetDomain.IsVerified) {
-                $result.Notes = "Verified in destination tenant"
-            } else {
-                $result.Notes = "Added but NOT verified in destination tenant"
-                $result.ReadinessStatus = "Added - Needs Verification"
-                $result.Recommendation = "Complete domain verification in destination tenant"
-            }
+    if ($dnsCheck.Found) {
+        Write-Log "  ✓ MS verification record found in DNS: $($dnsCheck.Record)" "SUCCESS"
+        $result.DNSVerifyRecordFound = $true
+        $result.DNSVerifyRecord = $dnsCheck.Record
+    } else {
+        Write-Log "  ✗ No MS verification record found in DNS" "WARN"
+        $result.DNSVerifyRecordFound = $false
+    }
+
+    # STEP 2: Connect to target tenant and check if domain is added
+    Write-Log "Connecting to destination tenant..."
+    try {
+        # Use login credential from Column R if provided
+        if (-not [string]::IsNullOrWhiteSpace($pair.LoginCredential)) {
+            Write-Log "Using credentials: $($pair.LoginCredential)"
+            Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome -AccountId $pair.LoginCredential
         } else {
-            Write-Log "    ✗ Domain NOT in destination tenant" "WARN"
-            $result.InTargetTenant = $false
+            Connect-MgGraph -TenantId $pair.DestinationTenant -Scopes "Domain.Read.All" -UseDeviceCode -NoWelcome
+        }
 
-            # Check DNS for verification record
-            Write-Log "    Checking DNS for MS verification record..."
-            $dnsCheck = Get-DNSVerificationRecord -Domain $domainToCheck
+        # Get target tenant info
+        $targetOrg = Get-MgOrganization
+        $targetTenantName = $targetOrg.DisplayName
+        Write-Log "Destination tenant: $targetTenantName"
 
-            if ($dnsCheck.Found) {
-                Write-Log "    ✓ MS verification record found in DNS: $($dnsCheck.Record)" "SUCCESS"
-                $result.DNSVerifyRecordFound = $true
-                $result.DNSVerifyRecord = $dnsCheck.Record
-                $result.ReadinessStatus = "Ready to Add"
-                $result.Recommendation = "Add domain to destination tenant and verify"
-                $result.Notes = "MS verification TXT record present in DNS"
-            } else {
-                Write-Log "    ✗ No MS verification record found in DNS" "WARN"
-                $result.DNSVerifyRecordFound = $false
-                $result.DNSVerifyRecord = $dnsCheck.Record
-                $result.ReadinessStatus = "Not Ready"
-                $result.Recommendation = "Add domain to destination tenant to get verification record, then add TXT record to DNS"
+        # Get domains from target tenant
+        Write-Log "Checking if domain is added to destination tenant..."
+        $targetDomains = Get-MgDomain
+        $targetDomainNames = $targetDomains | Select-Object -ExpandProperty Id
 
-                if ($dnsCheck.Record) {
-                    $result.Notes = "DNS issue: $($dnsCheck.Record)"
-                } else {
-                    $result.Notes = "No MS verification TXT record found in public DNS"
-                }
-            }
+        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+
+    } catch {
+        Write-Log "ERROR connecting to destination tenant: $_" "ERROR"
+        $result.ReadinessStatus = "Error"
+        $result.Recommendation = "Failed to connect to destination tenant"
+        $result.Notes = "Error: $_"
+        $allResults.Add($result)
+        continue
+    }
+
+    # Determine readiness status based on DNS and target tenant checks
+    if ($targetDomainNames -contains $domainToCheck) {
+        Write-Log "  ✓ Domain ADDED to destination tenant" "SUCCESS"
+        $result.InTargetTenant = $true
+
+        # Check verification status in target
+        $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainToCheck }
+        if ($targetDomain.IsVerified) {
+            Write-Log "  ✓ Domain is VERIFIED in destination tenant" "SUCCESS"
+            $result.ReadinessStatus = "✓ Complete - Added & Verified"
+            $result.Recommendation = "Domain is fully configured"
+            $result.Notes = "Domain added and verified in destination"
+        } else {
+            Write-Log "  ⚠ Domain added but NOT verified in destination" "WARN"
+            $result.ReadinessStatus = "⚠ Added - Needs Verification"
+            $result.Recommendation = "Complete domain verification in destination tenant"
+            $result.Notes = "Domain added but pending verification"
+        }
+    } else {
+        Write-Log "  ✗ Domain NOT added to destination tenant" "WARN"
+        $result.InTargetTenant = $false
+
+        # Determine status based on DNS check
+        if ($result.DNSVerifyRecordFound) {
+            $result.ReadinessStatus = "✓ Ready to Add"
+            $result.Recommendation = "Add domain to destination tenant (DNS verify record already present)"
+            $result.Notes = "MS verification TXT record found in DNS: $($result.DNSVerifyRecord)"
+        } else {
+            $result.ReadinessStatus = "✗ Not Ready"
+            $result.Recommendation = "1) Add domain to destination tenant, 2) Get MS verify TXT record, 3) Add to DNS, 4) Verify"
+            $result.Notes = "No MS verification TXT record in DNS yet"
+        }
     }
 
     $allResults.Add($result)
