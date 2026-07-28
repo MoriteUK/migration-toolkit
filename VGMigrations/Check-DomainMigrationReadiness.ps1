@@ -70,14 +70,15 @@ function Get-OrCreateAppRegistration {
             return $creds
         }
 
-        # Need to create app registration - connect interactively
-        Write-Log "First time setup - please authenticate as admin"
+        # Need to create app registration - connect with device code
+        Write-Log "First time setup - please authenticate as admin" "WARN"
         if ($LoginHint) {
-            Write-Log "Use account: $LoginHint"
+            Write-Log "Login with account: $LoginHint" "WARN"
         }
+        Write-Log "Opening browser for authentication..." "WARN"
 
         Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-        Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -NoWelcome
+        Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -UseDeviceCode -NoWelcome
 
         # Check if app exists
         $existingApp = Get-MgApplication -Filter "displayName eq '$AppName'" -ErrorAction SilentlyContinue
