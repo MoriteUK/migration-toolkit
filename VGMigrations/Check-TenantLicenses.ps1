@@ -37,7 +37,31 @@ function Write-Log {
     Write-Host $line
 }
 
-function Get-OrCreateAppRegistration {
+function Get-AppCredentials {
+    param(
+        [string]$TenantId,
+        [string]$TenantName
+    )
+
+    # Check if we have stored credentials
+    $credFile = Join-Path $CredentialStorePath "appcreds_$($TenantId).json"
+    if (Test-Path $credFile) {
+        $creds = Get-Content $credFile | ConvertFrom-Json
+        Write-Log "Using stored credentials (App: $($creds.AppId))"
+        return $creds
+    }
+
+    # No credentials found - need setup
+    Write-Log "No app registration found for $TenantName" "ERROR"
+    Write-Log "" "ERROR"
+    Write-Log "FIRST TIME SETUP REQUIRED:" "ERROR"
+    Write-Log "Run this command in PowerShell 7:" "ERROR"
+    Write-Log "  .\Setup-LicenseReportApp.ps1 -TenantId '$TenantId' -TenantName '$TenantName'" "ERROR"
+    Write-Log "" "ERROR"
+    throw "App registration not found - run Setup-LicenseReportApp.ps1 first"
+}
+
+function Get-OrCreateAppRegistration-OLD {
     param(
         [string]$TenantId,
         [string]$TenantName,
@@ -47,6 +71,17 @@ function Get-OrCreateAppRegistration {
     Write-Log "Checking for existing app registration in $TenantName..."
 
     try {
+        # Check if we have a stored secret for this tenant
+        $credFile = Join-Path $CredentialStorePath "appcreds_$($TenantId).json"
+        if (Test-Path $credFile) {
+            Write-Log "Using existing credentials"
+            $creds = Get-Content $credFile | ConvertFrom-Json
+            return $creds
+        }
+
+        # No credentials - need setup
+        Write-Log "No existing credentials found, setting up app registration..."
+
         # First, connect interactively to check/create the app
         Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
         Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All", "Directory.Read.All" -NoWelcome
@@ -58,16 +93,6 @@ function Get-OrCreateAppRegistration {
             Write-Log "App '$AppName' already exists (AppId: $($existingApp.AppId))"
             $appId = $existingApp.AppId
             $objectId = $existingApp.Id
-
-            # Check if we have a stored secret for this tenant
-            $credFile = Join-Path $CredentialStorePath "appcreds_$($TenantId).json"
-            if (Test-Path $credFile) {
-                Write-Log "Using existing credentials"
-                $creds = Get-Content $credFile | ConvertFrom-Json
-                return $creds
-            } else {
-                Write-Log "No stored credentials found, creating new secret..."
-            }
         } else {
             Write-Log "Creating new app registration '$AppName'..."
 
@@ -429,13 +454,13 @@ foreach ($tenant in $tenants) {
             if ($creds.SecretExpires) {
                 $expiryDate = [DateTime]$creds.SecretExpires
                 if ($expiryDate -lt (Get-Date).AddDays(30)) {
-                    Write-Log "Client secret expires soon ($expiryDate), will regenerate..." "WARN"
-                    $creds = Get-OrCreateAppRegistration -TenantId $tenantIdToUse -TenantName $tenant.Name -AppName $AppName
+                    Write-Log "Client secret expires soon ($expiryDate)" "WARN"
+                    Write-Log "Run Setup-LicenseReportApp.ps1 to regenerate" "WARN"
                 }
             }
         } else {
-            Write-Log "No existing credentials found, setting up app registration..."
-            $creds = Get-OrCreateAppRegistration -TenantId $tenantIdToUse -TenantName $tenant.Name -AppName $AppName
+            # No credentials - get them (this will throw with setup instructions)
+            $creds = Get-AppCredentials -TenantId $tenantIdToUse -TenantName $tenant.Name
         }
 
         # Connect using app credentials
