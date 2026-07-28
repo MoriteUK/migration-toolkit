@@ -30,6 +30,31 @@ if ($_startupError) {
 try   { . "$PSScriptRoot\settings.ps1"; Write-Log 'settings.ps1 loaded OK' }
 catch { Write-Log "settings.ps1 failed to load: $($_.Exception.Message)" 'WARN' }
 
+# ── Load version ──────────────────────────────────────────────────────────────
+$script:ToolVersion = "Unknown"
+$versionJsonPath = Join-Path $PSScriptRoot 'version.json'
+if (Test-Path $versionJsonPath) {
+    try {
+        $versionData = Get-Content $versionJsonPath -Raw | ConvertFrom-Json
+        $script:ToolVersion = $versionData.version
+        Write-Log "Version loaded: $script:ToolVersion"
+    } catch {
+        Write-Log "Failed to load version.json: $($_.Exception.Message)" 'WARN'
+        # Fallback to version.txt
+        $versionTxtPath = Join-Path $PSScriptRoot 'version.txt'
+        if (Test-Path $versionTxtPath) {
+            try {
+                $script:ToolVersion = (Get-Content $versionTxtPath -Raw).Trim()
+                Write-Log "Version loaded from version.txt: $script:ToolVersion"
+            } catch {
+                Write-Log "Failed to load version.txt: $($_.Exception.Message)" 'WARN'
+            }
+        }
+    }
+} else {
+    Write-Log "version.json not found at: $versionJsonPath" 'WARN'
+}
+
 # ── Discovery sub-menu ────────────────────────────────────────────────────────
 function Show-DiscoverySubMenu {
     $dlg = New-Object System.Windows.Forms.Form
