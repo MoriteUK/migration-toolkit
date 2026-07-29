@@ -437,8 +437,21 @@ foreach ($pair in $migrationPairs) {
 
     } catch {
         Write-Log "ERROR connecting to target tenant: $_" "ERROR"
+
+        # Check if it's a permissions issue
+        if ($_ -match "Insufficient privileges|Authorization_RequestDenied") {
+            Write-Log "" "ERROR"
+            Write-Log "APP PERMISSIONS ISSUE DETECTED:" "ERROR"
+            Write-Log "The app registration exists but lacks admin consent." "ERROR"
+            Write-Log "Re-run setup to refresh permissions:" "ERROR"
+            Write-Log "  .\Setup-DomainReadinessApp.ps1 -TenantId '$($pair.DestinationTenant)' -TenantName '$($pair.TenantName)'" "ERROR"
+            Write-Log "" "ERROR"
+            $result.Notes = "Insufficient privileges to complete the operation - re-run Setup-DomainReadinessApp.ps1"
+        } else {
+            $result.Notes = "Failed to connect to target tenant: $_"
+        }
+
         $result.ReadinessStatus = "Error"
-        $result.Notes = "Failed to connect to target tenant: $_"
         $allResults.Add($result)
         continue
     }

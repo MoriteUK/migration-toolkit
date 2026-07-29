@@ -136,19 +136,39 @@ try {
     # Grant admin consent
     Write-Log "Granting admin consent for Domain.ReadWrite.All..."
     $graphSP = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
-    try {
-        New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -BodyParameter @{
-            PrincipalId = $sp.Id
-            ResourceId = $graphSP.Id
-            AppRoleId = "7e05723c-0bb0-42da-be95-ae9f08a6e53c" # Domain.ReadWrite.All
-        } -ErrorAction SilentlyContinue | Out-Null
-        Write-Log "Admin consent granted" "SUCCESS"
-    } catch {
-        if ($_ -match "already exists") {
-            Write-Log "Permission already granted" "SUCCESS"
-        } else {
+
+    $domainReadWriteRoleId = "7e05723c-0bb0-42da-be95-ae9f08a6e53c"
+
+    # Check if permission already exists
+    $existingAssignment = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -ErrorAction SilentlyContinue |
+        Where-Object { $_.AppRoleId -eq $domainReadWriteRoleId -and $_.ResourceId -eq $graphSP.Id }
+
+    if ($existingAssignment) {
+        Write-Log "Permission already granted" "SUCCESS"
+    } else {
+        try {
+            New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -BodyParameter @{
+                PrincipalId = $sp.Id
+                ResourceId = $graphSP.Id
+                AppRoleId = $domainReadWriteRoleId
+            } | Out-Null
+            Write-Log "Admin consent granted" "SUCCESS"
+        } catch {
+            Write-Log "Failed to grant consent: $_" "ERROR"
             throw
         }
+    }
+
+    # Verify the permission was granted
+    Start-Sleep -Seconds 2
+    $verifyAssignment = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -ErrorAction SilentlyContinue |
+        Where-Object { $_.AppRoleId -eq $domainReadWriteRoleId -and $_.ResourceId -eq $graphSP.Id }
+
+    if (-not $verifyAssignment) {
+        Write-Log "WARNING: Permission grant could not be verified" "WARN"
+        Write-Log "You may need to manually grant admin consent in the Azure Portal" "WARN"
+    } else {
+        Write-Log "Permission verified successfully" "SUCCESS"
     }
 
     # Store credentials
