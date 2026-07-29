@@ -1,7 +1,22 @@
 {
-  "version": "2.9.36",
+  "version": "2.9.37",
   "releaseDate": "2026-07-29",
   "changelog": [
+    {
+      "version": "2.9.37",
+      "date": "2026-07-29",
+      "changes": [
+        "Check-TenantLicenses.ps1: Fixed Excel column reading - now correctly reads Tenant ID from Column B instead of Column C",
+        "Check-TenantLicenses.ps1: Improved mailbox license detection - now uses service plan checking (EXCHANGE_S_*, SHAREPOINT*) instead of hardcoded SKU list",
+        "Check-TenantLicenses.ps1: Excludes EXCHANGE_S_FOUNDATION and SHAREPOINTWAC (internal plumbing, not real mailboxes/storage)",
+        "Check-TenantLicenses.ps1: Output CSV and TXT files now save to Logs subfolder to avoid cluttering main directory",
+        "Check-TenantLicenses.ps1: Auto-creates Logs folder if it doesn't exist",
+        "MigrationToolkit-Web: Fixed auto-open of license report CSV - added missing streamPowerShell, onPsOutput, offPsOutput, and openFile functions to preload.js",
+        "MigrationToolkit-Web: Added ##OPEN_FILE## signal detection to renderer.js for Check-TenantLicenses output handler",
+        "MigrationToolkit-Web: CSV reports now automatically open in default application when script completes (requires app restart to load updated JavaScript)",
+        "Setup-LicenseReportApp.ps1: Credential files now use correct Tenant IDs from Excel Column B for proper app registration storage"
+      ]
+    },
     {
       "version": "2.9.36",
       "date": "2026-07-29",

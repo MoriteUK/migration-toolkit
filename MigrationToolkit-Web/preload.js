@@ -29,5 +29,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
   // Execute PowerShell script with arguments
-  executePowerShell: (scriptName, args) => ipcRenderer.invoke('execute-powershell', scriptName, args)
+  executePowerShell: (scriptName, args) => ipcRenderer.invoke('execute-powershell', scriptName, args),
+
+  // Stream PowerShell script output
+  streamPowerShell: (scriptName, args) => ipcRenderer.invoke('stream-powershell', scriptName, args),
+
+  // Listen for PowerShell output events
+  onPsOutput: (callback) => ipcRenderer.on('ps-output', (event, text) => callback(text)),
+  offPsOutput: () => ipcRenderer.removeAllListeners('ps-output'),
+
+  // Open file with default application
+  openFile: (filePath) => ipcRenderer.invoke('open-file', filePath)
 });

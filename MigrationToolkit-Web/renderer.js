@@ -371,7 +371,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       runLicenseReportBtn.textContent = 'Running...';
 
       window.electronAPI.onPsOutput((text) => {
-        logOutput.textContent += text;
+        const clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+        // Detect ##OPEN_FILE:<path>## signal from the PS script and open via Electron
+        const fileMarker = clean.match(/##OPEN_FILE:(.+?)##/);
+        if (fileMarker) {
+          window.electronAPI.openFile(fileMarker[1].trim());
+          logOutput.textContent += clean.replace(/##OPEN_FILE:.+?##/g, '').replace(/^\n/, '');
+        } else {
+          logOutput.textContent += clean;
+        }
         logOutput.scrollTop = logOutput.scrollHeight;
       });
 

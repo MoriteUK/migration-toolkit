@@ -16,7 +16,7 @@
 [CmdletBinding()]
 param(
     [string]$TenantIDsPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations\Tenant IDs.xlsx",
-    [string]$OutputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations",
+    [string]$OutputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations\Logs",
     [string]$AppName = "VG-License-Reporter",
     [string]$CredentialStorePath = $PSScriptRoot
 )
@@ -263,39 +263,20 @@ function Connect-WithAppCredentials {
     }
 }
 
-# SKUs that grant Exchange Online mailboxes
-$mailboxSKUs = @(
-    'EXCHANGESTANDARD',
-    'EXCHANGEENTERPRISE',
-    'EXCHANGEARCHIVE_ADDON',
-    'EXCHANGEDESKLESS',
-    'EXCHANGETELCO',
-    'OFFICESUBSCRIPTION',
-    'O365_BUSINESS_ESSENTIALS',
-    'O365_BUSINESS_PREMIUM',
-    'SPB',
-    'SPE_E3',
-    'SPE_E5',
-    'ENTERPRISEPACK',
-    'ENTERPRISEPREMIUM',
-    'DESKLESSPACK',
-    'STANDARDPACK',
-    'STANDARDWOFFPACK',
-    'ENTERPRISEPACKLRG',
-    'ENTERPRISEWITHSCAL',
-    'SMB_BUSINESS',
-    'SMB_BUSINESS_ESSENTIALS',
-    'SMB_BUSINESS_PREMIUM',
-    'MCOEV',
-    'MCOMEETADV',
-    'M365_F1',
-    'M365_F3',
-    'SPE_F1',
-    'DEVELOPERPACK',
-    'EXCHANGESTANDARD_STUDENT',
-    'EXCHANGEENTERPRISE_FACULTY',
-    'EXCHANGEENTERPRISE_STUDENT'
-)
+# Function to check if a SKU grants Exchange Online mailbox or OneDrive
+# Same logic as Get-TenantLicenseReport.ps1 - checks service plans instead of hardcoded SKU list
+function Test-SkuGrantsMailboxOrOneDrive($Sku) {
+    foreach ($plan in $Sku.ServicePlans) {
+        $name = $plan.ServicePlanName
+        # Skip EXCHANGE_S_FOUNDATION (internal plumbing, not a real mailbox)
+        if ($name -match '_FOUNDATION$') { continue }
+        # Skip SHAREPOINTWAC (Office-for-web viewing, not storage)
+        if ($name -eq 'SHAREPOINTWAC' -or $name -eq 'SHAREPOINTWAC_EDU') { continue }
+        # Check for Exchange or SharePoint service plans
+        if ($name -match '^EXCHANGE_S_' -or $name -match '^SHAREPOINT') { return $true }
+    }
+    return $false
+}
 
 Write-Log "=== Mailbox License Report (Auto-App) Started ==="
 Write-Log "Tenant IDs file: $TenantIDsPath"
@@ -347,11 +328,12 @@ try {
     Write-Log "Found $rowCount rows and $colCount columns"
 
     # Process data rows (starting from row 2)
+    # Column layout: A=FriendlyName, B=TenantId, C=AppId, D=AppSecret, J=licenses checked, N=cutover done, P=Domains (comma-separated)
     for ($row = 2; $row -le $rowCount; $row++) {
-        $tenantName = $usedRange.Cells.Item($row, 1).Text.Trim()
+        $friendlyName = $usedRange.Cells.Item($row, 1).Text.Trim()  # Column A = Friendly Name
 
         # Skip empty rows
-        if ([string]::IsNullOrWhiteSpace($tenantName)) {
+        if ([string]::IsNullOrWhiteSpace($friendlyName)) {
             continue
         }
 
@@ -362,38 +344,30 @@ try {
         # Skip if column J OR column N has "Yes" (case-insensitive)
         if ($columnJValue.ToLower() -eq "yes" -or $columnNValue.ToLower() -eq "yes") {
             $whichCol = if ($columnNValue.ToLower() -eq "yes") { "N" } elseif ($columnJValue.ToLower() -eq "yes") { "J" } else { "" }
-            Write-Log "Row $row : [$tenantName] - Skipping (Column $whichCol = Yes)"
+            Write-Log "Row $row : [$friendlyName] - Skipping (Column $whichCol = Yes)"
             continue
         }
 
-        # Try to find domain/tenant ID in the row
+        # Get Tenant ID from column B (column 2)
+        $tenantIdValue = $usedRange.Cells.Item($row, 2).Text.Trim()
+
+        # Validate it's a proper GUID
+        if (-not ($tenantIdValue -match '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')) {
+            Write-Log "Row $row : [$friendlyName] - Skipping (Column B does not contain a valid Tenant ID GUID)" "WARN"
+            continue
+        }
+
+        # Get domains from column P (column 16) - comma-separated list
+        $domainsValue = $usedRange.Cells.Item($row, 16).Text.Trim()
+
         $tenantData = @{
-            Name = $tenantName
-            TenantId = $null
-            Domain = $null
+            Name = $friendlyName
+            TenantId = $tenantIdValue
+            Domain = $domainsValue
         }
 
-        # Look for tenant ID or domain in various columns
-        for ($col = 1; $col -le $colCount; $col++) {
-            $cellValue = $usedRange.Cells.Item($row, $col).Text.Trim()
-
-            # Check if it looks like a domain
-            if ($cellValue -match '\.onmicrosoft\.com$' -or ($cellValue -match '\.\w{2,}$' -and $cellValue -match '@')) {
-                $tenantData.Domain = $cellValue
-            }
-
-            # Check if it looks like a tenant GUID
-            if ($cellValue -match '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$') {
-                $tenantData.TenantId = $cellValue
-            }
-        }
-
-        if ($tenantData.Domain -or $tenantData.TenantId) {
-            $tenants.Add([PSCustomObject]$tenantData)
-            Write-Log "Found tenant: $tenantName (Domain: $($tenantData.Domain), TenantId: $($tenantData.TenantId))"
-        } else {
-            Write-Log "Skipping $tenantName - no domain or tenant ID found" "WARN"
-        }
+        $tenants.Add([PSCustomObject]$tenantData)
+        Write-Log "Found tenant: $friendlyName (Domain: $($tenantData.Domain), TenantId: $($tenantData.TenantId))"
     }
 
 } catch {
@@ -485,25 +459,8 @@ foreach ($tenant in $tenants) {
         $mailboxSKUDetails = @()
 
         foreach ($sku in $skus) {
-            $skuPartNumber = $sku.SkuPartNumber
-            $grantsMailbox = $false
-
-            # Check against known mailbox SKUs
-            if ($mailboxSKUs -contains $skuPartNumber) {
-                $grantsMailbox = $true
-            }
-
-            # Also check service plans for Exchange
-            $exchangePlans = $sku.ServicePlans | Where-Object {
-                $_.ServicePlanName -match 'EXCHANGE' -and
-                $_.ProvisioningStatus -eq 'Success'
-            }
-
-            if ($exchangePlans) {
-                $grantsMailbox = $true
-            }
-
-            if ($grantsMailbox) {
+            # Use the service plan checking function
+            if (Test-SkuGrantsMailboxOrOneDrive $sku) {
                 $consumed = $sku.ConsumedUnits
                 $mailboxLicenseCount += $consumed
 
@@ -545,6 +502,12 @@ foreach ($tenant in $tenants) {
 # Generate report
 Write-Log ""
 Write-Log "=== Generating Report ==="
+
+# Ensure output directory exists
+if (-not (Test-Path $OutputPath)) {
+    New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+    Write-Log "Created output directory: $OutputPath"
+}
 
 $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 $reportFile = Join-Path $OutputPath "MailboxLicenseReport_$timestamp.csv"
