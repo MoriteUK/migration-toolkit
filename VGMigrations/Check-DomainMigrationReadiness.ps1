@@ -218,21 +218,28 @@ try {
         }
 
         # Read columns:
-        # Column B = Primary domain name (column 2)
-        # Column C = Tenant ID (column 3)
-        # Column P = Additional domain names (comma-separated) (column 16)
+        # Column B = Primary domain name (column 2) - but might be a tenant ID GUID, skip if so
+        # Column P = Domain names (comma-separated) (column 16)
         # Column Q = Target tenant ID (column 17)
         # Column R = Login credentials (optional) (column 18)
         $primaryDomain = $usedRange.Cells.Item($row, 2).Text.Trim()
-        $tenantId = $usedRange.Cells.Item($row, 3).Text.Trim()
         $additionalDomains = $usedRange.Cells.Item($row, 16).Text.Trim()
         $destinationTenant = $usedRange.Cells.Item($row, 17).Text.Trim()
         $loginCredential = $usedRange.Cells.Item($row, 18).Text.Trim()
 
-        # Combine primary domain with additional domains
-        $domainNames = $primaryDomain
-        if (-not [string]::IsNullOrWhiteSpace($additionalDomains)) {
-            $domainNames += ",$additionalDomains"
+        # Build domain list - only use Column P (not Column B if it's a GUID)
+        $domainNames = ""
+
+        # Check if primary domain is a GUID pattern (skip if so)
+        if ($primaryDomain -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') {
+            # It's a GUID, skip it
+            $domainNames = $additionalDomains
+        } else {
+            # It's a domain name, include it
+            $domainNames = $primaryDomain
+            if (-not [string]::IsNullOrWhiteSpace($additionalDomains)) {
+                $domainNames += ",$additionalDomains"
+            }
         }
 
         # Skip if no domain or destination
@@ -355,15 +362,20 @@ foreach ($pair in $migrationPairs) {
         try {
             $verificationRecords = Get-MgDomainServiceConfigurationRecord -DomainId $domainToCheck
 
-            # Find the TXT record for verification
-            $txtRecord = $verificationRecords | Where-Object {
+            # Find the TXT record for MS= verification (not SPF)
+            $txtRecords = $verificationRecords | Where-Object {
                 $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.domainDnsTxtRecord'
+            }
+
+            # Filter for the MS= verification record (not SPF or other records)
+            $verifyRecord = $txtRecords | Where-Object {
+                $_.AdditionalProperties.text -match '^MS=ms\d+'
             } | Select-Object -First 1
 
-            if ($txtRecord) {
+            if ($verifyRecord) {
                 $recordType = "TXT"
-                $recordLabel = if ($txtRecord.AdditionalProperties.label) { $txtRecord.AdditionalProperties.label } else { "@" }
-                $recordValue = $txtRecord.AdditionalProperties.text
+                $recordLabel = if ($verifyRecord.AdditionalProperties.label) { $verifyRecord.AdditionalProperties.label } else { "@" }
+                $recordValue = $verifyRecord.AdditionalProperties.text
 
                 Write-Log "  DNS Record to configure:"
                 Write-Log "    Type: $recordType"
@@ -375,12 +387,12 @@ foreach ($pair in $migrationPairs) {
                 $result.DNS_Value = $recordValue
                 $result.DNSVerifyRecord = $recordValue
             } else {
-                Write-Log "  ⚠ Could not retrieve DNS verification record from target" "WARN"
+                Write-Log "  ⚠ Could not retrieve MS= verification record from target" "WARN"
                 $result.DNS_RecordType = "TXT"
                 $result.DNS_Label = "Unable to retrieve"
-                $result.DNS_Value = "Unable to retrieve from target"
+                $result.DNS_Value = "Unable to retrieve MS= record from target"
                 $result.ReadinessStatus = "Error"
-                $result.Notes = "Domain added but could not retrieve verification record"
+                $result.Notes = "Domain added but could not retrieve MS= verification record"
                 Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
                 $allResults.Add($result)
                 continue
