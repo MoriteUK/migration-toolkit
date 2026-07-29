@@ -172,8 +172,8 @@ try {
     # Grant admin consent for the required permissions
     Write-Log "Granting admin consent for permissions..."
 
-    # Get the Microsoft Graph service principal
-    $graphSP = Get-MgServicePrincipal -Filter "appId eq '$graphResourceId'"
+    # Get the Microsoft Graph service principal (use single quotes in filter)
+    $graphSP = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
 
     $permissionNames = @{
         "7ab1d382-f21e-4acd-a863-ba3e13f7da61" = "Directory.Read.All"
@@ -182,22 +182,45 @@ try {
     }
 
     foreach ($permission in $requiredPermissions) {
-        try {
-            $appRoleAssignment = @{
-                PrincipalId = $sp.Id
-                ResourceId = $graphSP.Id
-                AppRoleId = $permission.Id
-            }
+        # Check if permission already exists
+        $existingAssignment = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -ErrorAction SilentlyContinue |
+            Where-Object { $_.AppRoleId -eq $permission.Id -and $_.ResourceId -eq $graphSP.Id }
 
-            New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -BodyParameter $appRoleAssignment -ErrorAction SilentlyContinue | Out-Null
-            Write-Log "  Granted: $($permissionNames[$permission.Id])" "SUCCESS"
-        } catch {
-            if ($_ -match "already exists") {
-                Write-Log "  Already granted: $($permissionNames[$permission.Id])" "SUCCESS"
-            } else {
+        if ($existingAssignment) {
+            Write-Log "  Already granted: $($permissionNames[$permission.Id])" "SUCCESS"
+        } else {
+            try {
+                $appRoleAssignment = @{
+                    PrincipalId = $sp.Id
+                    ResourceId = $graphSP.Id
+                    AppRoleId = $permission.Id
+                }
+
+                New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -BodyParameter $appRoleAssignment | Out-Null
+                Write-Log "  Granted: $($permissionNames[$permission.Id])" "SUCCESS"
+            } catch {
                 Write-Log "  Warning on $($permissionNames[$permission.Id]): $($_.Exception.Message)" "WARN"
             }
         }
+    }
+
+    # Verify permissions were granted
+    Start-Sleep -Seconds 2
+    $verifiedCount = 0
+    foreach ($permission in $requiredPermissions) {
+        $verifyAssignment = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -ErrorAction SilentlyContinue |
+            Where-Object { $_.AppRoleId -eq $permission.Id -and $_.ResourceId -eq $graphSP.Id }
+
+        if ($verifyAssignment) {
+            $verifiedCount++
+        }
+    }
+
+    if ($verifiedCount -eq $requiredPermissions.Count) {
+        Write-Log "All permissions verified successfully" "SUCCESS"
+    } else {
+        Write-Log "WARNING: Only $verifiedCount of $($requiredPermissions.Count) permissions verified" "WARN"
+        Write-Log "You may need to manually grant admin consent in the Azure Portal" "WARN"
     }
 
     Write-Log "Admin consent completed" "SUCCESS"
