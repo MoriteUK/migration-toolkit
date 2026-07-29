@@ -278,6 +278,34 @@ function Test-SkuGrantsMailboxOrOneDrive($Sku) {
     return $false
 }
 
+# Function to check if a SKU is a trial license
+function Test-IsTrialLicense($SkuPartNumber, $EnabledCount) {
+    # Common trial indicators in SKU part numbers
+    $trialPatterns = @(
+        'TRIAL',
+        'EXPLORATORY',
+        '_FREE$',
+        '^FLOW_FREE',
+        '^POWERAPPS_VIRAL',
+        'RIGHTSMANAGEMENT_ADHOC'
+    )
+
+    # Check SKU name patterns
+    foreach ($pattern in $trialPatterns) {
+        if ($SkuPartNumber -match $pattern) {
+            return $true
+        }
+    }
+
+    # Quantity-based heuristic: 25 is a common trial license quantity
+    # Flag these as "Possibly Trial" for manual verification
+    if ($EnabledCount -eq 25) {
+        return $true
+    }
+
+    return $false
+}
+
 Write-Log "=== Mailbox License Report (Auto-App) Started ==="
 Write-Log "Tenant IDs file: $TenantIDsPath"
 Write-Log "App Name: $AppName"
@@ -457,20 +485,34 @@ foreach ($tenant in $tenants) {
 
         $mailboxLicenseCount = 0
         $mailboxSKUDetails = @()
+        $trialLicenses = @()
 
         foreach ($sku in $skus) {
             # Use the service plan checking function
             if (Test-SkuGrantsMailboxOrOneDrive $sku) {
+                $skuPartNumber = $sku.SkuPartNumber
+                $enabled = $sku.PrepaidUnits.Enabled
                 $consumed = $sku.ConsumedUnits
-                $mailboxLicenseCount += $consumed
+                $available = $enabled - $consumed
+                $isTrial = Test-IsTrialLicense $skuPartNumber $enabled
+
+                $mailboxLicenseCount += $enabled
 
                 $mailboxSKUDetails += [PSCustomObject]@{
                     SKU = $skuPartNumber
+                    Enabled = $enabled
                     Consumed = $consumed
-                    Total = $sku.PrepaidUnits.Enabled
+                    Available = $available
+                    IsTrial = $isTrial
                 }
 
-                Write-Log "  $skuPartNumber : $consumed licenses consumed"
+                # Track trial licenses separately
+                if ($isTrial) {
+                    $trialLicenses += $skuPartNumber
+                }
+
+                $trialFlag = if ($isTrial) { " [TRIAL]" } else { "" }
+                Write-Log "  $skuPartNumber : $enabled enabled, $consumed consumed, $available available$trialFlag"
             }
         }
 
@@ -478,19 +520,30 @@ foreach ($tenant in $tenants) {
         $results.Add([PSCustomObject]@{
             Domain = $primaryDomain
             TenantName = $tenant.Name
-            TotalMailboxLicenses = $mailboxLicenseCount
-            SKUDetails = ($mailboxSKUDetails | ForEach-Object { "$($_.SKU):$($_.Consumed)" }) -join '; '
+            TotalEnabled = $mailboxLicenseCount
+            TotalConsumed = ($mailboxSKUDetails | Measure-Object -Property Consumed -Sum).Sum
+            TotalAvailable = ($mailboxSKUDetails | Measure-Object -Property Available -Sum).Sum
+            TrialLicenses = if ($trialLicenses.Count -gt 0) { ($trialLicenses -join ', ') } else { 'None' }
+            HasTrials = ($trialLicenses.Count -gt 0)
+            SKUDetails = ($mailboxSKUDetails | ForEach-Object {
+                $trialMarker = if ($_.IsTrial) { "[T]" } else { "" }
+                "$($_.SKU)$trialMarker : $($_.Enabled)E/$($_.Consumed)C/$($_.Available)A"
+            }) -join '; '
             Status = 'Success'
         })
 
-        Write-Log "Total mailbox licenses: $mailboxLicenseCount" "SUCCESS"
+        Write-Log "Total enabled mailbox licenses: $mailboxLicenseCount" "SUCCESS"
 
     } catch {
         Write-Log "ERROR processing tenant: $_" "ERROR"
         $results.Add([PSCustomObject]@{
             Domain = if ($tenant.Domain) { $tenant.Domain } else { "Unknown" }
             TenantName = $tenant.Name
-            TotalMailboxLicenses = 0
+            TotalEnabled = 0
+            TotalConsumed = 0
+            TotalAvailable = 0
+            TrialLicenses = 'N/A'
+            HasTrials = $false
             SKUDetails = "Error: $_"
             Status = 'Failed'
         })
@@ -533,7 +586,12 @@ FAILED: $($results | Where-Object { $_.Status -eq 'Failed' } | Measure-Object | 
 foreach ($result in $results | Sort-Object Domain) {
     $summary += "Domain: $($result.Domain)`n"
     $summary += "  Tenant Name: $($result.TenantName)`n"
-    $summary += "  Mailbox Licenses: $($result.TotalMailboxLicenses)`n"
+    $summary += "  Enabled: $($result.TotalEnabled)`n"
+    $summary += "  Consumed: $($result.TotalConsumed)`n"
+    $summary += "  Available: $($result.TotalAvailable)`n"
+    if ($result.HasTrials) {
+        $summary += "  ⚠ Trial Licenses: $($result.TrialLicenses)`n"
+    }
     $summary += "  Status: $($result.Status)`n"
     if ($result.SKUDetails -and $result.Status -eq 'Success') {
         $summary += "  SKU Breakdown: $($result.SKUDetails)`n"
@@ -541,8 +599,13 @@ foreach ($result in $results | Sort-Object Domain) {
     $summary += "`n"
 }
 
-$totalLicenses = ($results | Where-Object { $_.Status -eq 'Success' } | Measure-Object -Property TotalMailboxLicenses -Sum).Sum
-$summary += "=== GRAND TOTAL: $totalLicenses MAILBOX LICENSES ===`n"
+$totalEnabled = ($results | Where-Object { $_.Status -eq 'Success' } | Measure-Object -Property TotalEnabled -Sum).Sum
+$totalConsumed = ($results | Where-Object { $_.Status -eq 'Success' } | Measure-Object -Property TotalConsumed -Sum).Sum
+$totalAvailable = ($results | Where-Object { $_.Status -eq 'Success' } | Measure-Object -Property TotalAvailable -Sum).Sum
+$summary += "=== GRAND TOTAL ===`n"
+$summary += "Enabled: $totalEnabled`n"
+$summary += "Consumed: $totalConsumed`n"
+$summary += "Available: $totalAvailable`n"
 
 # Save summary
 $summary | Out-File -FilePath $summaryFile -Encoding UTF8
