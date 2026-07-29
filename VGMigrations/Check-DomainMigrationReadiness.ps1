@@ -362,9 +362,20 @@ foreach ($pair in $migrationPairs) {
         try {
             $verificationRecords = Get-MgDomainServiceConfigurationRecord -DomainId $domainToCheck
 
+            # Debug: Log all records found
+            Write-Log "  Found $($verificationRecords.Count) total service configuration records"
+
             # Find the TXT record for MS= verification (not SPF)
             $txtRecords = $verificationRecords | Where-Object {
                 $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.domainDnsTxtRecord'
+            }
+
+            Write-Log "  Found $($txtRecords.Count) TXT records"
+
+            # Debug: Log each TXT record value
+            foreach ($rec in $txtRecords) {
+                $txtValue = $rec.AdditionalProperties.text
+                Write-Log "    TXT Record: $txtValue"
             }
 
             # Filter for the MS= verification record (not SPF or other records)
