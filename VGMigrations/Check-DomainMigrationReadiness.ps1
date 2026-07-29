@@ -93,38 +93,49 @@ function Connect-WithAppCredentials {
     }
 }
 
-function Get-DNSVerificationRecord {
-    param([string]$Domain)
+function Check-DNSForRecord {
+    param(
+        [string]$Domain,
+        [string]$ExpectedValue
+    )
 
     try {
-        # Query TXT records for MS verification
+        # Query TXT records
         $txtRecords = Resolve-DnsName -Name $Domain -Type TXT -ErrorAction SilentlyContinue
 
-        if ($txtRecords) {
-            $msVerifyRecords = $txtRecords | Where-Object {
-                $_.Strings -match '^MS=ms\d+'
-            }
-
-            if ($msVerifyRecords) {
-                return @{
-                    Found = $true
-                    Record = ($msVerifyRecords[0].Strings -match '^MS=ms\d+')[0]
-                    AllRecords = $msVerifyRecords | ForEach-Object { $_.Strings -join '; ' }
-                }
+        if (-not $txtRecords) {
+            return @{
+                Found = $false
+                Message = "No TXT records found in DNS"
             }
         }
 
-        return @{
-            Found = $false
-            Record = $null
-            AllRecords = $null
+        # Check if the expected MS= record is present
+        $matchFound = $false
+        foreach ($record in $txtRecords) {
+            $recordString = $record.Strings -join ''
+            if ($recordString -eq $ExpectedValue) {
+                $matchFound = $true
+                break
+            }
         }
+
+        if ($matchFound) {
+            return @{
+                Found = $true
+                Message = "Correct verification record found in DNS"
+            }
+        } else {
+            return @{
+                Found = $false
+                Message = "DNS TXT records exist but do not match expected value"
+            }
+        }
+
     } catch {
-        Write-Log "DNS query failed for $Domain : $_" "WARN"
         return @{
             Found = $false
-            Record = "DNS query failed: $_"
-            AllRecords = $null
+            Message = "DNS query error: $_"
         }
     }
 }
@@ -396,27 +407,18 @@ foreach ($pair in $migrationPairs) {
         continue
     }
 
-    # STEP 2: Check if the EXPECTED verification record is in DNS
-    Write-Log "Checking DNS for expected MS verification record..."
-    $dnsCheck = Get-DNSVerificationRecord -Domain $domainToCheck
+    # STEP 2: Check if the expected verification record is in DNS
+    Write-Log "Checking public DNS for verification record..."
+    $dnsCheck = Check-DNSForRecord -Domain $domainToCheck -ExpectedValue $result.DNS_Value
 
     if ($dnsCheck.Found) {
-        # Check if the DNS record matches what the target expects
-        if ($dnsCheck.AllRecords -match [regex]::Escape($result.DNS_Value)) {
-            Write-Log "  ✓ Correct MS verification record found in DNS" "SUCCESS"
-            $result.ReadinessStatus = "Ready"
-            $result.Notes = "DNS verification record matches target tenant"
-        } else {
-            Write-Log "  ✗ MS verification record found but DOES NOT MATCH target expectation" "WARN"
-            Write-Log "    Expected: $($result.DNS_Value)" "WARN"
-            Write-Log "    Found in DNS: $($dnsCheck.AllRecords)" "WARN"
-            $result.ReadinessStatus = "Not Ready"
-            $result.Notes = "DNS has old record - Add new TXT record: Label=$($result.DNS_Label) Value=$($result.DNS_Value)"
-        }
+        Write-Log "  ✓ $($dnsCheck.Message)" "SUCCESS"
+        $result.ReadinessStatus = "Ready"
+        $result.Notes = "DNS verification record is configured correctly"
     } else {
-        Write-Log "  ✗ Expected MS verification record NOT found in DNS" "WARN"
+        Write-Log "  ✗ $($dnsCheck.Message)" "WARN"
         $result.ReadinessStatus = "Not Ready"
-        $result.Notes = "Add DNS TXT record: Label=$($result.DNS_Label) Value=$($result.DNS_Value)"
+        $result.Notes = "DNS record missing - Request DNS team to add: Type=TXT, Host=$($result.DNS_Label), Value=$($result.DNS_Value)"
     }
 
     $allResults.Add($result)
