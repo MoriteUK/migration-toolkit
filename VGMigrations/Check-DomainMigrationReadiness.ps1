@@ -213,13 +213,19 @@ try {
             continue
         }
 
-        # Check column N (column 14) for "Yes" - indicates migration complete
+        # Check skip conditions
         if (-not $ProcessAll) {
+            # Column N (column 14) = "Yes" indicates migration complete
             $columnNValue = $usedRange.Cells.Item($row, 14).Text.Trim()
-
-            # Skip if column N has "Yes" (migration complete)
             if ($columnNValue.ToLower() -eq "yes") {
                 Write-Log "Row $row : [$tenantName] - Skipping (Migration Complete - Column N = Yes)"
+                continue
+            }
+
+            # Column L (column 12) = "Yes" indicates DNS already requested/added
+            $columnLValue = $usedRange.Cells.Item($row, 12).Text.Trim()
+            if ($columnLValue.ToLower() -eq "yes") {
+                Write-Log "Row $row : [$tenantName] - Skipping (DNS Already Requested - Column L = Yes)"
                 continue
             }
         }
