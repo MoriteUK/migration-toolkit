@@ -104,17 +104,23 @@ function Check-DNSForRecord {
         $txtRecords = Resolve-DnsName -Name $Domain -Type TXT -ErrorAction SilentlyContinue
 
         if (-not $txtRecords) {
+            Write-Log "    DNS: No TXT records found" "WARN"
             return @{
                 Found = $false
                 Message = "No TXT records found in DNS"
             }
         }
 
+        Write-Log "    DNS: Found $($txtRecords.Count) TXT records in public DNS"
+
         # Check if the expected MS= record is present
         $matchFound = $false
         foreach ($record in $txtRecords) {
             $recordString = $record.Strings -join ''
+            Write-Log "    DNS: Checking record: $recordString"
+
             if ($recordString -eq $ExpectedValue) {
+                Write-Log "    DNS: MATCH FOUND!" "SUCCESS"
                 $matchFound = $true
                 break
             }
@@ -126,6 +132,7 @@ function Check-DNSForRecord {
                 Message = "Correct verification record found in DNS"
             }
         } else {
+            Write-Log "    DNS: No match - expected: $ExpectedValue" "WARN"
             return @{
                 Found = $false
                 Message = "DNS TXT records exist but do not match expected value"
@@ -432,6 +439,7 @@ foreach ($pair in $migrationPairs) {
 
     # STEP 2: Check if the expected verification record is in DNS
     Write-Log "Checking public DNS for verification record..."
+    Write-Log "  Expected value: $($result.DNS_Value)"
     $dnsCheck = Check-DNSForRecord -Domain $domainToCheck -ExpectedValue $result.DNS_Value
 
     if ($dnsCheck.Found) {
