@@ -360,12 +360,12 @@ foreach ($pair in $migrationPairs) {
         # Get the verification DNS record from the target tenant
         Write-Log "  Retrieving DNS verification record..."
         try {
-            $verificationRecords = Get-MgDomainServiceConfigurationRecord -DomainId $domainToCheck
+            # Try the verification DNS records endpoint instead of service configuration
+            $verificationRecords = Get-MgDomainVerificationDnsRecord -DomainId $domainToCheck
 
-            # Debug: Log all records found
-            Write-Log "  Found $($verificationRecords.Count) total service configuration records"
+            Write-Log "  Found $($verificationRecords.Count) verification DNS records"
 
-            # Find the TXT record for MS= verification (not SPF)
+            # Find the TXT record for MS= verification
             $txtRecords = $verificationRecords | Where-Object {
                 $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.domainDnsTxtRecord'
             }
