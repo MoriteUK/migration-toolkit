@@ -1,7 +1,20 @@
 {
-  "version": "2.9.35",
-  "releaseDate": "2026-07-28",
+  "version": "2.9.36",
+  "releaseDate": "2026-07-29",
   "changelog": [
+    {
+      "version": "2.9.36",
+      "date": "2026-07-29",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Fixed verification record retrieval - now uses Get-MgDomainVerificationDnsRecord instead of ServiceConfigurationRecord",
+        "Check-DomainMigrationReadiness.ps1: Now correctly retrieves MS= verification records instead of SPF records",
+        "Check-DomainMigrationReadiness.ps1: Added Column L skip condition - rows with 'Yes' in Column L (DNS Already Requested) are now skipped",
+        "Check-DomainMigrationReadiness.ps1: DNS checking now shows detailed logs of records found and comparison results",
+        "Check-DomainMigrationReadiness.ps1: DNS verification now correctly identifies domains with missing verification records vs configured records",
+        "Setup-DomainReadinessApp.ps1: Uses browser authentication instead of device code to avoid MFA confusion",
+        "Permission upgraded from Domain.Read.All to Domain.ReadWrite.All to support adding domains to target tenants"
+      ]
+    },
     {
       "version": "2.9.35",
       "date": "2026-07-28",
