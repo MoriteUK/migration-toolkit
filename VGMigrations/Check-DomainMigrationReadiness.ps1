@@ -625,6 +625,14 @@ foreach ($pair in $migrationPairs) {
 Write-Log ""
 Write-Log "=== Generating Report ==="
 
+# Ensure output directory exists, fallback to script directory if not
+if (-not (Test-Path $OutputPath)) {
+    Write-Log "Output path not found: $OutputPath" "WARN"
+    $OutputPath = Join-Path $PSScriptRoot "Reports"
+    New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+    Write-Log "Using fallback output path: $OutputPath" "WARN"
+}
+
 $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 $reportFile = Join-Path $OutputPath "DomainMigrationReadiness_$timestamp.csv"
 $summaryFile = Join-Path $OutputPath "DomainMigrationReadiness_$timestamp.txt"
