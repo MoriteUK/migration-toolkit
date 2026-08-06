@@ -256,154 +256,82 @@ if (-not (Test-Path $TenantIDsPath)) {
     exit 1
 }
 
-# Check if Microsoft Graph module is available
-if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Authentication)) {
-    Write-Log "ERROR: Microsoft.Graph module not installed. Install with: Install-Module Microsoft.Graph -Scope CurrentUser" "ERROR"
-    exit 1
+
+# Check if ImportExcel module is available
+if (-not (Get-Module -ListAvailable -Name ImportExcel)) {
+    Write-Log "ImportExcel module not found. Installing..." "WARN"
+    try {
+        Install-Module -Name ImportExcel -Scope CurrentUser -Force -AllowClobber
+        Write-Log "ImportExcel module installed" "SUCCESS"
+    } catch {
+        Write-Log "ERROR: Failed to install ImportExcel: $_" "ERROR"
+        exit 1
+    }
 }
 
-# Verify file exists
-if (-not (Test-Path $TenantIDsPath)) {
-    Write-Log "ERROR: Tenant IDs file not found: $TenantIDsPath" "ERROR"
-    Write-Log "Please ensure the file exists at the specified path." "ERROR"
-    exit 1
-}
-
-# Read Excel file using COM
-Write-Log "Opening Excel file..."
-$excel = $null
-$workbook = $null
+# Read Excel using ImportExcel (no COM/Excel needed)
+Write-Log "Reading Excel file with ImportExcel module..."
 $migrationPairs = [System.Collections.Generic.List[object]]::new()
 
 try {
-    $excel = New-Object -ComObject Excel.Application
-    $excel.Visible = $false
-    $excel.DisplayAlerts = $false
+    $excelData = Import-Excel -Path $TenantIDsPath -NoHeader -DataOnly
+    if (-not $excelData) { throw "Could not read Excel file" }
+    Write-Log "Found $($excelData.Count) rows"
 
-    Write-Log "Opening workbook: $TenantIDsPath"
-    $workbook = $excel.Workbooks.Open($TenantIDsPath, $null, $true)  # Open read-only
+    for ($i = 1; $i -lt $excelData.Count; $i++) {
+        $row = $excelData[$i]
+        $rowNum = $i + 1
+        $tenantName = if ($row.P1) { $row.P1.ToString().Trim() } else { "" }
+        if ([string]::IsNullOrWhiteSpace($tenantName)) { continue }
 
-    if (-not $workbook) {
-        throw "Failed to open workbook - workbook object is null"
-    }
-
-    $worksheet = $workbook.Worksheets.Item(1)
-    $usedRange = $worksheet.UsedRange
-
-    $rowCount = $usedRange.Rows.Count
-    $colCount = $usedRange.Columns.Count
-
-    Write-Log "Found $rowCount rows and $colCount columns"
-
-    # Read headers from row 1
-    $headers = @{}
-    for ($col = 1; $col -le $colCount; $col++) {
-        $headerValue = $usedRange.Cells.Item(1, $col).Text
-        if ($headerValue) {
-            $headers[$col] = $headerValue
-        }
-    }
-
-    # Process data rows (starting from row 2)
-    for ($row = 2; $row -le $rowCount; $row++) {
-        $tenantName = $usedRange.Cells.Item($row, 1).Text.Trim()
-
-        # Skip empty rows
-        if ([string]::IsNullOrWhiteSpace($tenantName)) {
-            continue
-        }
-
-        # Check skip conditions
         if (-not $ProcessAll) {
-            # Column N (column 14) = "Yes" indicates migration complete
-            $columnNValue = $usedRange.Cells.Item($row, 14).Text.Trim()
-            if ($columnNValue.ToLower() -eq "yes") {
-                Write-Log "Row $row : [$tenantName] - Skipping (Migration Complete - Column N = Yes)"
+            $colN = if ($row.P14) { $row.P14.ToString().Trim() } else { "" }
+            if ($colN.ToLower() -eq "yes") {
+                Write-Log "Row $rowNum : [$tenantName] - Skipping (Migration Complete)"
                 continue
             }
-
-            # Column L (column 12) = "Yes" indicates DNS already requested/added
-            $columnLValue = $usedRange.Cells.Item($row, 12).Text.Trim()
-            if ($columnLValue.ToLower() -eq "yes") {
-                Write-Log "Row $row : [$tenantName] - Skipping (DNS Already Requested - Column L = Yes)"
+            $colL = if ($row.P12) { $row.P12.ToString().Trim() } else { "" }
+            if ($colL.ToLower() -eq "yes") {
+                Write-Log "Row $rowNum : [$tenantName] - Skipping (DNS Already Requested)"
                 continue
             }
         }
 
-        # Read columns:
-        # Column B = Primary domain name (column 2) - but might be a tenant ID GUID, skip if so
-        # Column P = Domain names (comma-separated) (column 16)
-        # Column Q = Target tenant ID (column 17)
-        # Column R = Login credentials (optional) (column 18)
-        $primaryDomain = $usedRange.Cells.Item($row, 2).Text.Trim()
-        $additionalDomains = $usedRange.Cells.Item($row, 16).Text.Trim()
-        $destinationTenant = $usedRange.Cells.Item($row, 17).Text.Trim()
-        $loginCredential = $usedRange.Cells.Item($row, 18).Text.Trim()
+        $primaryDomain = if ($row.P2) { $row.P2.ToString().Trim() } else { "" }
+        $additionalDomains = if ($row.P16) { $row.P16.ToString().Trim() } else { "" }
+        $destinationTenant = if ($row.P17) { $row.P17.ToString().Trim() } else { "" }
+        $loginCredential = if ($row.P18) { $row.P18.ToString().Trim() } else { "" }
 
-        # Build domain list - only use Column P (not Column B if it's a GUID)
         $domainNames = ""
-
-        # Check if primary domain is a GUID pattern (skip if so)
         if ($primaryDomain -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') {
-            # It's a GUID, skip it
             $domainNames = $additionalDomains
         } else {
-            # It's a domain name, include it
             $domainNames = $primaryDomain
             if (-not [string]::IsNullOrWhiteSpace($additionalDomains)) {
                 $domainNames += ",$additionalDomains"
             }
         }
 
-        # Skip if no domain or destination
         if ([string]::IsNullOrWhiteSpace($domainNames) -or [string]::IsNullOrWhiteSpace($destinationTenant)) {
-            Write-Log "Row $row : [$tenantName] - Skipping (No domain/destination in columns P/Q)"
+            Write-Log "Row $rowNum : [$tenantName] - Skipping (No domain/destination)"
             continue
         }
 
-        # Split domains by comma if multiple
         $domainList = $domainNames -split ',' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-
         foreach ($domain in $domainList) {
             $migrationPairs.Add([PSCustomObject]@{
                 TenantName = $tenantName
                 DomainName = $domain
                 DestinationTenant = $destinationTenant
                 LoginCredential = $loginCredential
-                Row = $row
+                Row = $rowNum
             })
-
-            Write-Log "Row $row : [$tenantName] - Domain: $domain -> Destination: $destinationTenant"
+            Write-Log "Row $rowNum : [$tenantName] - Domain: $domain -> Destination: $destinationTenant"
         }
     }
-
 } catch {
-    Write-Log "ERROR reading Excel file: $_" "ERROR"
+    Write-Log "ERROR reading Excel: $_" "ERROR"
     throw
-} finally {
-    # Aggressive cleanup of Excel COM objects
-    if ($workbook) {
-        try {
-            $workbook.Close($false)
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($workbook) | Out-Null
-        } catch { Write-Log "Error closing workbook: $_" "WARN" }
-    }
-    if ($excel) {
-        try {
-            $excel.Workbooks.Close()
-            $excel.Quit()
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null
-        } catch { Write-Log "Error quitting Excel: $_" "WARN" }
-    }
-
-    # Force garbage collection
-    [GC]::Collect()
-    [GC]::WaitForPendingFinalizers()
-    [GC]::Collect()
-
-    # Kill any lingering Excel processes as last resort
-    Start-Sleep -Milliseconds 500
-    Get-Process excel -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq "" } | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
 Write-Log "Found $($migrationPairs.Count) source->destination migration pairs to process"
