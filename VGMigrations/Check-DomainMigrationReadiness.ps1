@@ -655,10 +655,10 @@ try {
     # Auto-fit all columns
     $worksheet.Columns.AutoFit() | Out-Null
 
-    # Sort by ReadinessStatus (column 6) then TenantName (column 1)
+    # Sort by ReadinessStatus (column H = 8) then TenantName (column A = 1)
     $usedRange = $worksheet.UsedRange
-    $sortColumn1 = $worksheet.Columns.Item(6)  # ReadinessStatus
-    $sortColumn2 = $worksheet.Columns.Item(1)  # TenantName
+    $sortColumn1 = $worksheet.Columns.Item(8)  # ReadinessStatus (column H)
+    $sortColumn2 = $worksheet.Columns.Item(1)  # TenantName (column A)
 
     $usedRange.Sort($sortColumn1, 1, $sortColumn2, $null, 1) | Out-Null
 
