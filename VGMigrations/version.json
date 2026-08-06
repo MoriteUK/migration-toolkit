@@ -1,7 +1,97 @@
 {
-  "version": "2.9.33",
-  "releaseDate": "2026-07-22",
+  "version": "2.9.40",
+  "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.40",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: DNS queries now use public DNS servers (Google 8.8.8.8, Cloudflare 1.1.1.1) to avoid cached/corporate DNS issues",
+        "Check-DomainMigrationReadiness.ps1: Enhanced detection of unverified domains - now correctly identifies domains added to target but still active in source tenant",
+        "Check-DomainMigrationReadiness.ps1: Added comprehensive DNS record logging - shows all TXT records found with byte-level comparison for troubleshooting",
+        "Check-DomainMigrationReadiness.ps1: Improved pre-cutover validation - attempts exact match first, then accepts any MS= record if different",
+        "Check-DomainMigrationReadiness.ps1: Reports 'Ready - Pre-Cutover (Exact Match)' when DNS record matches target tenant's expected value exactly",
+        "Check-DomainMigrationReadiness.ps1: Warns when source tenant MS= record differs from target's expected value (DNS update needed after transfer)",
+        "Check-DomainMigrationReadiness.ps1: Added detailed debug logging for troubleshooting DNS resolution and domain verification status"
+      ]
+    },
+    {
+      "version": "2.9.39",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Now handles domains that are currently in another tenant (pre-cutover state)",
+        "Check-DomainMigrationReadiness.ps1: Checks for ANY MS= verification record when domain cannot be added to target tenant",
+        "Check-DomainMigrationReadiness.ps1: Reports 'Ready - Pre-Cutover' status when MS= record exists but domain is in source tenant",
+        "Check-DomainMigrationReadiness.ps1: Provides clear guidance that exact record validation will happen after cutover"
+      ]
+    },
+    {
+      "version": "2.9.38",
+      "date": "2026-08-06",
+      "changes": [
+        "License Report: Added 'Process all domains' option to ignore column J (licenses checked) while still respecting column N (cutover done)",
+        "Check-TenantLicenses.ps1: Added -ProcessAll switch parameter to bypass column J skip flag",
+        "Check-TenantLicenses.ps1: Column N (cutover done) is always respected regardless of ProcessAll setting",
+        "MigrationToolkit-Web: Added checkbox to License Report UI for processing all domains"
+      ]
+    },
+    {
+      "version": "2.9.37",
+      "date": "2026-07-29",
+      "changes": [
+        "Check-TenantLicenses.ps1: Fixed Excel column reading - now correctly reads Tenant ID from Column B instead of Column C",
+        "Check-TenantLicenses.ps1: Improved mailbox license detection - now uses service plan checking (EXCHANGE_S_*, SHAREPOINT*) instead of hardcoded SKU list",
+        "Check-TenantLicenses.ps1: Excludes EXCHANGE_S_FOUNDATION and SHAREPOINTWAC (internal plumbing, not real mailboxes/storage)",
+        "Check-TenantLicenses.ps1: Output CSV and TXT files now save to Logs subfolder to avoid cluttering main directory",
+        "Check-TenantLicenses.ps1: Auto-creates Logs folder if it doesn't exist",
+        "MigrationToolkit-Web: Fixed auto-open of license report CSV - added missing streamPowerShell, onPsOutput, offPsOutput, and openFile functions to preload.js",
+        "MigrationToolkit-Web: Added ##OPEN_FILE## signal detection to renderer.js for Check-TenantLicenses output handler",
+        "MigrationToolkit-Web: CSV reports now automatically open in default application when script completes (requires app restart to load updated JavaScript)",
+        "Setup-LicenseReportApp.ps1: Credential files now use correct Tenant IDs from Excel Column B for proper app registration storage"
+      ]
+    },
+    {
+      "version": "2.9.36",
+      "date": "2026-07-29",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Fixed verification record retrieval - now uses Get-MgDomainVerificationDnsRecord instead of ServiceConfigurationRecord",
+        "Check-DomainMigrationReadiness.ps1: Now correctly retrieves MS= verification records instead of SPF records",
+        "Check-DomainMigrationReadiness.ps1: Added Column L skip condition - rows with 'Yes' in Column L (DNS Already Requested) are now skipped",
+        "Check-DomainMigrationReadiness.ps1: DNS checking now shows detailed logs of records found and comparison results",
+        "Check-DomainMigrationReadiness.ps1: DNS verification now correctly identifies domains with missing verification records vs configured records",
+        "Setup-DomainReadinessApp.ps1: Uses browser authentication instead of device code to avoid MFA confusion",
+        "Permission upgraded from Domain.Read.All to Domain.ReadWrite.All to support adding domains to target tenants"
+      ]
+    },
+    {
+      "version": "2.9.35",
+      "date": "2026-07-28",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Now uses app registration with stored credentials",
+        "First run: Device code authentication to create app registration per tenant",
+        "Subsequent runs: Automatic authentication using stored credentials",
+        "No more repeated device code prompts - authenticate once per tenant",
+        "Credentials stored in domaincheck_<tenantid>.json for reuse",
+        "Required permission: Domain.Read.All (application)",
+        "App name: VG-DomainReadiness-Reporter",
+        "Added Archive-OldLogs.ps1 - Auto-archives logs older than 7 days to Old_Logs.zip on startup"
+      ]
+    },
+    {
+      "version": "2.9.34",
+      "date": "2026-07-28",
+      "changes": [
+        "Added Check-TenantLicenses.ps1 - License report with auto-app registration",
+        "Counts licenses granting Exchange Online mailboxes by domain",
+        "Auto-creates app registration per tenant with credential storage/reuse",
+        "Added Check-DomainMigrationReadiness.ps1 - Domain verification checker",
+        "Reads source/destination from Tenant IDs.xlsx columns P/Q",
+        "Checks if domains exist in target tenant and DNS verification status",
+        "Handles multiple comma-separated source tenants",
+        "Web: Added License Report and Domain Readiness buttons to Discovery section",
+        "Web: Updated to v2.9.34 to match PowerShell toolkit version"
+      ]
+    },
     {
       "version": "2.9.33",
       "date": "2026-07-22",
