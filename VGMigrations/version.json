@@ -1,7 +1,18 @@
 {
-  "version": "2.9.47",
+  "version": "2.9.48",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.48",
+      "date": "2026-08-06",
+      "changes": [
+        "remove-domain.ps1: Fixed SIP/IM address removal to target on-premises AD instead of Exchange Online",
+        "remove-domain.ps1: Proxy Addresses section now separates SIP/IM addresses from SMTP addresses",
+        "remove-domain.ps1: SIP/IM addresses are now removed from on-prem AD proxyAddresses attribute",
+        "remove-domain.ps1: SMTP addresses continue to be processed via Exchange Online as before",
+        "remove-domain.ps1: On-prem AD update section now handles SIP, IM, and SMTP proxy addresses"
+      ]
+    },
     {
       "version": "2.9.47",
       "date": "2026-08-06",

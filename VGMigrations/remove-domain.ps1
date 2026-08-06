@@ -805,20 +805,32 @@ function Show-RemoveDomainUI {
                         $rows = Read-SectionCsv $csvName
                         if ($rows) {
                             $primaries    = @($rows | Where-Object { $_.IsPrimary -eq 'True' })
+                            # Separate SIP/IM addresses (on-prem AD) from SMTP addresses (Exchange Online)
                             $nonPrimaries = @($rows | Where-Object { $_.IsPrimary -ne 'True' })
+                            $sipImAddresses = @($nonPrimaries | Where-Object { $_.AddressType -imatch '^(sip|im)$' })
+                            $smtpAddresses  = @($nonPrimaries | Where-Object { $_.AddressType -imatch '^smtp$' })
+
                             if ($primaries.Count -gt 0) {
                                 QLog "$($primaries.Count) primary SMTP address(es) will be SKIPPED - reclassify manually." 'WARN'
                             }
-                            if ($nonPrimaries.Count -gt 0) {
+
+                            # Handle SIP/IM addresses (requires on-prem AD, will be handled in AD update section below)
+                            if ($sipImAddresses.Count -gt 0) {
+                                QLog "$($sipImAddresses.Count) SIP/IM address(es) found - these will be removed from on-prem AD in the AD update section." 'WARN'
+                                $rs.Progress += $sipImAddresses.Count
+                            }
+
+                            # Handle SMTP addresses (Exchange Online)
+                            if ($smtpAddresses.Count -gt 0) {
                                 $ok = 0; $fail = 0; $skip = 0
                                 $connected = $whatIf -or (Ensure-ExoConnected)
                                 if ($connected) {
-                                    $byRecipient = $nonPrimaries | Group-Object -Property PrimarySmtpAddress
+                                    $byRecipient = $smtpAddresses | Group-Object -Property PrimarySmtpAddress
                                     foreach ($grp in $byRecipient) {
                                         $primaryAddr     = $grp.Name
                                         $addressesToDrop = @($grp.Group | ForEach-Object { "$($_.AddressType):$($_.ProxyAddress)" })
                                         if ($whatIf) {
-                                            foreach ($a in $addressesToDrop) { QLog "WhatIf: would remove proxy $a from $primaryAddr" 'WARN' }
+                                            foreach ($a in $addressesToDrop) { QLog "WhatIf: would remove SMTP proxy $a from $primaryAddr" 'WARN' }
                                             $ok += $addressesToDrop.Count; $rs.Progress += $addressesToDrop.Count
                                         } else {
                                             try {
@@ -830,7 +842,7 @@ function Show-RemoveDomainUI {
                                                 })
                                                 $removed = $currentProxies.Count - $newProxies.Count
                                                 if ($removed -eq 0) {
-                                                    QLog "No matching addresses found on ${primaryAddr} - skipping." 'WARN'
+                                                    QLog "No matching SMTP addresses found on ${primaryAddr} - skipping." 'WARN'
                                                     $skip++; $rs.Progress += $addressesToDrop.Count
                                                 } else {
                                                     switch -Wildcard ($type) {
@@ -845,19 +857,19 @@ function Show-RemoveDomainUI {
                                                             $skip++; $rs.Progress += $addressesToDrop.Count
                                                         }
                                                     }
-                                                    foreach ($dropped in $addressesToDrop) { QLog "REMOVED proxy: $dropped  from: $primaryAddr" 'OK' }
+                                                    foreach ($dropped in $addressesToDrop) { QLog "REMOVED SMTP proxy: $dropped  from: $primaryAddr" 'OK' }
                                                     $ok += $removed; $rs.Progress += $addressesToDrop.Count
                                                 }
                                             } catch {
-                                                QLog "Failed to update proxies on '${primaryAddr}': $($_.Exception.Message.Split([Environment]::NewLine)[0])" 'ERROR'
+                                                QLog "Failed to update SMTP proxies on '${primaryAddr}': $($_.Exception.Message.Split([Environment]::NewLine)[0])" 'ERROR'
                                                 $fail++; $rs.Progress += $addressesToDrop.Count
                                             }
                                         }
                                     }
-                                } else { $rs.Progress += $nonPrimaries.Count }
-                                QLog "Proxy addresses: removed $ok  failed $fail  skipped $skip"
+                                } else { $rs.Progress += $smtpAddresses.Count }
+                                QLog "SMTP proxy addresses: removed $ok  failed $fail  skipped $skip"
                             } else {
-                                QLog 'No non-primary proxy addresses to remove.' 'WARN'
+                                QLog 'No non-primary SMTP proxy addresses to remove from Exchange Online.' 'WARN'
                             }
                             $rs.Progress += $primaries.Count
                         }
@@ -928,17 +940,26 @@ function Show-RemoveDomainUI {
                                             $changes['mail'] = $newMail
                                         }
 
-                                        # 3. Update proxyAddresses - replace all references to the domain
+                                        # 3. Update proxyAddresses - replace all references to the domain (SMTP, SIP, IM, etc.)
                                         if ($adUser.proxyAddresses) {
                                             $newProxies = @()
                                             $proxyChanged = $false
 
                                             foreach ($proxy in $adUser.proxyAddresses) {
-                                                if ($proxy -match "^(smtp|SMTP):(.+)@$([regex]::Escape($domainToRemove))$") {
+                                                # Handle SMTP, SIP, and IM addresses
+                                                if ($proxy -match "^(smtp|SMTP|sip|SIP|im|IM):(.+)@$([regex]::Escape($domainToRemove))$") {
                                                     $prefix = $matches[1]
                                                     $localPart = $matches[2]
-                                                    $newProxies += "${prefix}:${localPart}@ourvolaris.onmicrosoft.com"
-                                                    $proxyChanged = $true
+                                                    # Remove SIP/IM addresses with the old domain, rename SMTP addresses
+                                                    if ($prefix -imatch '^(sip|im)$') {
+                                                        # Drop SIP/IM addresses with old domain
+                                                        QLog "    Removing ${prefix}: proxy $proxy" 'OK'
+                                                        $proxyChanged = $true
+                                                    } else {
+                                                        # Rename SMTP addresses
+                                                        $newProxies += "${prefix}:${localPart}@ourvolaris.onmicrosoft.com"
+                                                        $proxyChanged = $true
+                                                    }
                                                 } else {
                                                     $newProxies += $proxy
                                                 }
