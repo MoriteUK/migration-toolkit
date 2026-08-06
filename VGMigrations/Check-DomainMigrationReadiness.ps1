@@ -642,12 +642,38 @@ $summaryFile = Join-Path $OutputPath "DomainMigrationReadiness_$timestamp.txt"
 $allResults | Export-Csv -Path $reportFile -NoTypeInformation -Encoding UTF8
 Write-Log "Detailed report saved: $reportFile"
 
-# Open the CSV file automatically
+# Open and format the CSV in Excel
 try {
-    Write-Log "Opening CSV report in Excel..."
-    Invoke-Item $reportFile
+    Write-Log "Opening and formatting CSV report in Excel..."
+    $excel = New-Object -ComObject Excel.Application
+    $excel.Visible = $true
+    $excel.DisplayAlerts = $false
+
+    $workbook = $excel.Workbooks.Open($reportFile)
+    $worksheet = $workbook.Worksheets.Item(1)
+
+    # Auto-fit all columns
+    $worksheet.Columns.AutoFit() | Out-Null
+
+    # Sort by ReadinessStatus (column 6) then TenantName (column 1)
+    $usedRange = $worksheet.UsedRange
+    $sortColumn1 = $worksheet.Columns.Item(6)  # ReadinessStatus
+    $sortColumn2 = $worksheet.Columns.Item(1)  # TenantName
+
+    $usedRange.Sort($sortColumn1, 1, $sortColumn2, $null, 1) | Out-Null
+
+    # Save and close
+    $workbook.Save()
+
+    Write-Log "CSV formatted and sorted successfully"
 } catch {
-    Write-Log "Could not auto-open CSV: $_" "WARN"
+    Write-Log "Could not format CSV in Excel: $_" "WARN"
+    Write-Log "Opening with default application instead..."
+    try {
+        Invoke-Item $reportFile
+    } catch {
+        Write-Log "Could not auto-open CSV: $_" "WARN"
+    }
 }
 
 # Generate summary
