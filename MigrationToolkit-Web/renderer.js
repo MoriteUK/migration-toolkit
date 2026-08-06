@@ -147,17 +147,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Sidebar navigation - sub-items
   const sidebarSubitems = document.querySelectorAll('.sidebar-subitem');
   sidebarSubitems.forEach((subitem) => {
-    subitem.addEventListener('click', (event) => {
+    subitem.addEventListener('click', async (event) => {
       event.stopPropagation();
       const view = subitem.getAttribute('data-view');
+      const script = subitem.getAttribute('data-script');
 
       // Update active state
       sidebarItems.forEach(i => i.classList.remove('active'));
       sidebarSubitems.forEach(i => i.classList.remove('active'));
       subitem.classList.add('active');
 
-      // Switch views
-      if (view) {
+      // Launch script or switch view
+      if (script) {
+        await launchScript(script, subitem);
+      } else if (view) {
         switchView(view);
       }
     });
@@ -350,6 +353,80 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.electronAPI.offPsOutput();
         startDiscoveryBtn.disabled = false;
         startDiscoveryBtn.textContent = 'Start Discovery';
+      }
+    });
+  }
+
+  // License Report - Run button
+  const runLicenseReportBtn = document.getElementById('runLicenseReportBtn');
+  if (runLicenseReportBtn) {
+    runLicenseReportBtn.addEventListener('click', async () => {
+      const logSection = document.getElementById('licenseReportLog');
+      const logOutput = document.getElementById('licenseReportLogOutput');
+      const processAll = document.getElementById('licenseProcessAll').checked;
+
+      logSection.classList.remove('hidden');
+      logOutput.textContent = 'Starting License Report...\n\n';
+
+      runLicenseReportBtn.disabled = true;
+      runLicenseReportBtn.textContent = 'Running...';
+
+      window.electronAPI.onPsOutput((text) => {
+        const clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+        // Detect ##OPEN_FILE:<path>## signal from the PS script and open via Electron
+        const fileMarker = clean.match(/##OPEN_FILE:(.+?)##/);
+        if (fileMarker) {
+          window.electronAPI.openFile(fileMarker[1].trim());
+          logOutput.textContent += clean.replace(/##OPEN_FILE:.+?##/g, '').replace(/^\n/, '');
+        } else {
+          logOutput.textContent += clean;
+        }
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+
+      try {
+        const args = processAll ? ['-ProcessAll'] : [];
+        const result = await window.electronAPI.streamPowerShell('Check-TenantLicenses.ps1', args);
+        logOutput.textContent += result?.success ? '\n✓ License Report complete\n' : `\n✗ Failed (exit ${result?.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\n✗ Error: ${err.message}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        runLicenseReportBtn.disabled = false;
+        runLicenseReportBtn.textContent = '🚀 Run License Report';
+      }
+    });
+  }
+
+  // Domain Readiness - Run button
+  const runDomainReadinessBtn = document.getElementById('runDomainReadinessBtn');
+  if (runDomainReadinessBtn) {
+    runDomainReadinessBtn.addEventListener('click', async () => {
+      const logSection = document.getElementById('domainReadinessLog');
+      const logOutput = document.getElementById('domainReadinessLogOutput');
+      const processAll = document.getElementById('domainProcessAll').checked;
+
+      logSection.classList.remove('hidden');
+      logOutput.textContent = 'Starting Domain Readiness Check...\n\n';
+
+      runDomainReadinessBtn.disabled = true;
+      runDomainReadinessBtn.textContent = 'Running...';
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+
+      try {
+        const args = processAll ? ['-ProcessAll'] : [];
+        const result = await window.electronAPI.streamPowerShell('Check-DomainMigrationReadiness.ps1', args);
+        logOutput.textContent += result?.success ? '\n✓ Domain Readiness Check complete\n' : `\n✗ Failed (exit ${result?.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\n✗ Error: ${err.message}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        runDomainReadinessBtn.disabled = false;
+        runDomainReadinessBtn.textContent = '🚀 Run Domain Readiness Check';
       }
     });
   }
@@ -1655,6 +1732,8 @@ function switchView(viewName) {
     'dashboard': 'dashboardView',
     'discovery': 'discoveryView',
     // Discovery sub-views
+    'licenseReport': 'licenseReportView',
+    'domainReadiness': 'domainReadinessView',
     'discovery-tenant-licenses': 'discoveryTenantLicensesView',
     // AvePoint Fly sub-views
     'avepoint-appreg': 'avepointAppRegView',
