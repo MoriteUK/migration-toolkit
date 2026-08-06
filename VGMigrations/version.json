@@ -1,7 +1,17 @@
 {
-  "version": "2.9.41",
+  "version": "2.9.42",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.42",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Replaced COM Excel automation with ImportExcel PowerShell module",
+        "Check-DomainMigrationReadiness.ps1: No longer requires Microsoft Excel to be installed on server",
+        "Check-DomainMigrationReadiness.ps1: Auto-installs ImportExcel module if missing",
+        "Check-DomainMigrationReadiness.ps1: Fixes 'Class not registered' (REGDB_E_CLASSNOTREG) error on servers without Office"
+      ]
+    },
     {
       "version": "2.9.41",
       "date": "2026-08-06",
