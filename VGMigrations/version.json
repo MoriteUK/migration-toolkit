@@ -1,7 +1,16 @@
 {
-  "version": "2.9.43",
+  "version": "2.9.44",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.44",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Domains with wrong MS= records from previous migrations now marked as 'Not Ready'",
+        "Check-DomainMigrationReadiness.ps1: Clearer error messaging when DNS has old verification record that doesn't match target tenant",
+        "Check-DomainMigrationReadiness.ps1: Prevents cutover failures due to stale MS= records in DNS"
+      ]
+    },
     {
       "version": "2.9.43",
       "date": "2026-08-06",
