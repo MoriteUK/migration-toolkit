@@ -1,7 +1,17 @@
 {
-  "version": "2.9.45",
+  "version": "2.9.46",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.46",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: CSV report now auto-formats when opened in Excel",
+        "Check-DomainMigrationReadiness.ps1: All columns auto-fit for better readability",
+        "Check-DomainMigrationReadiness.ps1: Report sorted by ReadinessStatus then TenantName (Not Ready domains at top)",
+        "Check-DomainMigrationReadiness.ps1: Falls back to default app if Excel not available"
+      ]
+    },
     {
       "version": "2.9.45",
       "date": "2026-08-06",
