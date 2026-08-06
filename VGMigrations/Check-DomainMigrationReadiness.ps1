@@ -580,11 +580,12 @@ foreach ($pair in $migrationPairs) {
 
             # Compare found record with target's expected value
             if ($result.DNS_Value -and $result.DNS_Value -ne "Unknown - domain in source tenant" -and $dnsCheck.ActualValue -ne $result.DNS_Value) {
-                Write-Log "  ⚠ DNS has different MS= record than target expects" "WARN"
+                Write-Log "  ✗ DNS has WRONG MS= record (likely from previous migration)" "ERROR"
                 Write-Log "    Found in DNS: $($dnsCheck.ActualValue)"
                 Write-Log "    Target expects: $($result.DNS_Value)"
-                $result.ReadinessStatus = "Ready - Pre-Cutover (Source Record)"
-                $result.Notes = "MS= record found in DNS (from source tenant). Target expects different value: $($result.DNS_Value). Update DNS before cutover or domain verification may fail after transfer."
+                Write-Log "    Action required: Update DNS TXT record before cutover"
+                $result.ReadinessStatus = "Not Ready"
+                $result.Notes = "Wrong MS= record in DNS (from previous migration). Expected: $($result.DNS_Value), Found: $($dnsCheck.ActualValue). Update DNS before cutover or domain verification will fail."
                 $result.DNS_Value = "Target: $($result.DNS_Value) | Current: $($dnsCheck.ActualValue)"
             } else {
                 $result.ReadinessStatus = "Ready - Pre-Cutover"
