@@ -424,7 +424,7 @@ foreach ($pair in $migrationPairs) {
             # If domain is already verified, mark as ready and skip DNS check
             if ($targetDomain.IsVerified) {
                 Write-Log "  ✓ Domain is already verified in target tenant" "SUCCESS"
-                $result.ReadinessStatus = "Ready"
+                $result.ReadinessStatus = "Ready - Pre-Cutover (Exact Match)"
                 $result.Notes = "Domain already verified in target tenant"
                 $result.DNS_RecordType = "N/A"
                 $result.DNS_Label = "N/A"
@@ -588,7 +588,7 @@ foreach ($pair in $migrationPairs) {
                 $result.Notes = "Wrong MS= record in DNS (from previous migration). Expected: $($result.DNS_Value), Found: $($dnsCheck.ActualValue). Update DNS before cutover or domain verification will fail."
                 $result.DNS_Value = "Target: $($result.DNS_Value) | Current: $($dnsCheck.ActualValue)"
             } else {
-                $result.ReadinessStatus = "Ready - Pre-Cutover"
+                $result.ReadinessStatus = "Ready - Pre-Cutover (Exact Match)"
                 $result.Notes = "MS= verification record found in DNS. Domain currently in source tenant - record will be validated on cutover."
             }
             $result.DNSVerifyRecord = $dnsCheck.ActualValue
@@ -606,7 +606,7 @@ foreach ($pair in $migrationPairs) {
 
         if ($dnsCheck.Found) {
             Write-Log "  ✓ $($dnsCheck.Message)" "SUCCESS"
-            $result.ReadinessStatus = "Ready"
+            $result.ReadinessStatus = "Ready - Pre-Cutover (Exact Match)"
             $result.Notes = "DNS verification record is configured correctly"
         } else {
             Write-Log "  ✗ $($dnsCheck.Message)" "WARN"
