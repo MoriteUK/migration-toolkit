@@ -18,7 +18,8 @@ param(
     [string]$TenantIDsPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations\Tenant IDs.xlsx",
     [string]$OutputPath = "C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations\Logs",
     [string]$AppName = "VG-License-Reporter",
-    [string]$CredentialStorePath = $PSScriptRoot
+    [string]$CredentialStorePath = $PSScriptRoot,
+    [switch]$ProcessAll
 )
 
 $ErrorActionPreference = 'Stop'
@@ -309,6 +310,9 @@ function Test-IsTrialLicense($SkuPartNumber, $EnabledCount) {
 Write-Log "=== Mailbox License Report (Auto-App) Started ==="
 Write-Log "Tenant IDs file: $TenantIDsPath"
 Write-Log "App Name: $AppName"
+if ($ProcessAll) {
+    Write-Log "Process All: Enabled (ignoring column J, still respecting column N for cutover done)" "INFO"
+}
 
 # Check if file exists
 if (-not (Test-Path $TenantIDsPath)) {
@@ -366,13 +370,19 @@ try {
         }
 
         # Check column J (column 10) and column N (column 14) for "Yes"
+        # ProcessAll ignores column J but still respects column N (cutover done)
         $columnJValue = $usedRange.Cells.Item($row, 10).Text.Trim()
         $columnNValue = $usedRange.Cells.Item($row, 14).Text.Trim()
 
-        # Skip if column J OR column N has "Yes" (case-insensitive)
-        if ($columnJValue.ToLower() -eq "yes" -or $columnNValue.ToLower() -eq "yes") {
-            $whichCol = if ($columnNValue.ToLower() -eq "yes") { "N" } elseif ($columnJValue.ToLower() -eq "yes") { "J" } else { "" }
-            Write-Log "Row $row : [$friendlyName] - Skipping (Column $whichCol = Yes)"
+        # Always skip if column N has "Yes" (cutover done)
+        if ($columnNValue.ToLower() -eq "yes") {
+            Write-Log "Row $row : [$friendlyName] - Skipping (Column N = Yes - cutover done)"
+            continue
+        }
+
+        # Skip if column J has "Yes" (unless ProcessAll is set)
+        if (-not $ProcessAll -and $columnJValue.ToLower() -eq "yes") {
+            Write-Log "Row $row : [$friendlyName] - Skipping (Column J = Yes - licenses checked)"
             continue
         }
 

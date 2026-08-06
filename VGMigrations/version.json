@@ -1,7 +1,17 @@
 {
-  "version": "2.9.37",
-  "releaseDate": "2026-07-29",
+  "version": "2.9.38",
+  "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.38",
+      "date": "2026-08-06",
+      "changes": [
+        "License Report: Added 'Process all domains' option to ignore column J (licenses checked) while still respecting column N (cutover done)",
+        "Check-TenantLicenses.ps1: Added -ProcessAll switch parameter to bypass column J skip flag",
+        "Check-TenantLicenses.ps1: Column N (cutover done) is always respected regardless of ProcessAll setting",
+        "MigrationToolkit-Web: Added checkbox to License Report UI for processing all domains"
+      ]
+    },
     {
       "version": "2.9.37",
       "date": "2026-07-29",

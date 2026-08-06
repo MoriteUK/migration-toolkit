@@ -363,6 +363,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     runLicenseReportBtn.addEventListener('click', async () => {
       const logSection = document.getElementById('licenseReportLog');
       const logOutput = document.getElementById('licenseReportLogOutput');
+      const processAll = document.getElementById('licenseProcessAll').checked;
 
       logSection.classList.remove('hidden');
       logOutput.textContent = 'Starting License Report...\n\n';
@@ -384,7 +385,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       try {
-        const result = await window.electronAPI.streamPowerShell('Check-TenantLicenses.ps1', []);
+        const args = processAll ? ['-ProcessAll'] : [];
+        const result = await window.electronAPI.streamPowerShell('Check-TenantLicenses.ps1', args);
         logOutput.textContent += result?.success ? '\n✓ License Report complete\n' : `\n✗ Failed (exit ${result?.code})\n`;
       } catch (err) {
         logOutput.textContent += `\n✗ Error: ${err.message}\n`;
