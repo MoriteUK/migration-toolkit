@@ -1,7 +1,16 @@
 {
-  "version": "2.9.44",
+  "version": "2.9.45",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.45",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Simplified ReadinessStatus to only two values: 'Ready - Pre-Cutover (Exact Match)' or 'Not Ready'",
+        "Check-DomainMigrationReadiness.ps1: Removed ambiguous status values for clearer reporting",
+        "Check-DomainMigrationReadiness.ps1: All domains with correct DNS records now consistently show 'Ready - Pre-Cutover (Exact Match)'"
+      ]
+    },
     {
       "version": "2.9.44",
       "date": "2026-08-06",
