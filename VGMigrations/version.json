@@ -1,7 +1,18 @@
 {
-  "version": "2.9.48",
+  "version": "2.9.49",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.49",
+      "date": "2026-08-06",
+      "changes": [
+        "Update-SIPDomain.ps1: Completely rewritten to target on-premises Active Directory instead of Exchange Online",
+        "Update-SIPDomain.ps1: Now uses ActiveDirectory module to update proxyAddresses attribute directly",
+        "Update-SIPDomain.ps1: No longer requires Exchange Online or Microsoft Graph connections",
+        "Update-SIPDomain.ps1: Removed license provisioning logic (not needed for on-prem AD)",
+        "Update-SIPDomain.ps1: Added SearchBase parameter for targeting specific OUs"
+      ]
+    },
     {
       "version": "2.9.48",
       "date": "2026-08-06",
