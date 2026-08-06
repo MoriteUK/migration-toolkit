@@ -1,7 +1,16 @@
 {
-  "version": "2.9.40",
+  "version": "2.9.41",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.41",
+      "date": "2026-08-06",
+      "changes": [
+        "Domain Readiness Web UI: Added Tenant IDs Excel file path input field with Browse button",
+        "Domain Readiness Web UI: File path can now be customized per environment (fixes server OneDrive path issue)",
+        "Domain Readiness Web UI: Script accepts -TenantIDsPath parameter for flexible file location"
+      ]
+    },
     {
       "version": "2.9.40",
       "date": "2026-08-06",
