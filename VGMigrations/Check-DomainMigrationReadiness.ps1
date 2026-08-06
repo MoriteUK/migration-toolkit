@@ -96,7 +96,8 @@ function Connect-WithAppCredentials {
 function Check-DNSForRecord {
     param(
         [string]$Domain,
-        [string]$ExpectedValue
+        [string]$ExpectedValue,
+        [switch]$CheckForAnyMSRecord
     )
 
     try {
@@ -108,16 +109,50 @@ function Check-DNSForRecord {
             return @{
                 Found = $false
                 Message = "No TXT records found in DNS"
+                ActualValue = $null
             }
         }
 
         Write-Log "    DNS: Found $($txtRecords.Count) TXT records in public DNS"
 
-        # Check if the expected MS= record is present
+        # If checking for any MS= record (domain in another tenant scenario)
+        if ($CheckForAnyMSRecord) {
+            $msRecords = @()
+            foreach ($record in $txtRecords) {
+                $recordString = $record.Strings -join ''
+                Write-Log "    DNS: Checking record: $recordString"
+
+                if ($recordString -match '^MS=ms\d+') {
+                    Write-Log "    DNS: MS= verification record FOUND!" "SUCCESS"
+                    $msRecords += $recordString
+                }
+            }
+
+            if ($msRecords.Count -gt 0) {
+                return @{
+                    Found = $true
+                    Message = "MS= verification record present in DNS (domain currently in another tenant - cannot validate exact value until transfer)"
+                    ActualValue = $msRecords[0]
+                }
+            } else {
+                return @{
+                    Found = $false
+                    Message = "No MS= verification record found in DNS"
+                    ActualValue = $null
+                }
+            }
+        }
+
+        # Normal check - validate exact expected value
         $matchFound = $false
+        $foundMSRecords = @()
         foreach ($record in $txtRecords) {
             $recordString = $record.Strings -join ''
             Write-Log "    DNS: Checking record: $recordString"
+
+            if ($recordString -match '^MS=ms\d+') {
+                $foundMSRecords += $recordString
+            }
 
             if ($recordString -eq $ExpectedValue) {
                 Write-Log "    DNS: MATCH FOUND!" "SUCCESS"
@@ -130,12 +165,25 @@ function Check-DNSForRecord {
             return @{
                 Found = $true
                 Message = "Correct verification record found in DNS"
+                ActualValue = $ExpectedValue
             }
         } else {
-            Write-Log "    DNS: No match - expected: $ExpectedValue" "WARN"
-            return @{
-                Found = $false
-                Message = "DNS TXT records exist but do not match expected value"
+            if ($foundMSRecords.Count -gt 0) {
+                Write-Log "    DNS: Found MS= record(s) but none match expected value" "WARN"
+                Write-Log "    DNS: Expected: $ExpectedValue" "WARN"
+                Write-Log "    DNS: Found: $($foundMSRecords -join ', ')" "WARN"
+                return @{
+                    Found = $false
+                    Message = "MS= record exists but does not match expected value (Found: $($foundMSRecords[0]))"
+                    ActualValue = $foundMSRecords[0]
+                }
+            } else {
+                Write-Log "    DNS: No MS= verification record found" "WARN"
+                return @{
+                    Found = $false
+                    Message = "No MS= verification record found in DNS"
+                    ActualValue = $null
+                }
             }
         }
 
@@ -143,6 +191,7 @@ function Check-DNSForRecord {
         return @{
             Found = $false
             Message = "DNS query error: $_"
+            ActualValue = $null
         }
     }
 }
@@ -351,6 +400,9 @@ foreach ($pair in $migrationPairs) {
         $targetDomains = Get-MgDomain
         $targetDomain = $targetDomains | Where-Object { $_.Id -eq $domainToCheck }
 
+        $domainInAnotherTenant = $false
+        $cannotGetVerificationRecord = $false
+
         if (-not $targetDomain) {
             Write-Log "  ℹ Domain NOT yet added to target tenant - attempting to add..."
             try {
@@ -359,78 +411,109 @@ foreach ($pair in $migrationPairs) {
                 Write-Log "  ✓ Domain added to target tenant successfully" "SUCCESS"
                 $targetDomain = $newDomain
             } catch {
-                Write-Log "  ✗ Failed to add domain: $_" "ERROR"
-                $result.ReadinessStatus = "Error"
-                $result.Notes = "Failed to add domain to target tenant: $_"
-                Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-                $allResults.Add($result)
-                continue
+                # Check if error is because domain is in another tenant
+                if ($_ -match "domain is already added to a different|domain.*already.*organization|domain.*cannot be added") {
+                    Write-Log "  ℹ Domain is currently in another tenant (expected pre-cutover)" "INFO"
+                    Write-Log "  Will check DNS for MS= verification record presence"
+                    $domainInAnotherTenant = $true
+                    $cannotGetVerificationRecord = $true
+                } else {
+                    Write-Log "  ✗ Failed to add domain: $_" "ERROR"
+                    $result.ReadinessStatus = "Error"
+                    $result.Notes = "Failed to add domain to target tenant: $_"
+                    Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+                    $allResults.Add($result)
+                    continue
+                }
             }
         } else {
             Write-Log "  ℹ Domain is already in target tenant (Verified: $($targetDomain.IsVerified))"
-        }
 
-        # Get the verification DNS record from the target tenant
-        Write-Log "  Retrieving DNS verification record..."
-        try {
-            # Try the verification DNS records endpoint instead of service configuration
-            $verificationRecords = Get-MgDomainVerificationDnsRecord -DomainId $domainToCheck
-
-            Write-Log "  Found $($verificationRecords.Count) verification DNS records"
-
-            # Find the TXT record for MS= verification
-            $txtRecords = $verificationRecords | Where-Object {
-                $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.domainDnsTxtRecord'
-            }
-
-            Write-Log "  Found $($txtRecords.Count) TXT records"
-
-            # Debug: Log each TXT record value
-            foreach ($rec in $txtRecords) {
-                $txtValue = $rec.AdditionalProperties.text
-                Write-Log "    TXT Record: $txtValue"
-            }
-
-            # Filter for the MS= verification record (not SPF or other records)
-            $verifyRecord = $txtRecords | Where-Object {
-                $_.AdditionalProperties.text -match '^MS=ms\d+'
-            } | Select-Object -First 1
-
-            if ($verifyRecord) {
-                $recordType = "TXT"
-                $recordLabel = if ($verifyRecord.AdditionalProperties.label) { $verifyRecord.AdditionalProperties.label } else { "@" }
-                $recordValue = $verifyRecord.AdditionalProperties.text
-
-                Write-Log "  DNS Record to configure:"
-                Write-Log "    Type: $recordType"
-                Write-Log "    Label: $recordLabel"
-                Write-Log "    Value: $recordValue"
-
-                $result.DNS_RecordType = $recordType
-                $result.DNS_Label = $recordLabel
-                $result.DNS_Value = $recordValue
-                $result.DNSVerifyRecord = $recordValue
-            } else {
-                Write-Log "  ⚠ Could not retrieve MS= verification record from target" "WARN"
-                $result.DNS_RecordType = "TXT"
-                $result.DNS_Label = "Unable to retrieve"
-                $result.DNS_Value = "Unable to retrieve MS= record from target"
-                $result.ReadinessStatus = "Error"
-                $result.Notes = "Domain added but could not retrieve MS= verification record"
+            # If domain is already verified, mark as ready and skip DNS check
+            if ($targetDomain.IsVerified) {
+                Write-Log "  ✓ Domain is already verified in target tenant" "SUCCESS"
+                $result.ReadinessStatus = "Ready"
+                $result.Notes = "Domain already verified in target tenant"
+                $result.DNS_RecordType = "N/A"
+                $result.DNS_Label = "N/A"
+                $result.DNS_Value = "Already verified"
+                $result.DNSVerifyRecord = "Already verified"
                 Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
                 $allResults.Add($result)
                 continue
             }
-        } catch {
-            Write-Log "  ✗ Error retrieving verification record: $_" "ERROR"
+        }
+
+        # Get the verification DNS record from the target tenant (if possible)
+        if ($cannotGetVerificationRecord) {
+            Write-Log "  ⚠ Cannot retrieve exact verification record - domain in another tenant"
+            Write-Log "  Will check DNS for any MS= verification record instead"
             $result.DNS_RecordType = "TXT"
-            $result.DNS_Label = "Error"
-            $result.DNS_Value = "Error: $_"
-            $result.ReadinessStatus = "Error"
-            $result.Notes = "Failed to retrieve DNS verification record: $_"
-            Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-            $allResults.Add($result)
-            continue
+            $result.DNS_Label = "@"
+            $result.DNS_Value = "Unknown - domain in another tenant"
+            # We'll check DNS for ANY MS= record below
+        } else {
+            Write-Log "  Retrieving DNS verification record..."
+            try {
+                # Try the verification DNS records endpoint instead of service configuration
+                $verificationRecords = Get-MgDomainVerificationDnsRecord -DomainId $domainToCheck
+
+                Write-Log "  Found $($verificationRecords.Count) verification DNS records"
+
+                # Find the TXT record for MS= verification
+                $txtRecords = $verificationRecords | Where-Object {
+                    $_.AdditionalProperties.'@odata.type' -eq '#microsoft.graph.domainDnsTxtRecord'
+                }
+
+                Write-Log "  Found $($txtRecords.Count) TXT records"
+
+                # Debug: Log each TXT record value
+                foreach ($rec in $txtRecords) {
+                    $txtValue = $rec.AdditionalProperties.text
+                    Write-Log "    TXT Record: $txtValue"
+                }
+
+                # Filter for the MS= verification record (not SPF or other records)
+                $verifyRecord = $txtRecords | Where-Object {
+                    $_.AdditionalProperties.text -match '^MS=ms\d+'
+                } | Select-Object -First 1
+
+                if ($verifyRecord) {
+                    $recordType = "TXT"
+                    $recordLabel = if ($verifyRecord.AdditionalProperties.label) { $verifyRecord.AdditionalProperties.label } else { "@" }
+                    $recordValue = $verifyRecord.AdditionalProperties.text
+
+                    Write-Log "  DNS Record to configure:"
+                    Write-Log "    Type: $recordType"
+                    Write-Log "    Label: $recordLabel"
+                    Write-Log "    Value: $recordValue"
+
+                    $result.DNS_RecordType = $recordType
+                    $result.DNS_Label = $recordLabel
+                    $result.DNS_Value = $recordValue
+                    $result.DNSVerifyRecord = $recordValue
+                } else {
+                    Write-Log "  ⚠ Could not retrieve MS= verification record from target" "WARN"
+                    $result.DNS_RecordType = "TXT"
+                    $result.DNS_Label = "Unable to retrieve"
+                    $result.DNS_Value = "Unable to retrieve MS= record from target"
+                    $result.ReadinessStatus = "Error"
+                    $result.Notes = "Domain added but could not retrieve MS= verification record"
+                    Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+                    $allResults.Add($result)
+                    continue
+                }
+            } catch {
+                Write-Log "  ✗ Error retrieving verification record: $_" "ERROR"
+                $result.DNS_RecordType = "TXT"
+                $result.DNS_Label = "Error"
+                $result.DNS_Value = "Error: $_"
+                $result.ReadinessStatus = "Error"
+                $result.Notes = "Failed to retrieve DNS verification record: $_"
+                Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+                $allResults.Add($result)
+                continue
+            }
         }
 
         Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
@@ -458,17 +541,41 @@ foreach ($pair in $migrationPairs) {
 
     # STEP 2: Check if the expected verification record is in DNS
     Write-Log "Checking public DNS for verification record..."
-    Write-Log "  Expected value: $($result.DNS_Value)"
-    $dnsCheck = Check-DNSForRecord -Domain $domainToCheck -ExpectedValue $result.DNS_Value
 
-    if ($dnsCheck.Found) {
-        Write-Log "  ✓ $($dnsCheck.Message)" "SUCCESS"
-        $result.ReadinessStatus = "Ready"
-        $result.Notes = "DNS verification record is configured correctly"
+    if ($domainInAnotherTenant) {
+        # Domain is in another tenant - check for ANY MS= record
+        Write-Log "  Checking for any MS= verification record (exact value unknown)"
+        $dnsCheck = Check-DNSForRecord -Domain $domainToCheck -ExpectedValue "" -CheckForAnyMSRecord
+
+        if ($dnsCheck.Found) {
+            Write-Log "  ✓ $($dnsCheck.Message)" "SUCCESS"
+            $result.ReadinessStatus = "Ready - Pre-Cutover"
+            $result.Notes = "MS= verification record found in DNS. Domain currently in source tenant - record will be validated on cutover."
+            $result.DNS_Value = $dnsCheck.ActualValue
+            $result.DNSVerifyRecord = $dnsCheck.ActualValue
+        } else {
+            Write-Log "  ✗ $($dnsCheck.Message)" "WARN"
+            $result.ReadinessStatus = "Not Ready"
+            $result.Notes = "No MS= verification record found in DNS. Add verification record before cutover. Transfer domain to target tenant first to get exact value, or use existing verification record from source tenant."
+        }
     } else {
-        Write-Log "  ✗ $($dnsCheck.Message)" "WARN"
-        $result.ReadinessStatus = "Not Ready"
-        $result.Notes = "DNS record missing - Request DNS team to add: Type=TXT, Host=$($result.DNS_Label), Value=$($result.DNS_Value)"
+        # Normal flow - validate exact expected value
+        Write-Log "  Expected value: $($result.DNS_Value)"
+        $dnsCheck = Check-DNSForRecord -Domain $domainToCheck -ExpectedValue $result.DNS_Value
+
+        if ($dnsCheck.Found) {
+            Write-Log "  ✓ $($dnsCheck.Message)" "SUCCESS"
+            $result.ReadinessStatus = "Ready"
+            $result.Notes = "DNS verification record is configured correctly"
+        } else {
+            Write-Log "  ✗ $($dnsCheck.Message)" "WARN"
+            $result.ReadinessStatus = "Not Ready"
+            if ($dnsCheck.ActualValue) {
+                $result.Notes = "Wrong MS= record in DNS. Expected: $($result.DNS_Value), Found: $($dnsCheck.ActualValue)"
+            } else {
+                $result.Notes = "DNS record missing - Request DNS team to add: Type=TXT, Host=$($result.DNS_Label), Value=$($result.DNS_Value)"
+            }
+        }
     }
 
     $allResults.Add($result)

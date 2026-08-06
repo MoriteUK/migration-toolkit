@@ -1,7 +1,17 @@
 {
-  "version": "2.9.38",
+  "version": "2.9.39",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.39",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Now handles domains that are currently in another tenant (pre-cutover state)",
+        "Check-DomainMigrationReadiness.ps1: Checks for ANY MS= verification record when domain cannot be added to target tenant",
+        "Check-DomainMigrationReadiness.ps1: Reports 'Ready - Pre-Cutover' status when MS= record exists but domain is in source tenant",
+        "Check-DomainMigrationReadiness.ps1: Provides clear guidance that exact record validation will happen after cutover"
+      ]
+    },
     {
       "version": "2.9.38",
       "date": "2026-08-06",
