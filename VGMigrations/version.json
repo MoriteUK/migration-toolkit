@@ -1,7 +1,20 @@
 {
-  "version": "2.9.39",
+  "version": "2.9.40",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.40",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: DNS queries now use public DNS servers (Google 8.8.8.8, Cloudflare 1.1.1.1) to avoid cached/corporate DNS issues",
+        "Check-DomainMigrationReadiness.ps1: Enhanced detection of unverified domains - now correctly identifies domains added to target but still active in source tenant",
+        "Check-DomainMigrationReadiness.ps1: Added comprehensive DNS record logging - shows all TXT records found with byte-level comparison for troubleshooting",
+        "Check-DomainMigrationReadiness.ps1: Improved pre-cutover validation - attempts exact match first, then accepts any MS= record if different",
+        "Check-DomainMigrationReadiness.ps1: Reports 'Ready - Pre-Cutover (Exact Match)' when DNS record matches target tenant's expected value exactly",
+        "Check-DomainMigrationReadiness.ps1: Warns when source tenant MS= record differs from target's expected value (DNS update needed after transfer)",
+        "Check-DomainMigrationReadiness.ps1: Added detailed debug logging for troubleshooting DNS resolution and domain verification status"
+      ]
+    },
     {
       "version": "2.9.39",
       "date": "2026-08-06",

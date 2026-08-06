@@ -101,29 +101,63 @@ function Check-DNSForRecord {
     )
 
     try {
-        # Query TXT records
-        $txtRecords = Resolve-DnsName -Name $Domain -Type TXT -ErrorAction SilentlyContinue
+        # Query TXT records using multiple public DNS servers for reliability
+        # Try Google DNS first, fallback to Cloudflare if needed
+        $dnsServers = @('8.8.8.8', '1.1.1.1')
+        $txtRecords = $null
+        $dnsServerUsed = $null
+
+        foreach ($dnsServer in $dnsServers) {
+            try {
+                Write-Log "    DNS: Querying $Domain via $dnsServer..."
+                $txtRecords = Resolve-DnsName -Name $Domain -Type TXT -Server $dnsServer -ErrorAction Stop
+                $dnsServerUsed = $dnsServer
+                Write-Log "    DNS: Successfully queried via $dnsServer" "SUCCESS"
+                break
+            } catch {
+                Write-Log "    DNS: Failed to query via $dnsServer - $($_.Exception.Message)" "WARN"
+                continue
+            }
+        }
 
         if (-not $txtRecords) {
-            Write-Log "    DNS: No TXT records found" "WARN"
+            Write-Log "    DNS: No TXT records found (tried all public DNS servers)" "WARN"
             return @{
                 Found = $false
-                Message = "No TXT records found in DNS"
+                Message = "No TXT records found in DNS (queried via public DNS: $($dnsServers -join ', '))"
                 ActualValue = $null
             }
         }
 
-        Write-Log "    DNS: Found $($txtRecords.Count) TXT records in public DNS"
+        Write-Log "    DNS: Found $($txtRecords.Count) TXT record(s) via $dnsServerUsed"
+        Write-Log "    DNS: Detailed record listing:"
+
+        # Log all TXT records found for detailed diagnostics
+        $allRecordStrings = @()
+        Write-Log "    DNS: Processing $($txtRecords.Count) record objects..."
+        foreach ($record in $txtRecords) {
+            # Handle both single strings and arrays
+            if ($record.Strings) {
+                if ($record.Strings -is [array]) {
+                    $recordString = $record.Strings -join ''
+                    Write-Log "      [Array] Raw: $($record.Strings -join ' | ') → Joined: $recordString"
+                } else {
+                    $recordString = $record.Strings
+                    Write-Log "      [String] Raw: $recordString"
+                }
+                $allRecordStrings += $recordString
+            } else {
+                Write-Log "      [Empty] Record has no Strings property" "WARN"
+            }
+        }
+        Write-Log "    DNS: Extracted $($allRecordStrings.Count) record string(s) for comparison"
 
         # If checking for any MS= record (domain in another tenant scenario)
         if ($CheckForAnyMSRecord) {
             $msRecords = @()
-            foreach ($record in $txtRecords) {
-                $recordString = $record.Strings -join ''
-                Write-Log "    DNS: Checking record: $recordString"
-
+            foreach ($recordString in $allRecordStrings) {
                 if ($recordString -match '^MS=ms\d+') {
-                    Write-Log "    DNS: MS= verification record FOUND!" "SUCCESS"
+                    Write-Log "    DNS: MS= verification record FOUND: $recordString" "SUCCESS"
                     $msRecords += $recordString
                 }
             }
@@ -135,6 +169,7 @@ function Check-DNSForRecord {
                     ActualValue = $msRecords[0]
                 }
             } else {
+                Write-Log "    DNS: No MS= verification records found in the $($allRecordStrings.Count) TXT records" "WARN"
                 return @{
                     Found = $false
                     Message = "No MS= verification record found in DNS"
@@ -146,22 +181,36 @@ function Check-DNSForRecord {
         # Normal check - validate exact expected value
         $matchFound = $false
         $foundMSRecords = @()
-        foreach ($record in $txtRecords) {
-            $recordString = $record.Strings -join ''
-            Write-Log "    DNS: Checking record: $recordString"
+        $expectedTrimmed = $ExpectedValue.Trim()
 
-            if ($recordString -match '^MS=ms\d+') {
-                $foundMSRecords += $recordString
+        Write-Log "    DNS: Comparing against expected value: '$expectedTrimmed'"
+
+        foreach ($recordString in $allRecordStrings) {
+            $recordTrimmed = $recordString.Trim()
+
+            if ($recordTrimmed -match '^MS=ms\d+') {
+                $foundMSRecords += $recordTrimmed
+                Write-Log "      → Found MS= record: '$recordTrimmed'"
             }
 
-            if ($recordString -eq $ExpectedValue) {
-                Write-Log "    DNS: MATCH FOUND!" "SUCCESS"
+            # Case-insensitive comparison with trimmed strings
+            if ($recordTrimmed -eq $expectedTrimmed) {
+                Write-Log "    DNS: ✓✓✓ EXACT MATCH FOUND ✓✓✓: '$recordTrimmed'" "SUCCESS"
                 $matchFound = $true
                 break
+            } else {
+                # Debug: show why it didn't match
+                if ($recordTrimmed -match '^MS=ms\d+') {
+                    Write-Log "      ✗ No match: '$recordTrimmed' vs '$expectedTrimmed'"
+                    Write-Log "        Length: $($recordTrimmed.Length) vs $($expectedTrimmed.Length)"
+                    Write-Log "        Bytes: $([BitConverter]::ToString([System.Text.Encoding]::UTF8.GetBytes($recordTrimmed)))"
+                    Write-Log "        Expected bytes: $([BitConverter]::ToString([System.Text.Encoding]::UTF8.GetBytes($expectedTrimmed)))"
+                }
             }
         }
 
         if ($matchFound) {
+            Write-Log "    DNS: Returning Found=TRUE" "SUCCESS"
             return @{
                 Found = $true
                 Message = "Correct verification record found in DNS"
@@ -170,8 +219,9 @@ function Check-DNSForRecord {
         } else {
             if ($foundMSRecords.Count -gt 0) {
                 Write-Log "    DNS: Found MS= record(s) but none match expected value" "WARN"
-                Write-Log "    DNS: Expected: $ExpectedValue" "WARN"
+                Write-Log "    DNS: Expected: '$expectedTrimmed'" "WARN"
                 Write-Log "    DNS: Found: $($foundMSRecords -join ', ')" "WARN"
+                Write-Log "    DNS: Returning Found=FALSE with ActualValue" "WARN"
                 return @{
                     Found = $false
                     Message = "MS= record exists but does not match expected value (Found: $($foundMSRecords[0]))"
@@ -179,6 +229,7 @@ function Check-DNSForRecord {
                 }
             } else {
                 Write-Log "    DNS: No MS= verification record found" "WARN"
+                Write-Log "    DNS: Returning Found=FALSE with null" "WARN"
                 return @{
                     Found = $false
                     Message = "No MS= verification record found in DNS"
@@ -410,6 +461,19 @@ foreach ($pair in $migrationPairs) {
                 $newDomain = New-MgDomain -Id $domainToCheck
                 Write-Log "  ✓ Domain added to target tenant successfully" "SUCCESS"
                 $targetDomain = $newDomain
+
+                # IMPORTANT: Check if domain was added but is unverified
+                # This happens when the domain is still active in the source tenant
+                Write-Log "  Domain verification status: IsVerified=$($targetDomain.IsVerified)"
+                if (-not $targetDomain.IsVerified) {
+                    Write-Log "  ⚠ Domain added but NOT verified (likely still active in source tenant)" "WARN"
+                    Write-Log "  This is expected pre-cutover - will check DNS for MS= record"
+                    Write-Log "  Setting domainInAnotherTenant=TRUE for pre-cutover validation"
+                    # Treat as pre-cutover scenario even though New-MgDomain succeeded
+                    $domainInAnotherTenant = $true
+                } else {
+                    Write-Log "  ✓ Domain is verified - normal validation will proceed"
+                }
             } catch {
                 # Check if error is because domain is in another tenant
                 if ($_ -match "domain is already added to a different|domain.*already.*organization|domain.*cannot be added") {
@@ -441,18 +505,31 @@ foreach ($pair in $migrationPairs) {
                 Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
                 $allResults.Add($result)
                 continue
+            } else {
+                # Domain exists but is NOT verified - likely still in source tenant
+                Write-Log "  ⚠ Domain exists in target but is NOT verified (likely still active in source tenant)" "WARN"
+                Write-Log "  This is expected pre-cutover - will check DNS for MS= record"
+                Write-Log "  Setting domainInAnotherTenant=TRUE for pre-cutover validation"
+                $domainInAnotherTenant = $true
             }
         }
 
         # Get the verification DNS record from the target tenant (if possible)
-        if ($cannotGetVerificationRecord) {
-            Write-Log "  ⚠ Cannot retrieve exact verification record - domain in another tenant"
+        if ($domainInAnotherTenant -and $cannotGetVerificationRecord) {
+            Write-Log "  ⚠ Cannot retrieve exact verification record - domain blocked by source tenant"
             Write-Log "  Will check DNS for any MS= verification record instead"
             $result.DNS_RecordType = "TXT"
             $result.DNS_Label = "@"
-            $result.DNS_Value = "Unknown - domain in another tenant"
+            $result.DNS_Value = "Unknown - domain in source tenant"
             # We'll check DNS for ANY MS= record below
-        } else {
+        } elseif ($domainInAnotherTenant -and -not $cannotGetVerificationRecord) {
+            Write-Log "  ℹ Domain added to target but unverified (still in source tenant)"
+            Write-Log "  Retrieving verification record AND checking DNS for any MS= record"
+            # Try to get the target's expected record, but also accept any MS= record
+            # Fall through to normal verification record retrieval
+        }
+
+        if (-not $cannotGetVerificationRecord) {
             Write-Log "  Retrieving DNS verification record..."
             try {
                 # Try the verification DNS records endpoint instead of service configuration
@@ -541,26 +618,61 @@ foreach ($pair in $migrationPairs) {
 
     # STEP 2: Check if the expected verification record is in DNS
     Write-Log "Checking public DNS for verification record..."
+    Write-Log "DEBUG: domainInAnotherTenant=$domainInAnotherTenant, cannotGetVerificationRecord=$cannotGetVerificationRecord"
+    Write-Log "DEBUG: DNS_Value='$($result.DNS_Value)'"
 
     if ($domainInAnotherTenant) {
-        # Domain is in another tenant - check for ANY MS= record
-        Write-Log "  Checking for any MS= verification record (exact value unknown)"
+        # Domain is in another tenant - check for ANY MS= record first
+        Write-Log "  ═══ PRE-CUTOVER SCENARIO DETECTED ═══" "INFO"
+        Write-Log "  Domain still in source tenant"
+
+        # If we have the target's expected value, try exact match first
+        if ($result.DNS_Value -and $result.DNS_Value -ne "Unknown - domain in source tenant") {
+            Write-Log "  Attempting exact match against target's expected value: $($result.DNS_Value)"
+            $exactCheck = Check-DNSForRecord -Domain $domainToCheck -ExpectedValue $result.DNS_Value
+
+            if ($exactCheck.Found) {
+                Write-Log "  ✓ PERFECT MATCH: DNS record matches target tenant's expected value!" "SUCCESS"
+                $result.ReadinessStatus = "Ready - Pre-Cutover (Exact Match)"
+                $result.Notes = "DNS verification record matches target tenant exactly. Domain still in source tenant - ready for cutover."
+                $result.DNSVerifyRecord = $exactCheck.ActualValue
+                $allResults.Add($result)
+                continue
+            } else {
+                Write-Log "  ℹ No exact match - checking for any MS= record instead"
+            }
+        }
+
+        # Check for ANY MS= record (from source tenant)
+        Write-Log "  Checking for any MS= verification record..."
         $dnsCheck = Check-DNSForRecord -Domain $domainToCheck -ExpectedValue "" -CheckForAnyMSRecord
 
         if ($dnsCheck.Found) {
             Write-Log "  ✓ $($dnsCheck.Message)" "SUCCESS"
-            $result.ReadinessStatus = "Ready - Pre-Cutover"
-            $result.Notes = "MS= verification record found in DNS. Domain currently in source tenant - record will be validated on cutover."
-            $result.DNS_Value = $dnsCheck.ActualValue
+
+            # Compare found record with target's expected value
+            if ($result.DNS_Value -and $result.DNS_Value -ne "Unknown - domain in source tenant" -and $dnsCheck.ActualValue -ne $result.DNS_Value) {
+                Write-Log "  ⚠ DNS has different MS= record than target expects" "WARN"
+                Write-Log "    Found in DNS: $($dnsCheck.ActualValue)"
+                Write-Log "    Target expects: $($result.DNS_Value)"
+                $result.ReadinessStatus = "Ready - Pre-Cutover (Source Record)"
+                $result.Notes = "MS= record found in DNS (from source tenant). Target expects different value: $($result.DNS_Value). Update DNS before cutover or domain verification may fail after transfer."
+                $result.DNS_Value = "Target: $($result.DNS_Value) | Current: $($dnsCheck.ActualValue)"
+            } else {
+                $result.ReadinessStatus = "Ready - Pre-Cutover"
+                $result.Notes = "MS= verification record found in DNS. Domain currently in source tenant - record will be validated on cutover."
+            }
             $result.DNSVerifyRecord = $dnsCheck.ActualValue
         } else {
             Write-Log "  ✗ $($dnsCheck.Message)" "WARN"
             $result.ReadinessStatus = "Not Ready"
-            $result.Notes = "No MS= verification record found in DNS. Add verification record before cutover. Transfer domain to target tenant first to get exact value, or use existing verification record from source tenant."
+            $result.Notes = "No MS= verification record found in DNS. Add verification record before cutover. Target expects: $($result.DNS_Value)"
         }
     } else {
         # Normal flow - validate exact expected value
-        Write-Log "  Expected value: $($result.DNS_Value)"
+        Write-Log "  ═══ NORMAL SCENARIO (NOT PRE-CUTOVER) ═══" "INFO"
+        Write-Log "  Validating exact match against target's expected value"
+        Write-Log "  Expected value: '$($result.DNS_Value)'"
         $dnsCheck = Check-DNSForRecord -Domain $domainToCheck -ExpectedValue $result.DNS_Value
 
         if ($dnsCheck.Found) {
