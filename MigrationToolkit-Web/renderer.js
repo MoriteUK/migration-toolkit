@@ -418,7 +418,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       try {
-        const args = processAll ? ['-ProcessAll'] : [];
+        const tenantIDsPath = document.getElementById('domainTenantIDsPath').value.trim();
+        if (!tenantIDsPath) {
+          logOutput.textContent += '\n✗ Error: Please specify the Tenant IDs Excel file path\n';
+          return;
+        }
+
+        const args = ['-TenantIDsPath', tenantIDsPath];
+        if (processAll) {
+          args.push('-ProcessAll');
+        }
+
         const result = await window.electronAPI.streamPowerShell('Check-DomainMigrationReadiness.ps1', args);
         logOutput.textContent += result?.success ? '\n✓ Domain Readiness Check complete\n' : `\n✗ Failed (exit ${result?.code})\n`;
       } catch (err) {
@@ -429,6 +439,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         runDomainReadinessBtn.textContent = '🚀 Run Domain Readiness Check';
       }
     });
+
+    // Browse button for Tenant IDs file
+    const browseDomainTenantIDsBtn = document.getElementById('browseDomainTenantIDs');
+    if (browseDomainTenantIDsBtn) {
+      browseDomainTenantIDsBtn.addEventListener('click', async () => {
+        const result = await window.electronAPI.showOpenDialog({
+          title: 'Select Tenant IDs Excel File',
+          filters: [{ name: 'Excel Files', extensions: ['xlsx', 'xls'] }],
+          properties: ['openFile']
+        });
+        if (result && !result.canceled && result.filePaths.length > 0) {
+          document.getElementById('domainTenantIDsPath').value = result.filePaths[0];
+        }
+      });
+    }
   }
 
   // Option launch button click handlers
