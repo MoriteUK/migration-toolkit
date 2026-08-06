@@ -1,7 +1,16 @@
 {
-  "version": "2.9.42",
+  "version": "2.9.43",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.43",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Added fallback output path when OneDrive directory doesn't exist",
+        "Check-DomainMigrationReadiness.ps1: Reports now save to script directory/Reports if specified path not found",
+        "Check-DomainMigrationReadiness.ps1: Fixes 'Could not find a part of the path' error on servers"
+      ]
+    },
     {
       "version": "2.9.42",
       "date": "2026-08-06",
