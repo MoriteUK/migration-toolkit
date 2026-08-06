@@ -1,7 +1,15 @@
 {
-  "version": "2.9.46",
+  "version": "2.9.47",
   "releaseDate": "2026-08-06",
   "changelog": [
+    {
+      "version": "2.9.47",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Fixed CSV sort to use correct column number for ReadinessStatus (column H/8)",
+        "Check-DomainMigrationReadiness.ps1: Report now correctly sorts by ReadinessStatus then TenantName"
+      ]
+    },
     {
       "version": "2.9.46",
       "date": "2026-08-06",
