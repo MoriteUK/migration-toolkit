@@ -38,7 +38,7 @@ if (-not (Get-Module -Name Microsoft.Online.SharePoint.PowerShell -ListAvailable
 }
 Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop -WarningAction SilentlyContinue
 Write-Host ">>> Your default browser will open — sign in as SharePoint Administrator <<<" -ForegroundColor Yellow
-Connect-SPOService -Url $TenantAdminUrl -UseSystemBrowser -ErrorAction Stop
+Connect-SPOService -Url $TenantAdminUrl -UseSystemBrowser:$true -ErrorAction Stop
 Write-Host "Connected via SPO module." -ForegroundColor Green
 
 # ============================================================

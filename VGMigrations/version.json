@@ -1,7 +1,16 @@
 {
-  "version": "2.9.52",
+  "version": "2.9.53",
   "releaseDate": "2026-08-07",
   "changelog": [
+    {
+      "version": "2.9.53",
+      "date": "2026-08-07",
+      "changes": [
+        "Deduplicate-Inventory.ps1: Fixed -UseSystemBrowser parameter error",
+        "Deduplicate-Inventory.ps1: Changed from switch to boolean parameter (-UseSystemBrowser:$true)",
+        "Deduplicate-Inventory.ps1: Fixes 'Missing an argument for parameter UseSystemBrowser' error"
+      ]
+    },
     {
       "version": "2.9.52",
       "date": "2026-08-07",
