@@ -1,7 +1,16 @@
 {
-  "version": "2.9.54",
+  "version": "2.9.55",
   "releaseDate": "2026-08-07",
   "changelog": [
+    {
+      "version": "2.9.55",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Domain dropdown now falls back to Customers array from config.json",
+        "MigrationToolkit-Web: Works without VBU CSV file - uses existing customer configuration",
+        "MigrationToolkit-Web: Dropdown shows customer prefix and domain from config"
+      ]
+    },
     {
       "version": "2.9.54",
       "date": "2026-08-07",

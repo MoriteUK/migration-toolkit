@@ -1842,14 +1842,32 @@ async function loadDiscoveryDomains() {
   try {
     const cfgResult = await window.electronAPI.getConfig();
     const csvPath = cfgResult?.config?.VbuCsvPath;
-    if (!csvPath) return;
 
-    const result = await window.electronAPI.readVbuCsv(csvPath);
-    if (!result.success || !result.rows.length) return;
+    // Try to load from VBU CSV if configured
+    if (csvPath) {
+      const result = await window.electronAPI.readVbuCsv(csvPath);
+      if (result.success && result.rows.length) {
+        _vbuMap = {};
+        _vbuRows = result.rows;
+        result.rows.forEach(r => { _vbuMap[r.domain] = r.vbuId; });
+        return;
+      }
+    }
 
-    _vbuMap = {};
-    _vbuRows = result.rows;
-    result.rows.forEach(r => { _vbuMap[r.domain] = r.vbuId; });
+    // Fallback: use Customers array from config
+    const customers = cfgResult?.config?.Customers;
+    if (customers && customers.length > 0) {
+      _vbuMap = {};
+      _vbuRows = customers
+        .filter(c => c.Domain) // Only include customers with a domain
+        .map(c => ({
+          domain: c.Domain || '',
+          vbuId: '',
+          vbuName: c.Prefix || ''
+        }));
+      _vbuRows.forEach(r => { _vbuMap[r.domain.toLowerCase()] = r.vbuId; });
+      console.log(`Loaded ${_vbuRows.length} domains from Customers config`);
+    }
   } catch (err) {
     console.error('loadDiscoveryDomains failed:', err);
   }
