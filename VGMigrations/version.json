@@ -1,7 +1,15 @@
 {
-  "version": "2.9.49",
-  "releaseDate": "2026-08-06",
+  "version": "2.9.50",
+  "releaseDate": "2026-08-07",
   "changelog": [
+    {
+      "version": "2.9.50",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Fixed Deduplicate Inventory browse button not working",
+        "MigrationToolkit-Web: Added missing data-target attribute to browse button"
+      ]
+    },
     {
       "version": "2.9.49",
       "date": "2026-08-06",

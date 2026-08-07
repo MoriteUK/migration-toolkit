@@ -72,6 +72,15 @@
             <button type="button" class="sidebar-subitem" data-view="discovery">
               <span class="sidebar-sublabel">M365 Discovery</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-onedrive">
+              <span class="sidebar-sublabel">Provision OneDrives</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-deduplicate">
+              <span class="sidebar-sublabel">Deduplicate Inventory</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-baseline">
+              <span class="sidebar-sublabel">Tenant Baseline Config</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="licenseReport">
               <span class="sidebar-sublabel">License Report</span>
             </button>
@@ -96,12 +105,6 @@
             <button type="button" class="sidebar-subitem" data-view="avepoint-connections">
               <span class="sidebar-sublabel">Project</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-view="avepoint-monitor">
-              <span class="sidebar-sublabel">Monitor</span>
-            </button>
-            <button type="button" class="sidebar-subitem" data-view="avepoint-reports">
-              <span class="sidebar-sublabel">Reports</span>
-            </button>
           </div>
 
           <!-- Misc Scripts - Expandable -->
@@ -111,17 +114,8 @@
             <span class="sidebar-arrow">›</span>
           </button>
           <div class="sidebar-submenu" id="submenu-misc">
-            <button type="button" class="sidebar-subitem" data-view="misc-baseline">
-              <span class="sidebar-sublabel">Tenant Baseline Config</span>
-            </button>
-            <button type="button" class="sidebar-subitem" data-view="misc-onedrive">
-              <span class="sidebar-sublabel">Provision OneDrives</span>
-            </button>
             <button type="button" class="sidebar-subitem" data-view="misc-teams">
               <span class="sidebar-sublabel">Set Teams Owners</span>
-            </button>
-            <button type="button" class="sidebar-subitem" data-view="misc-deduplicate">
-              <span class="sidebar-sublabel">Deduplicate Inventory</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="misc-purge-spo">
               <span class="sidebar-sublabel">Purge Deleted SPO Sites</span>
@@ -978,7 +972,7 @@
             <label class="form-label">Discovery Workbook (.xlsx)</label>
             <div class="input-with-button">
               <input type="text" class="form-input form-input-compact" id="deduplicateWorkbook" placeholder="C:\discovery.xlsx" readonly>
-              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx">Browse</button>
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx" data-target="deduplicateWorkbook">Browse</button>
             </div>
             <small class="form-help">Must contain Teams, M365Groups, and SharePointSites worksheets</small>
           </div>
