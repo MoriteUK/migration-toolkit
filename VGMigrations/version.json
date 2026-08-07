@@ -1,7 +1,16 @@
 {
-  "version": "2.9.51",
+  "version": "2.9.52",
   "releaseDate": "2026-08-07",
   "changelog": [
+    {
+      "version": "2.9.52",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Fixed browse buttons not working - added missing showOpenDialog to preload.js",
+        "MigrationToolkit-Web: All file/folder browse buttons now work correctly",
+        "MigrationToolkit-Web: Fixes 'window.electronAPI.showOpenDialog is not a function' error"
+      ]
+    },
     {
       "version": "2.9.51",
       "date": "2026-08-07",

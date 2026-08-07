@@ -19,9 +19,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Open logs folder
   openLogs: () => ipcRenderer.invoke('open-logs'),
 
-  // Open a file with the default application (e.g. Notepad for .txt)
-  openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
-
   // Get real migration data
   getMigrationData: (projectPrefix) => ipcRenderer.invoke('get-migration-data', projectPrefix),
 
@@ -31,24 +28,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Open external URL
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
-  // Native file-open dialog
-  showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
-
-  // Native file-save dialog
-  showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
-
-  // Execute PowerShell script with arguments (buffered — returns when done)
+  // Execute PowerShell script with arguments
   executePowerShell: (scriptName, args) => ipcRenderer.invoke('execute-powershell', scriptName, args),
 
-  // Streaming variant — resolves when done; output arrives via onPsOutput callbacks
+  // Stream PowerShell script output
   streamPowerShell: (scriptName, args) => ipcRenderer.invoke('stream-powershell', scriptName, args),
-  onPsOutput:  (cb) => ipcRenderer.on('ps-output', (_e, data) => cb(data)),
-  offPsOutput: ()   => ipcRenderer.removeAllListeners('ps-output'),
 
-  // Shared config (AOS tenant details)
-  getSharedConfig: () => ipcRenderer.invoke('get-shared-config'),
-  saveSharedConfig: (values) => ipcRenderer.invoke('save-shared-config', values),
+  // Listen for PowerShell output events
+  onPsOutput: (callback) => ipcRenderer.on('ps-output', (event, text) => callback(text)),
+  offPsOutput: () => ipcRenderer.removeAllListeners('ps-output'),
 
-  // VBU CSV reader — parses domain/VBU ID mapping from a CSV file
-  readVbuCsv: (filePath) => ipcRenderer.invoke('read-vbu-csv', filePath)
+  // Open file with default application
+  openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
+
+  // Show native open dialog for file/folder selection
+  showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options)
 });
