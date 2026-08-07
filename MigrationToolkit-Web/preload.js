@@ -42,5 +42,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
 
   // Show native open dialog for file/folder selection
-  showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options)
+  showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
+
+  // Read VBU CSV file for domain dropdown
+  readVbuCsv: (filePath) => ipcRenderer.invoke('read-vbu-csv', filePath)
 });

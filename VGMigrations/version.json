@@ -1,7 +1,16 @@
 {
-  "version": "2.9.53",
+  "version": "2.9.54",
   "releaseDate": "2026-08-07",
   "changelog": [
+    {
+      "version": "2.9.54",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Fixed M365 Discovery domain dropdown not working",
+        "MigrationToolkit-Web: Added missing readVbuCsv bridge function to preload.js",
+        "MigrationToolkit-Web: Domain dropdown now populates from VBU CSV file"
+      ]
+    },
     {
       "version": "2.9.53",
       "date": "2026-08-07",
