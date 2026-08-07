@@ -29,9 +29,20 @@ async function openFileBrowser(inputEl, opts) {
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.input-with-button button');
   if (!btn) return;
+
+  console.log('Browse button clicked:', btn);
+
   const input = btn.closest('.input-with-button')?.querySelector('input');
-  if (!input) return;
+  if (!input) {
+    console.error('No input found in .input-with-button container');
+    return;
+  }
+
+  console.log('Found input:', input.id);
+
   const exts = btn.dataset.extensions;
+  console.log('Extensions:', exts);
+
   if (btn.dataset.folder) {
     window.electronAPI.showOpenDialog({ properties: ['openDirectory'] }).then(result => {
       if (!result.canceled && result.filePaths.length > 0) {
@@ -41,6 +52,7 @@ document.addEventListener('click', (e) => {
     }).catch(err => console.error('Folder dialog error:', err));
   } else if (exts) {
     const extList = exts.split(',').map(s => s.trim());
+    console.log('Opening file browser with extensions:', extList);
     openFileBrowser(input, {
       filters: [
         { name: extList.map(x => x.toUpperCase()).join('/') + ' Files', extensions: extList },
@@ -48,6 +60,7 @@ document.addEventListener('click', (e) => {
       ]
     });
   } else {
+    console.log('Opening file browser with default CSV filter');
     openFileBrowser(input);
   }
 });

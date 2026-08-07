@@ -1,7 +1,15 @@
 {
-  "version": "2.9.50",
+  "version": "2.9.51",
   "releaseDate": "2026-08-07",
   "changelog": [
+    {
+      "version": "2.9.51",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Added debug logging to browse button click handler",
+        "MigrationToolkit-Web: Helps diagnose why Deduplicate Inventory browse button not responding"
+      ]
+    },
     {
       "version": "2.9.50",
       "date": "2026-08-07",
