@@ -1829,6 +1829,8 @@ function switchView(viewName) {
     'domain-sip': 'domainSIPView',
     'domain-devices': 'domainDevicesView',
     'domain-retire-devices': 'domainRetireDevicesView',
+    'domain-check-cloud': 'domainCheckCloudView',
+    'domain-check-ad': 'domainCheckADView',
     'domain-entra-remove': 'domainEntraRemoveView'
   };
 
@@ -1841,7 +1843,7 @@ function switchView(viewName) {
       // Load dropdowns when specific views are shown
       if (viewName === 'discovery') {
         loadDiscoveryDomains();
-      } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip'].includes(viewName)) {
+      } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip', 'domain-check-cloud', 'domain-check-ad'].includes(viewName)) {
         loadTargetDomain();
       } else if (viewName === 'misc-onedrive') {
         loadOneDriveTenants();
@@ -3736,6 +3738,90 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         retireRunBtn.disabled = false;
         retireRunBtn.textContent = '▶ Retire Devices';
+      }
+    });
+  }
+
+  // ── Check M365 Domain References ─────────────────────────────────────
+  const checkCloudRunBtn = document.getElementById('checkCloudRunBtn');
+  if (checkCloudRunBtn) {
+    checkCloudRunBtn.addEventListener('click', async () => {
+      const domain = document.getElementById('checkCloudDomain').value.trim();
+      const targetDomain = document.getElementById('checkCloudTargetDomain').value.trim();
+      const logPath = document.getElementById('checkCloudLog').value.trim();
+      const apply = document.getElementById('checkCloudApply').checked;
+
+      if (!domain) { alert('Please enter the domain to check.'); return; }
+      if (!targetDomain) { alert('Please enter the target domain.'); return; }
+
+      const logSection = document.getElementById('checkCloudLog');
+      const logOutput = document.getElementById('checkCloudLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      checkCloudRunBtn.disabled = true;
+      checkCloudRunBtn.textContent = 'Running…';
+
+      const args = ['-OldDomain', domain, '-NewDomain', targetDomain];
+      if (logPath) args.push('-LogPath', logPath);
+      if (apply) args.push('-Apply');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Remove-DomainDependants.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        checkCloudRunBtn.disabled = false;
+        checkCloudRunBtn.textContent = '▶ Check M365';
+      }
+    });
+  }
+
+  // ── Check AD Domain References ─────────────────────────────────────
+  const checkADRunBtn = document.getElementById('checkADRunBtn');
+  if (checkADRunBtn) {
+    checkADRunBtn.addEventListener('click', async () => {
+      const csvPath = document.getElementById('checkADCsv').value.trim();
+      const domain = document.getElementById('checkADDomain').value.trim();
+      const targetDomain = document.getElementById('checkADTargetDomain').value.trim();
+      const logPath = document.getElementById('checkADLog').value.trim();
+      const apply = document.getElementById('checkADApply').checked;
+
+      if (!csvPath) { alert('Please select an AD discovery CSV file.'); return; }
+      if (!domain) { alert('Please enter the domain to check.'); return; }
+      if (!targetDomain) { alert('Please enter the target domain.'); return; }
+
+      const logSection = document.getElementById('checkADLog');
+      const logOutput = document.getElementById('checkADLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      checkADRunBtn.disabled = true;
+      checkADRunBtn.textContent = 'Running…';
+
+      const args = ['-CsvPath', csvPath, '-OldDomain', domain, '-NewDomain', targetDomain];
+      if (logPath) args.push('-LogPath', logPath);
+      if (apply) args.push('-Apply');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Check-ADDomainReferences.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Done\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        checkADRunBtn.disabled = false;
+        checkADRunBtn.textContent = '▶ Check AD';
       }
     });
   }

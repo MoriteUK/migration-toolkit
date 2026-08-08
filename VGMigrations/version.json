@@ -1,7 +1,21 @@
 {
-  "version": "2.9.61",
+  "version": "2.9.62",
   "releaseDate": "2026-08-08",
   "changelog": [
+    {
+      "version": "2.9.62",
+      "date": "2026-08-08",
+      "changes": [
+        "Added Remove-DomainDependants.ps1: Pre-flight check for remaining M365 domain references",
+        "Remove-DomainDependants.ps1: Scans Entra ID users and Exchange Online objects (mailboxes, contacts, groups, M365 groups, public folders)",
+        "Added Check-ADDomainReferences.ps1: Pre-flight check for remaining on-prem AD domain references",
+        "Check-ADDomainReferences.ps1: Checks mail, userPrincipalName, and proxyAddresses attributes in AD discovery CSV",
+        "Domain Removal: Added '✅ Check M365 References' and '✅ Check AD References' menu items",
+        "Domain Removal: Both checks run in dry-run mode by default with detailed CSV logs",
+        "Domain Removal: Add -Apply switch to actually fix issues found during checks",
+        "MigrationToolkit-Web: Added UI views for both pre-flight check scripts with streaming output"
+      ]
+    },
     {
       "version": "2.9.61",
       "date": "2026-08-08",

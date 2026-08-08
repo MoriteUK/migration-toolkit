@@ -162,6 +162,12 @@
             <button type="button" class="sidebar-subitem" data-view="domain-remove">
               <span class="sidebar-sublabel">8. Rename Domain</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-check-cloud">
+              <span class="sidebar-sublabel">✅ Check M365 References</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-check-ad">
+              <span class="sidebar-sublabel">✅ Check AD References</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="domain-entra-remove">
               <span class="sidebar-sublabel">Remove Entra Users ⚠</span>
             </button>
@@ -1292,6 +1298,106 @@
         <div class="log-section hidden" id="retireLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="retireLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Check M365 References -->
+      <div id="domainCheckCloudView" class="view-container hidden">
+        <h2 class="view-title">Check M365 References</h2>
+
+        <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-check-ad">Next: Check AD References →</button>
+          </div>
+
+          <h3 class="form-card-title">Scan for Remaining M365 Domain References</h3>
+          <p class="form-help">Scans <strong>Entra ID users</strong> and <strong>Exchange Online objects</strong> (mailboxes, contacts, groups, M365 groups, public folders) for any remaining references to the old domain. Runs in <strong>dry run mode by default</strong> — add <code>-Apply</code> to make live changes. Outputs a detailed CSV log.</p>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Domain to Check</label>
+            <input type="text" class="form-input form-input-compact" id="checkCloudDomain" placeholder="e.g., oldcompany.com">
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-label">Target Domain (for replacement)</label>
+            <input type="text" class="form-input form-input-compact target-domain-field" id="checkCloudTargetDomain" placeholder="e.g., ourvolaris.onmicrosoft.com" readonly>
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-label">Log Path</label>
+            <input type="text" class="form-input form-input-compact" id="checkCloudLog" placeholder="C:\m365discovery\cloud_check.csv">
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="checkCloudApply">
+              <span style="font-weight:600;color:#DC2626;">Apply Changes (default: dry run only)</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="checkCloudRunBtn">▶ Check M365</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="checkCloudLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="checkCloudLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Domain Removal - Check AD References -->
+      <div id="domainCheckADView" class="view-container hidden">
+        <h2 class="view-title">Check AD References</h2>
+
+        <div class="form-card form-card-compact">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <button type="button" class="btn btn-secondary btn-xs workflow-nav-btn" data-view="domain-workflow">← Workflow</button>
+            <span style="font-size:11px; color:#10B981; font-weight:600;">✅ Pre-flight check</span>
+          </div>
+
+          <h3 class="form-card-title">Scan for Remaining AD Domain References</h3>
+          <p class="form-help">Reads a CSV export from on-premises Active Directory discovery and checks <strong>mail</strong>, <strong>userPrincipalName</strong>, and <strong>proxyAddresses</strong> attributes for any remaining references to the old domain. Runs in <strong>dry run mode by default</strong> — add <code>-Apply</code> to make live changes. Outputs a detailed CSV log.</p>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">AD Discovery CSV</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="checkADCsv" placeholder="Path to AD_usage.csv...">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-label">Domain to Check</label>
+            <input type="text" class="form-input form-input-compact" id="checkADDomain" placeholder="e.g., oldcompany.onmicrosoft.com">
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-label">Target Domain (for replacement)</label>
+            <input type="text" class="form-input form-input-compact target-domain-field" id="checkADTargetDomain" placeholder="e.g., ourvolaris.onmicrosoft.com" readonly>
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-label">Log Path</label>
+            <input type="text" class="form-input form-input-compact" id="checkADLog" placeholder="C:\m365discovery\ad_check.csv">
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="checkADApply">
+              <span style="font-weight:600;color:#DC2626;">Apply Changes (default: dry run only)</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="checkADRunBtn">▶ Check AD</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="checkADLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="checkADLogOutput"></div>
         </div>
       </div>
 
