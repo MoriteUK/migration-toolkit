@@ -616,6 +616,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('checkUpdatesBtn').addEventListener('click', manualCheckUpdates);
   document.getElementById('settingsAosSignInBtn').addEventListener('click', settingsAosSignIn);
 
+  // Skip rename operations checkbox handler
+  const skipRenameCheckbox = document.getElementById('skipRenameOperations');
+  const renameObjectsGroup = document.getElementById('renameObjectsGroup');
+  const removeSectionCheckboxes = document.querySelectorAll('.remove-section:not(#removeDomainFromTenant)');
+
+  if (skipRenameCheckbox && renameObjectsGroup) {
+    skipRenameCheckbox.addEventListener('change', () => {
+      if (skipRenameCheckbox.checked) {
+        // Disable and uncheck all rename checkboxes
+        removeSectionCheckboxes.forEach(cb => {
+          cb.checked = false;
+          cb.disabled = true;
+        });
+        renameObjectsGroup.style.opacity = '0.5';
+        renameObjectsGroup.style.pointerEvents = 'none';
+      } else {
+        // Re-enable all rename checkboxes and check them by default
+        removeSectionCheckboxes.forEach(cb => {
+          cb.checked = true;
+          cb.disabled = false;
+        });
+        renameObjectsGroup.style.opacity = '1';
+        renameObjectsGroup.style.pointerEvents = 'auto';
+      }
+    });
+  }
+
   // Install update button
   document.getElementById('installUpdateBtn').addEventListener('click', installUpdate);
 

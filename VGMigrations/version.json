@@ -1,7 +1,17 @@
 {
-  "version": "2.9.60",
+  "version": "2.9.61",
   "releaseDate": "2026-08-08",
   "changelog": [
+    {
+      "version": "2.9.61",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Added 'Skip rename operations' option to Rename Domain",
+        "MigrationToolkit-Web: Allows removing domain from tenant without renaming objects",
+        "MigrationToolkit-Web: Useful when objects already renamed manually or via other scripts",
+        "MigrationToolkit-Web: When checked, disables all rename checkboxes and only removes domain registration"
+      ]
+    },
     {
       "version": "2.9.60",
       "date": "2026-08-08",

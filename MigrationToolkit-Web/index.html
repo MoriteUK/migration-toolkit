@@ -1161,6 +1161,14 @@
           </div>
 
           <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="skipRenameOperations">
+              <span style="font-weight:600;">Skip rename operations (only remove domain from tenant)</span>
+            </label>
+            <p style="margin:4px 0 0 22px; font-size:11px; color:#6B7280;">Check this if you've already renamed objects manually or via other scripts. Will only remove the domain registration.</p>
+          </div>
+
+          <div class="form-group" id="renameObjectsGroup" style="margin-top:8px;">
             <label class="form-label">Object types to rename</label>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px 16px; margin-top:4px;">
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="02_Mailboxes.csv" checked><span>Mailboxes</span></label>
@@ -1174,7 +1182,7 @@
 
           <div class="form-group" style="margin-top:8px; padding:8px 10px; background:#FEF3C7; border:1px solid #FCD34D; border-radius:6px;">
             <label class="form-checkbox">
-              <input type="checkbox" class="remove-section" value="01_AcceptedDomains.csv" checked>
+              <input type="checkbox" id="removeDomainFromTenant" class="remove-section" value="01_AcceptedDomains.csv" checked>
               <span style="font-weight:600;">Remove domain name from tenant</span>
             </label>
             <p style="margin:4px 0 0 22px; font-size:11px; color:#92400E;">Removes the old domain registration from M365 — do this after all objects are renamed above.</p>
