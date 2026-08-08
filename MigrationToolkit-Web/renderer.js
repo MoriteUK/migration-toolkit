@@ -44,13 +44,17 @@ document.addEventListener('click', (e) => {
   console.log('Extensions:', exts);
 
   if (btn.dataset.folder) {
+    console.log('Opening folder browser');
     window.electronAPI.showOpenDialog({ properties: ['openDirectory'] }).then(result => {
       if (!result.canceled && result.filePaths.length > 0) {
         input.value = result.filePaths[0];
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }).catch(err => console.error('Folder dialog error:', err));
-  } else if (exts) {
+    return; // Don't fall through to file browser
+  }
+
+  if (exts) {
     const extList = exts.split(',').map(s => s.trim());
     console.log('Opening file browser with extensions:', extList);
     openFileBrowser(input, {
@@ -59,10 +63,11 @@ document.addEventListener('click', (e) => {
         { name: 'All Files', extensions: ['*'] }
       ]
     });
-  } else {
-    console.log('Opening file browser with default CSV filter');
-    openFileBrowser(input);
+    return; // Don't fall through to default
   }
+
+  console.log('Opening file browser with default CSV filter');
+  openFileBrowser(input);
 });
 
 console.log('=== RENDERER.JS LOADING ===');

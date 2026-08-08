@@ -1,7 +1,17 @@
 {
-  "version": "2.9.58",
+  "version": "2.9.59",
   "releaseDate": "2026-08-08",
   "changelog": [
+    {
+      "version": "2.9.59",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Fixed browse buttons opening both folder AND file picker dialogs",
+        "MigrationToolkit-Web: Added return statements to prevent fall-through in event handler",
+        "MigrationToolkit-Web: Folder browse buttons now only open folder picker",
+        "MigrationToolkit-Web: File browse buttons now only open file picker"
+      ]
+    },
     {
       "version": "2.9.58",
       "date": "2026-08-08",
