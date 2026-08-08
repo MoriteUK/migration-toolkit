@@ -1,7 +1,16 @@
 {
-  "version": "2.9.56",
+  "version": "2.9.57",
   "releaseDate": "2026-08-08",
   "changelog": [
+    {
+      "version": "2.9.57",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Fixed all Discovery Folder browse buttons to open folder picker instead of file picker",
+        "MigrationToolkit-Web: Affects Rename Domain, Hide from Address Book, Remove Aliases, Retire Devices, Remove Devices",
+        "MigrationToolkit-Web: CSV file browse buttons now correctly open file picker with CSV filter"
+      ]
+    },
     {
       "version": "2.9.56",
       "date": "2026-08-08",
