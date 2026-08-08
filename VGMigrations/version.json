@@ -1,7 +1,17 @@
 {
-  "version": "2.9.59",
+  "version": "2.9.60",
   "releaseDate": "2026-08-08",
   "changelog": [
+    {
+      "version": "2.9.60",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Reordered Domain Removal sidebar menu to match workflow order",
+        "MigrationToolkit-Web: Added step numbers (1-8) to sidebar items for clarity",
+        "MigrationToolkit-Web: Rename Domain now appears as step 8 (last step)",
+        "MigrationToolkit-Web: Remove Entra Users remains at bottom as last-resort option"
+      ]
+    },
     {
       "version": "2.9.59",
       "date": "2026-08-08",
