@@ -1138,7 +1138,7 @@
           </div>
 
           <h3 class="form-card-title">Rename M365 Domain References</h3>
-          <p class="form-help">Reads discovery CSVs and renames email addresses from the old domain to the new domain on all M365 objects. Then removes the old domain name from the tenant. Objects themselves are <strong>not deleted</strong> — only their email domain is updated.</p>
+          <p class="form-help">Reads discovery CSVs and renames email addresses from the old domain to the target domain (configured in Settings > Discovery). Then removes the old domain name from the tenant. Objects themselves are <strong>not deleted</strong> — only their email domain is updated.</p>
 
           <div class="form-row" style="margin-top:6px; gap:12px;">
             <div class="form-group flex-1">
@@ -1146,8 +1146,9 @@
               <input type="text" class="form-input form-input-compact" id="removeOldDomain" placeholder="e.g. olddomain.com">
             </div>
             <div class="form-group flex-1">
-              <label class="form-label">New Domain <span style="font-weight:normal;color:var(--color-text-muted)">(rename to)</span></label>
-              <input type="text" class="form-input form-input-compact" id="removeNewDomain" placeholder="e.g. ourvolaris.onmicrosoft.com">
+              <label class="form-label">Target Domain <span style="font-weight:normal;color:var(--color-text-muted)">(rename to)</span></label>
+              <input type="text" class="form-input form-input-compact" id="removeNewDomain" placeholder="Set in Settings > Discovery" readonly style="background:#f9fafb; cursor:not-allowed;">
+              <small class="form-help" style="margin-top:4px; display:block;">Change this in Settings (⚙) > Discovery tab</small>
             </div>
           </div>
 
@@ -1771,6 +1772,11 @@
               <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv">Browse</button>
             </div>
             <small class="form-help">CSV with "Email Domain" and "VBU ID" columns. Used to populate the domain dropdown in Discovery and auto-fill the VBU ID.</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label">TARGET DOMAIN (DOMAIN REMOVAL)</label>
+            <input type="text" class="form-input" id="targetDomain" placeholder="ourvolaris.onmicrosoft.com">
+            <small class="form-help">Default target domain for domain rename operations. Email addresses will be renamed to this domain (without @).</small>
           </div>
         </div>
       </div>

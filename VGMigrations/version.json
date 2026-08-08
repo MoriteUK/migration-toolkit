@@ -1,7 +1,17 @@
 {
-  "version": "2.9.55",
-  "releaseDate": "2026-08-07",
+  "version": "2.9.56",
+  "releaseDate": "2026-08-08",
   "changelog": [
+    {
+      "version": "2.9.56",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Added Target Domain setting in Settings > Discovery",
+        "MigrationToolkit-Web: Domain Rename now uses target domain from settings (defaults to ourvolaris.onmicrosoft.com)",
+        "MigrationToolkit-Web: Removed editable New Domain field - now auto-populated and readonly",
+        "MigrationToolkit-Web: Change target domain in Settings instead of entering each time"
+      ]
+    },
     {
       "version": "2.9.55",
       "date": "2026-08-07",

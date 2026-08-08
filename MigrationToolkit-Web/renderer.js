@@ -1809,6 +1809,8 @@ function switchView(viewName) {
       // Load dropdowns when specific views are shown
       if (viewName === 'discovery') {
         loadDiscoveryDomains();
+      } else if (viewName === 'domain-remove') {
+        loadTargetDomain();
       } else if (viewName === 'misc-onedrive') {
         loadOneDriveTenants();
       } else if (viewName === 'avepoint-monitor') {
@@ -1837,6 +1839,19 @@ function switchView(viewName) {
 // ── Discovery: domain/VBU dropdown ───────────────────────────────────────────
 let _vbuMap = {};
 let _vbuRows = [];
+
+async function loadTargetDomain() {
+  try {
+    const cfgResult = await window.electronAPI.getConfig();
+    const targetDomain = cfgResult?.config?.TargetDomain || 'ourvolaris.onmicrosoft.com';
+    const newDomainInput = document.getElementById('removeNewDomain');
+    if (newDomainInput) {
+      newDomainInput.value = targetDomain;
+    }
+  } catch (err) {
+    console.error('loadTargetDomain failed:', err);
+  }
+}
 
 async function loadDiscoveryDomains() {
   try {
@@ -2054,6 +2069,7 @@ async function openSettings() {
       document.getElementById('secretExpiry').value = result.config.SecretExpiry || '';
       document.getElementById('discoveryOutputPath').value = result.config.DiscoveryOutputPath || '';
       document.getElementById('vbuCsvPath').value = result.config.VbuCsvPath || '';
+      document.getElementById('targetDomain').value = result.config.TargetDomain || 'ourvolaris.onmicrosoft.com';
 
       // Load customers into table
       const customerTableBody = document.getElementById('customerTableBody');
@@ -2138,6 +2154,7 @@ async function saveSettings() {
     const secretExpiry = document.getElementById('secretExpiry').value.trim();
     const discoveryOutputPath = document.getElementById('discoveryOutputPath').value.trim();
     const vbuCsvPath = document.getElementById('vbuCsvPath').value.trim();
+    const targetDomain = document.getElementById('targetDomain').value.trim();
 
     // Collect customer data from table
     const customerRows = document.querySelectorAll('#customerTableBody tr');
@@ -2169,6 +2186,7 @@ async function saveSettings() {
       SecretExpiry: secretExpiry,
       DiscoveryOutputPath: discoveryOutputPath,
       VbuCsvPath: vbuCsvPath,
+      TargetDomain: targetDomain,
       Customers: customers
     };
 
