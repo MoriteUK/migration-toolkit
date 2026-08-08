@@ -1809,7 +1809,7 @@ function switchView(viewName) {
       // Load dropdowns when specific views are shown
       if (viewName === 'discovery') {
         loadDiscoveryDomains();
-      } else if (viewName === 'domain-remove') {
+      } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip'].includes(viewName)) {
         loadTargetDomain();
       } else if (viewName === 'misc-onedrive') {
         loadOneDriveTenants();
@@ -1844,10 +1844,21 @@ async function loadTargetDomain() {
   try {
     const cfgResult = await window.electronAPI.getConfig();
     const targetDomain = cfgResult?.config?.TargetDomain || 'ourvolaris.onmicrosoft.com';
-    const newDomainInput = document.getElementById('removeNewDomain');
-    if (newDomainInput) {
-      newDomainInput.value = targetDomain;
-    }
+
+    // Update all target domain fields
+    const fields = [
+      'removeNewDomain',      // Rename Domain Objects
+      'onpremTargetDomain',   // Update On-Prem UPNs
+      'cloudNewDomain',       // Update Cloud UPNs
+      'sipNewDomain'          // SIP/IM Addresses
+    ];
+
+    fields.forEach(fieldId => {
+      const input = document.getElementById(fieldId);
+      if (input) {
+        input.value = targetDomain;
+      }
+    });
   } catch (err) {
     console.error('loadTargetDomain failed:', err);
   }

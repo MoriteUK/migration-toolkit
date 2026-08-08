@@ -1,7 +1,17 @@
 {
-  "version": "2.9.57",
+  "version": "2.9.58",
   "releaseDate": "2026-08-08",
   "changelog": [
+    {
+      "version": "2.9.58",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: All target domain fields now use Settings > Discovery target domain",
+        "MigrationToolkit-Web: Applied to Update On-Prem UPNs, Update Cloud UPNs, and SIP/IM Addresses",
+        "MigrationToolkit-Web: All target domain fields now readonly and auto-populated",
+        "MigrationToolkit-Web: Set target domain once in Settings - used everywhere automatically"
+      ]
+    },
     {
       "version": "2.9.57",
       "date": "2026-08-08",
