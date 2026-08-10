@@ -1,7 +1,17 @@
 {
-  "version": "2.9.62",
-  "releaseDate": "2026-08-08",
+  "version": "2.9.63",
+  "releaseDate": "2026-08-10",
   "changelog": [
+    {
+      "version": "2.9.63",
+      "date": "2026-08-10",
+      "changes": [
+        "MigrationToolkit-Web: Fixed sidebar 'License Report' pointing at a script that never existed (Check-TenantLicenses.ps1), causing exit code 64",
+        "MigrationToolkit-Web: Removed the broken duplicate License Report panel and its mismatched auto-auth/process-all checkboxes",
+        "MigrationToolkit-Web: Sidebar 'License Report' now opens the working panel that correctly calls Get-TenantLicenseReport.ps1",
+        "VGMigrations: .gitignore now excludes backup-*/ folders and appdata-config.json/localappdata-shared-config.json/config.json (previously an uncommitted config backup was leaking an encrypted API secret blob into the working tree diff)"
+      ]
+    },
     {
       "version": "2.9.62",
       "date": "2026-08-08",

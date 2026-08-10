@@ -81,7 +81,7 @@
             <button type="button" class="sidebar-subitem" data-view="misc-baseline">
               <span class="sidebar-sublabel">Tenant Baseline Config</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-view="licenseReport">
+            <button type="button" class="sidebar-subitem" data-view="discovery-tenant-licenses">
               <span class="sidebar-sublabel">License Report</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="domainReadiness">
@@ -394,44 +394,6 @@
         <div class="log-section hidden" id="discoveryLog">
           <h3 class="form-card-title">Discovery Log</h3>
           <div class="log-output" id="discoveryLogOutput"></div>
-        </div>
-      </div>
-
-      <!-- License Report View -->
-      <div id="licenseReportView" class="view-container hidden">
-        <h2 class="view-title">📄 License Report</h2>
-
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Tenant License Report</h3>
-          <p class="form-help">
-            Generates a report of mailbox-granting licenses by domain with automatic app registration.
-            Reads from Tenant IDs.xlsx and skips domains with "Yes" in columns J or N.
-          </p>
-
-          <div class="form-group">
-            <label class="form-checkbox">
-              <input type="checkbox" id="licenseAutoAuth" checked>
-              <span>Auto-create app registration per tenant (stores credentials for reuse)</span>
-            </label>
-          </div>
-
-          <div class="form-group">
-            <label class="form-checkbox">
-              <input type="checkbox" id="licenseProcessAll">
-              <span>Process all domains (ignore "Yes" in column J, still skip column N)</span>
-            </label>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary btn-large" id="runLicenseReportBtn">
-              🚀 Run License Report
-            </button>
-          </div>
-        </div>
-
-        <div class="log-section hidden" id="licenseReportLog">
-          <h3 class="form-card-title">License Report Output</h3>
-          <div class="log-output" id="licenseReportLogOutput"></div>
         </div>
       </div>
 
