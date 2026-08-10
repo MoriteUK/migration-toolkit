@@ -45,7 +45,7 @@
 
 .PARAMETER SkipColumn
     Excel column letter holding the "cutover done" skip flag (.xlsx only) — rows where this
-    column equals -SkipValue are excluded. Default 'L'.
+    column equals -SkipValue are excluded. Default 'N'.
 
 .PARAMETER SkipValue
     Value in -SkipColumn / -LicensesOkColumn that marks a tenant to be skipped
@@ -53,7 +53,7 @@
 
 .PARAMETER LicensesOkColumn
     Excel column letter holding the "licenses already confirmed correct" flag (.xlsx only) —
-    rows where this column equals -SkipValue are excluded, same as -SkipColumn. Default 'I'.
+    rows where this column equals -SkipValue are excluded, same as -SkipColumn. Default 'J'.
 
 .PARAMETER HeaderRow
     Row number the data starts after (.xlsx only) — row 1 is assumed to be headers. Default 1.
@@ -78,10 +78,16 @@
 .PARAMETER ForceRefreshLookup
     Refresh the lookup copy from -TenantsFile now, regardless of its age.
 
+.PARAMETER ProcessAll
+    Process all tenants, ignoring both SkipColumn and LicensesOkColumn. Still respects
+    ExcludeDomains (e.g., 'ourvolaris') to avoid processing the management tenant itself.
+
 .EXAMPLE
     .\Get-TenantLicenseReport.ps1
 .EXAMPLE
     .\Get-TenantLicenseReport.ps1 -TenantsFile C:\tenants.csv
+.EXAMPLE
+    .\Get-TenantLicenseReport.ps1 -ProcessAll
 #>
 
 param(
@@ -91,8 +97,8 @@ param(
     [string]$TenantIdColumn  = 'B',
     [string]$AppIdColumn     = 'C',
     [string]$AppSecretColumn = 'D',
-    [string]$SkipColumn      = 'L',
-    [string]$LicensesOkColumn = 'I',
+    [string]$SkipColumn      = 'N',
+    [string]$LicensesOkColumn = 'J',
     [string]$SkipValue       = 'Yes',
     [int]$HeaderRow          = 1,
 
@@ -103,7 +109,8 @@ param(
     [string]$OutputPath,
 
     [double]$RefreshIntervalDays = 3.5,
-    [switch]$ForceRefreshLookup
+    [switch]$ForceRefreshLookup,
+    [switch]$ProcessAll
 )
 
 $ErrorActionPreference = 'Stop'
@@ -196,7 +203,11 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
     $appSecIdx  = ConvertFrom-ExcelColumnLetter $AppSecretColumn
     $skipIdx    = ConvertFrom-ExcelColumnLetter $SkipColumn
     $licOkIdx   = ConvertFrom-ExcelColumnLetter $LicensesOkColumn
-    Write-Host "Reading column $TenantIdColumn (tenant ID), $DomainColumn (domain) — skipping rows where column $SkipColumn or $LicensesOkColumn = '$SkipValue'." -ForegroundColor Gray
+    if ($ProcessAll) {
+        Write-Host "Reading column $TenantIdColumn (tenant ID), $DomainColumn (domain) — PROCESSING ALL (ignoring skip columns)." -ForegroundColor Cyan
+    } else {
+        Write-Host "Reading column $TenantIdColumn (tenant ID), $DomainColumn (domain) — skipping rows where column $SkipColumn or $LicensesOkColumn = '$SkipValue'." -ForegroundColor Gray
+    }
 
     $excelRows = @(Import-Excel -Path $lookupFile -NoHeader -StartRow ($HeaderRow + 1) -ErrorAction Stop)
     $skippedCount = 0
@@ -205,14 +216,19 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
         $skipVal  = $row."P$skipIdx"
         $licOkVal = $row."P$licOkIdx"
         if ([string]::IsNullOrWhiteSpace($idVal)) { continue }
-        if ($skipVal -and $skipVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
-            $skippedCount++
-            continue
+
+        # Only apply skip logic if -ProcessAll is NOT set
+        if (-not $ProcessAll) {
+            if ($skipVal -and $skipVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $skippedCount++
+                continue
+            }
+            if ($licOkVal -and $licOkVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $skippedCount++
+                continue
+            }
         }
-        if ($licOkVal -and $licOkVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
-            $skippedCount++
-            continue
-        }
+
         $tenantRecords.Add([pscustomobject]@{
             Domain    = $row."P$domainIdx"
             TenantId  = $idVal.ToString().Trim()
