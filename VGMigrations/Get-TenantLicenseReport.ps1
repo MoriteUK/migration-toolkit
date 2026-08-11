@@ -102,7 +102,7 @@ param(
     [string]$SkipValue       = 'Yes',
     [int]$HeaderRow          = 1,
 
-    [string[]]$ExcludeDomains = @('ourvolaris'),
+    [string[]]$ExcludeDomains = @('ourvolaris', 'Volaris'),
 
     [string]$Column,
 
@@ -222,12 +222,14 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
             continue
         }
 
-        # Only apply skip logic if -ProcessAll is NOT set
+        # ALWAYS skip if column N (cutover done) = Yes, regardless of -ProcessAll
+        if ($skipVal -and $skipVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $skippedCount++
+            continue
+        }
+
+        # Only skip column J (licenses checked) when -ProcessAll is NOT set
         if (-not $ProcessAll) {
-            if ($skipVal -and $skipVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
-                $skippedCount++
-                continue
-            }
             if ($licOkVal -and $licOkVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
                 $skippedCount++
                 continue
