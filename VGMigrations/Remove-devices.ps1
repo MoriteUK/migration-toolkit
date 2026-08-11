@@ -25,7 +25,7 @@
 #>
 
 param(
-    [string]$DiscoveryFolder = '',  # reads 11_Devices.csv from this folder (headless mode)
+    [string]$DiscoveryFolder = '',  # reads 12_Devices.csv from this folder (headless mode)
     [string]$CsvFile         = '',  # OR provide a direct CSV path (headless mode)
     [switch]$WhatIf
 )
@@ -417,7 +417,7 @@ function Invoke-RemoveDevicesHeadless {
         $folder    = $DiscoveryFolder.Trim().Trim('"')
         $candidate = Join-Path $folder 'Discovery'
         if ((Split-Path $folder -Leaf) -ne 'Discovery' -and (Test-Path $candidate)) { $folder = $candidate }
-        $csvPath = Join-Path $folder '11_Devices.csv'
+        $csvPath = Join-Path $folder '12_Devices.csv'
     }
 
     if (-not $csvPath -or -not (Test-Path $csvPath)) {

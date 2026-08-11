@@ -95,12 +95,12 @@ $filter = if ($Sections -eq 'all') { $null } else { @($Sections -split ',') | Fo
 function Should-Process { param([string]$n) -not $filter -or $n -in $filter }
 
 # ── Mailboxes & Shared Mailboxes ──────────────────────────────────────────────
-foreach ($csvName in @('02_Mailboxes.csv', '05_SharedMailboxes.csv')) {
+foreach ($csvName in @('02_ADUsers.csv', '05_SharedMailboxes.csv')) {
     if (-not (Should-Process $csvName)) { continue }
     $csvPath = Join-Path $discFolder $csvName
     if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): $csvName"; continue }
     $rows  = @(Import-Csv -Path $csvPath -Encoding UTF8)
-    $label = if ($csvName -eq '02_Mailboxes.csv') { 'Mailboxes' } else { 'Shared Mailboxes' }
+    $label = if ($csvName -eq '02_ADUsers.csv') { 'Mailboxes' } else { 'Shared Mailboxes' }
     Write-Host "--- ${label}: $($rows.Count) item(s) ---"
     if ($rows.Count -eq 0) { Write-Host ''; continue }
     if (-not $WhatIf -and -not (Connect-EXOIfNeeded)) { Write-Host ''; continue }
@@ -203,9 +203,9 @@ if (Should-Process '06_M365Groups.csv') {
 }
 
 # ── Proxy Addresses — strip old-domain secondary smtp: entries ────────────────
-if (Should-Process '12_ProxyAddresses.csv') {
-    $csvPath = Join-Path $discFolder '12_ProxyAddresses.csv'
-    if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): 12_ProxyAddresses.csv" }
+if (Should-Process '13_ProxyAddresses.csv') {
+    $csvPath = Join-Path $discFolder '13_ProxyAddresses.csv'
+    if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): 13_ProxyAddresses.csv" }
     else {
         $rows = @(Import-Csv -Path $csvPath -Encoding UTF8)
         Write-Host "--- Proxy Addresses: $($rows.Count) item(s) ---"

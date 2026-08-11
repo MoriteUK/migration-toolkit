@@ -4,7 +4,7 @@
     Retire-Devices.ps1 — Disable Entra ID devices from a discovery CSV (headless).
 
 .DESCRIPTION
-    Reads 11_Devices.csv from a discovery folder (or a specific CSV file) and disables
+    Reads 12_Devices.csv from a discovery folder (or a specific CSV file) and disables
     each device in Entra ID by setting AccountEnabled = $false via Microsoft Graph.
     The device record is preserved — it is not deleted.
 
@@ -12,7 +12,7 @@
     without permanently removing the device objects.
 
 .PARAMETER DiscoveryFolder
-    Path to a discovery folder containing 11_Devices.csv.
+    Path to a discovery folder containing 12_Devices.csv.
     If the folder is not named 'Discovery', the script looks for a Discovery subfolder.
 
 .PARAMETER CsvFile
@@ -37,7 +37,7 @@ if ($CsvFile) {
     $folder    = $DiscoveryFolder.Trim().Trim('"')
     $candidate = Join-Path $folder 'Discovery'
     if ((Split-Path $folder -Leaf) -ne 'Discovery' -and (Test-Path $candidate)) { $folder = $candidate }
-    $csvPath = Join-Path $folder '11_Devices.csv'
+    $csvPath = Join-Path $folder '12_Devices.csv'
 }
 
 if (-not $csvPath -or -not (Test-Path $csvPath)) {

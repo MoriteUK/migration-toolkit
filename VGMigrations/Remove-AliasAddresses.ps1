@@ -2,20 +2,20 @@
 <#
 .SYNOPSIS
     Remove-AliasAddresses.ps1 — Strips alias (secondary smtp:) and IM (SIP/EUM) addresses from
-    recipients listed in discovery CSVs, checking on-prem AD and Exchange Online.
+    recipients listed in discovery CSVs, checking on-prem AD by default.
 
 .DESCRIPTION
-    On-prem AD is tried first for hybrid/synced objects (everything except M365 Groups, which
-    are cloud-native). Exchange Online is still checked too regardless of the on-prem result —
-    some addresses (notably Teams/Skype-for-Business-Online auto-generated SIP addresses) are
-    provisioned entirely cloud-side and never appear in on-prem proxyAddresses at all, even
-    though the object itself is DirSync'd. When Exchange Online refuses an edit because the
-    object is synchronized from on-premises, that's reported as "PROTECTED" rather than a
-    generic failure — it means the address only exists in the cloud on an object EXO won't let
-    you edit directly.
+    On-prem AD is checked for hybrid/synced objects (everything except M365 Groups, which are
+    cloud-native and always go through Exchange Online). Exchange Online is NOT checked by
+    default — pass -CheckExchangeOnline to also check it, which is useful for cloud-only
+    accounts or to catch addresses that are provisioned entirely cloud-side (notably
+    Teams/Skype-for-Business-Online auto-generated SIP addresses, which never appear in on-prem
+    proxyAddresses even on a DirSync'd object). With -CheckExchangeOnline, when Exchange Online
+    refuses an edit because the object is synchronized from on-premises, that's reported as
+    "PROTECTED" rather than a generic failure.
 
 .PARAMETER DiscoveryFolder
-    Path to the folder containing discovery CSV files (02_Mailboxes, 03_DistributionGroups, etc.)
+    Path to the folder containing discovery CSV files (02_ADUsers, 03_DistributionGroups, etc.)
 
 .PARAMETER Domain
     Optional: restrict removal to addresses containing this domain (e.g. "olddomain.com").
@@ -27,12 +27,17 @@
 .PARAMETER SkipSIP
     Skip removal of IM/SIP and EUM addresses (SIP: and EUM: prefixes).
 
+.PARAMETER CheckExchangeOnline
+    Also check Exchange Online for every on-prem-eligible section, not just M365 Groups. Off by
+    default — on-prem AD alone gives a much shorter, clearer log for the common hybrid case;
+    turn this on when you need to catch cloud-only accounts or cloud-only addresses too.
+
 .PARAMETER WhatIf
     Preview which addresses would be removed without making changes.
 
 .NOTES
-    Requires : ExchangeOnlineManagement
-    CSVs used: 02_Mailboxes, 03_DistributionGroups, 04_MailContacts,
+    Requires : ExchangeOnlineManagement (only if -CheckExchangeOnline is used, or for M365 Groups)
+    CSVs used: 02_ADUsers, 03_DistributionGroups, 04_MailContacts,
                05_SharedMailboxes, 06_M365Groups
 #>
 
@@ -46,6 +51,8 @@ param(
     [switch]$SkipAliases,
 
     [switch]$SkipSIP,
+
+    [switch]$CheckExchangeOnline,
 
     [switch]$WhatIf
 )
@@ -69,7 +76,7 @@ _RawLog "=== Remove-AliasAddresses.ps1 started  PID=$PID  PSVersion=$($PSVersion
 # DirSync'd object ("out of the current user's write scope... should be performed on the object
 # in your on-premises organization") regardless of which specific address is being changed.
 $script:SectionDefs = @(
-    [pscustomobject]@{ CsvName='02_Mailboxes.csv';          Label='Mailboxes';           KeyField='UserPrincipalName';    GetCmd='Get-Mailbox';           SetCmd='Set-Mailbox';           OnPrem=$true  }
+    [pscustomobject]@{ CsvName='02_ADUsers.csv';          Label='Mailboxes';           KeyField='UserPrincipalName';    GetCmd='Get-Mailbox';           SetCmd='Set-Mailbox';           OnPrem=$true  }
     [pscustomobject]@{ CsvName='03_DistributionGroups.csv'; Label='Distribution Groups'; KeyField='PrimarySmtpAddress';   GetCmd='Get-DistributionGroup'; SetCmd='Set-DistributionGroup'; OnPrem=$true  }
     [pscustomobject]@{ CsvName='04_MailContacts.csv';       Label='Mail Contacts';       KeyField='ExternalEmailAddress'; GetCmd='Get-MailContact';       SetCmd='Set-MailContact';       OnPrem=$true  }
     [pscustomobject]@{ CsvName='05_SharedMailboxes.csv';    Label='Shared Mailboxes';    KeyField='PrimarySmtpAddress';   GetCmd='Get-Mailbox';           SetCmd='Set-Mailbox';           OnPrem=$true  }
@@ -163,18 +170,35 @@ Write-Host "=== Remove Alias Addresses$(if ($WhatIf) { ' [WhatIf]' }) ==="
 Write-Host "Discovery folder : $discFolder"
 Write-Host "Removing         : $scopeMsg"
 Write-Host $(if ($script:AdAvailable) { 'ActiveDirectory module loaded — on-prem objects checked first.' } else { 'ActiveDirectory module not available — all objects handled via Exchange Online only.' })
-_RawLog "DiscoveryFolder=$discFolder  Domain=$Domain  SkipAliases=$SkipAliases  SkipSIP=$SkipSIP  WhatIf=$WhatIf  AdAvailable=$($script:AdAvailable)"
-
-$mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
-if (-not $mod) {
-    Write-Host 'ERROR: ExchangeOnlineManagement module is not installed.'
-    Write-Host 'Install it with: Install-Module ExchangeOnlineManagement -Scope CurrentUser'
-    exit 1
-}
-Import-Module 'ExchangeOnlineManagement' -ErrorAction Stop
-Write-Host 'ExchangeOnlineManagement module loaded.'
+Write-Host $(if ($CheckExchangeOnline) { 'Exchange Online will also be checked for every section.' } else { 'Exchange Online will only be checked for M365 Groups (cloud-native). Pass -CheckExchangeOnline to also check it for everything else.' })
+_RawLog "DiscoveryFolder=$discFolder  Domain=$Domain  SkipAliases=$SkipAliases  SkipSIP=$SkipSIP  CheckExchangeOnline=$CheckExchangeOnline  WhatIf=$WhatIf  AdAvailable=$($script:AdAvailable)"
 
 $exoConnected = $false
+
+# Connects to Exchange Online on first use — never called at all when a run stays entirely
+# on-prem (CheckExchangeOnline off and no M365 Groups section).
+function Connect-ExoIfNeeded {
+    if ($exoConnected) { return $true }
+    $mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
+    if (-not $mod) {
+        Write-Host 'ERROR: ExchangeOnlineManagement module is not installed.'
+        Write-Host 'Install it with: Install-Module ExchangeOnlineManagement -Scope CurrentUser'
+        exit 1
+    }
+    Import-Module 'ExchangeOnlineManagement' -ErrorAction Stop
+    Write-Host 'Connecting to Exchange Online — sign in when the browser opens...'
+    try {
+        $cmds = @('Get-Mailbox','Set-Mailbox','Get-DistributionGroup','Set-DistributionGroup',
+                  'Get-MailContact','Set-MailContact','Get-UnifiedGroup','Set-UnifiedGroup')
+        Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
+        $script:exoConnected = $true
+        Write-Host 'Exchange Online connected.'
+        return $true
+    } catch {
+        Write-Host "ERROR: Failed to connect to Exchange Online: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+        exit 1
+    }
+}
 
 foreach ($sec in $script:SectionDefs) {
     $csvPath = Join-Path $discFolder $sec.CsvName
@@ -187,19 +211,9 @@ foreach ($sec in $script:SectionDefs) {
     Write-Host "--- $($sec.Label): $($rows.Count) item(s) ---"
     if ($rows.Count -eq 0) { continue }
 
-    if (-not $exoConnected) {
-        Write-Host 'Connecting to Exchange Online — sign in when the browser opens...'
-        try {
-            $cmds = @('Get-Mailbox','Set-Mailbox','Get-DistributionGroup','Set-DistributionGroup',
-                      'Get-MailContact','Set-MailContact','Get-UnifiedGroup','Set-UnifiedGroup')
-            Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
-            $exoConnected = $true
-            Write-Host 'Exchange Online connected.'
-        } catch {
-            Write-Host "ERROR: Failed to connect to Exchange Online: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
-            exit 1
-        }
-    }
+    # M365 Groups are cloud-native — always need Exchange Online regardless of the switch.
+    $checkExoForSection = $CheckExchangeOnline -or (-not $sec.OnPrem)
+    if ($checkExoForSection) { Connect-ExoIfNeeded | Out-Null }
 
     $ok = 0; $fail = 0; $nochange = 0; $protected = 0
 
@@ -207,11 +221,7 @@ foreach ($sec in $script:SectionDefs) {
         $identity = $r.($sec.KeyField)
         if (-not $identity) { continue }
 
-        # Try on-prem AD first. Note this alone isn't sufficient for hybrid objects: some
-        # addresses (notably Teams/Skype-for-Business-Online auto-generated SIP addresses) are
-        # provisioned entirely cloud-side and never appear in on-prem proxyAddresses at all, even
-        # though the object itself is DirSync'd — so Exchange Online is still checked below
-        # regardless of what happened on-prem.
+        # Try on-prem AD first.
         $onPremResult = $null
         if ($sec.OnPrem) {
             $onPremResult = Update-AliasesOnPrem -Identity $identity -FilterDomain $Domain -DoAliases (-not $SkipAliases) -DoSIP (-not $SkipSIP) -WhatIfMode:$WhatIf
@@ -225,6 +235,15 @@ foreach ($sec in $script:SectionDefs) {
                     _RawLog "OK-ONPREM $identity  removed=[$removeList]"
                 }
             }
+        }
+
+        if (-not $checkExoForSection) {
+            # On-prem only — this is the point of turning Exchange Online off: no cloud lookup,
+            # no possibility of a PROTECTED/cloud-only address noise, just a clean on-prem result.
+            if ($onPremResult -and $onPremResult.Removed.Count -gt 0) { $ok++ }
+            elseif ($onPremResult) { Write-Host "  No change : $identity  (on-prem AD)"; $nochange++ }
+            else { Write-Host "  NOT FOUND : $identity  (on-prem AD — enable -CheckExchangeOnline to also check the cloud)"; $nochange++ }
+            continue
         }
 
         try {

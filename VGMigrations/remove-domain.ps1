@@ -119,15 +119,15 @@ if (-not $_libLoaded) {
 # Section definitions
 $script:SectionDefs = @(
     [pscustomobject]@{ CsvName='01_AcceptedDomains.csv';    Label='Accepted Domains';       NeedsEXO=$true;  NeedsGraph=$false }
-    [pscustomobject]@{ CsvName='02_Mailboxes.csv';          Label='Mailboxes';              NeedsEXO=$true;  NeedsGraph=$false }
+    [pscustomobject]@{ CsvName='02_ADUsers.csv';          Label='Mailboxes';              NeedsEXO=$true;  NeedsGraph=$false }
     [pscustomobject]@{ CsvName='03_DistributionGroups.csv'; Label='Distribution Groups';    NeedsEXO=$true;  NeedsGraph=$false }
     [pscustomobject]@{ CsvName='04_MailContacts.csv';       Label='Mail Contacts';          NeedsEXO=$true;  NeedsGraph=$false }
     [pscustomobject]@{ CsvName='05_SharedMailboxes.csv';    Label='Shared Mailboxes';       NeedsEXO=$true;  NeedsGraph=$false }
     [pscustomobject]@{ CsvName='06_M365Groups.csv';         Label='M365 Groups (+ Teams)';  NeedsEXO=$true;  NeedsGraph=$false }
     [pscustomobject]@{ CsvName='07_AppRegistrations.csv';   Label='App Registrations';      NeedsEXO=$false; NeedsGraph=$true  }
     [pscustomobject]@{ CsvName='08_EnterpriseApps.csv';     Label='Enterprise Apps';        NeedsEXO=$false; NeedsGraph=$true  }
-    [pscustomobject]@{ CsvName='11_Devices.csv';            Label='Devices';                NeedsEXO=$false; NeedsGraph=$true  }
-    [pscustomobject]@{ CsvName='12_ProxyAddresses.csv';     Label='Proxy Addresses';        NeedsEXO=$true;  NeedsGraph=$false }
+    [pscustomobject]@{ CsvName='12_Devices.csv';            Label='Devices';                NeedsEXO=$false; NeedsGraph=$true  }
+    [pscustomobject]@{ CsvName='13_ProxyAddresses.csv';     Label='Proxy Addresses';        NeedsEXO=$true;  NeedsGraph=$false }
 )
 
 function Show-RemoveDomainUI {
@@ -592,9 +592,9 @@ function Show-RemoveDomainUI {
             }
 
             # Module check
-            $exoCsvs   = @('01_AcceptedDomains.csv','02_Mailboxes.csv','03_DistributionGroups.csv',
-                           '04_MailContacts.csv','05_SharedMailboxes.csv','06_M365Groups.csv','12_ProxyAddresses.csv')
-            $graphCsvs = @('07_AppRegistrations.csv','08_EnterpriseApps.csv','11_Devices.csv')
+            $exoCsvs   = @('01_AcceptedDomains.csv','02_ADUsers.csv','03_DistributionGroups.csv',
+                           '04_MailContacts.csv','05_SharedMailboxes.csv','06_M365Groups.csv','13_ProxyAddresses.csv')
+            $graphCsvs = @('07_AppRegistrations.csv','08_EnterpriseApps.csv','12_Devices.csv')
             $needsEXO   = $selectedCsvs | Where-Object { $exoCsvs -contains $_ }
             $needsGraph = $selectedCsvs | Where-Object { $graphCsvs -contains $_ }
 
@@ -641,7 +641,7 @@ function Show-RemoveDomainUI {
                         }
                     }
 
-                    elseif ($csvName -eq '02_Mailboxes.csv') {
+                    elseif ($csvName -eq '02_ADUsers.csv') {
                         $rows = Read-SectionCsv $csvName
                         if ($rows) {
                             $ok = 0; $fail = 0
@@ -781,7 +781,7 @@ function Show-RemoveDomainUI {
                         }
                     }
 
-                    elseif ($csvName -eq '11_Devices.csv') {
+                    elseif ($csvName -eq '12_Devices.csv') {
                         $rows = Read-SectionCsv $csvName
                         if ($rows) {
                             $ok = 0; $fail = 0
@@ -801,7 +801,7 @@ function Show-RemoveDomainUI {
                         }
                     }
 
-                    elseif ($csvName -eq '12_ProxyAddresses.csv') {
+                    elseif ($csvName -eq '13_ProxyAddresses.csv') {
                         $rows = Read-SectionCsv $csvName
                         if ($rows) {
                             $primaries    = @($rows | Where-Object { $_.IsPrimary -eq 'True' })
@@ -891,8 +891,8 @@ function Show-RemoveDomainUI {
                     }
 
                     if ($updateAD) {
-                        # Read 02_Mailboxes.csv to get the list of users with the domain to remove
-                        $mailboxRows = Read-SectionCsv '02_Mailboxes.csv'
+                        # Read 02_ADUsers.csv to get the list of users with the domain to remove
+                        $mailboxRows = Read-SectionCsv '02_ADUsers.csv'
                         if ($mailboxRows) {
                             QLog "Processing $($mailboxRows.Count) user(s) for on-prem AD updates..."
 
@@ -1006,7 +1006,7 @@ function Show-RemoveDomainUI {
                                 QLog "On-prem AD updates: $ok updated  |  $fail failed  |  $skip skipped" $(if ($fail -eq 0) {'OK'} else {'WARN'})
                             }
                         } else {
-                            QLog '02_Mailboxes.csv not found - skipping AD updates.' 'WARN'
+                            QLog '02_ADUsers.csv not found - skipping AD updates.' 'WARN'
                         }
                     }
                 }
@@ -1153,12 +1153,12 @@ function Invoke-RenameDomainHeadless {
     function Should-Process { param([string]$n) -not $filter -or $n -in $filter }
 
     # ── Mailboxes & Shared Mailboxes — rename email domain ────────────────────
-    foreach ($csvName in @('02_Mailboxes.csv','05_SharedMailboxes.csv')) {
+    foreach ($csvName in @('02_ADUsers.csv','05_SharedMailboxes.csv')) {
         if (-not (Should-Process $csvName)) { continue }
         $csvPath = Join-Path $discFolder $csvName
         if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): $csvName"; continue }
         $rows = @(Import-Csv -Path $csvPath -Encoding UTF8)
-        $label = if ($csvName -eq '02_Mailboxes.csv') { 'Mailboxes' } else { 'Shared Mailboxes' }
+        $label = if ($csvName -eq '02_ADUsers.csv') { 'Mailboxes' } else { 'Shared Mailboxes' }
         Write-Host "--- ${label}: $($rows.Count) item(s) ---"
         if ($rows.Count -eq 0) { Write-Host ''; continue }
         if (-not $WhatIf -and -not (Connect-EXOIfNeeded)) { Write-Host ''; continue }
@@ -1260,9 +1260,9 @@ function Invoke-RenameDomainHeadless {
     }
 
     # ── Proxy Addresses — strip old domain secondary smtp: entries ────────────
-    if (Should-Process '12_ProxyAddresses.csv') {
-        $csvPath = Join-Path $discFolder '12_ProxyAddresses.csv'
-        if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): 12_ProxyAddresses.csv" }
+    if (Should-Process '13_ProxyAddresses.csv') {
+        $csvPath = Join-Path $discFolder '13_ProxyAddresses.csv'
+        if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): 13_ProxyAddresses.csv" }
         else {
             $rows = @(Import-Csv -Path $csvPath -Encoding UTF8)
             Write-Host "--- Proxy Addresses: $($rows.Count) item(s) ---"

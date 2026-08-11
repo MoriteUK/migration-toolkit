@@ -3571,6 +3571,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const domain         = document.getElementById('aliasDomain').value.trim();
       const removeAliases  = document.getElementById('aliasRemoveAliases').checked;
       const removeSIP      = document.getElementById('aliasRemoveSIP').checked;
+      const checkExo       = document.getElementById('aliasCheckExo').checked;
       const whatIf         = document.getElementById('aliasWhatIf').checked;
 
       if (!folder) { alert('Please select a discovery folder.'); return; }
@@ -3588,6 +3589,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!removeAliases) args.push('-SkipAliases');
       if (!removeSIP)     args.push('-SkipSIP');
       if (domain) args.push('-Domain', domain);
+      if (checkExo) args.push('-CheckExchangeOnline');
       if (whatIf) args.push('-WhatIf');
 
       window.electronAPI.onPsOutput((text) => {

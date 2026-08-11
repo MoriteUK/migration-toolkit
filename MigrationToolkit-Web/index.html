@@ -1225,12 +1225,12 @@
           <div class="form-group" id="renameObjectsGroup" style="margin-top:8px;">
             <label class="form-label">Object types to rename</label>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px 16px; margin-top:4px;">
-              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="02_Mailboxes.csv" checked><span>Mailboxes</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="02_ADUsers.csv" checked><span>Mailboxes</span></label>
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="03_DistributionGroups.csv" checked><span>Distribution Groups</span></label>
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="04_MailContacts.csv" checked><span>Mail Contacts</span></label>
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="05_SharedMailboxes.csv" checked><span>Shared Mailboxes</span></label>
               <label class="form-checkbox"><input type="checkbox" class="remove-section" value="06_M365Groups.csv" checked><span>M365 Groups + Teams</span></label>
-              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="12_ProxyAddresses.csv" checked><span>Proxy Addresses</span></label>
+              <label class="form-checkbox"><input type="checkbox" class="remove-section" value="13_ProxyAddresses.csv" checked><span>Proxy Addresses</span></label>
             </div>
           </div>
 
@@ -1266,12 +1266,12 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Permanently Remove Entra ID Devices from CSV</h3>
-          <p class="form-help">Reads <code>11_Devices.csv</code> from the discovery folder (or a specific CSV file) and <strong>permanently deletes</strong> each device from Entra ID via Microsoft Graph. Use <a href="#" onclick="return false;" class="workflow-nav-btn" data-view="domain-retire-devices" style="cursor:pointer;color:var(--color-accent);">Retire Devices</a> instead if you want to disable without deleting.</p>
+          <p class="form-help">Reads <code>12_Devices.csv</code> from the discovery folder (or a specific CSV file) and <strong>permanently deletes</strong> each device from Entra ID via Microsoft Graph. Use <a href="#" onclick="return false;" class="workflow-nav-btn" data-view="domain-retire-devices" style="cursor:pointer;color:var(--color-accent);">Retire Devices</a> instead if you want to disable without deleting.</p>
 
           <div class="form-group" style="margin-top:8px;">
-            <label class="form-label">Discovery Folder <span style="font-weight:normal;color:var(--color-text-muted)">(reads 11_Devices.csv)</span></label>
+            <label class="form-label">Discovery Folder <span style="font-weight:normal;color:var(--color-text-muted)">(reads 12_Devices.csv)</span></label>
             <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" id="devicesDiscoveryFolder" placeholder="Folder containing 11_Devices.csv...">
+              <input type="text" class="form-input form-input-compact" id="devicesDiscoveryFolder" placeholder="Folder containing 12_Devices.csv...">
               <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
             </div>
           </div>
@@ -1313,12 +1313,12 @@
           </div>
 
           <h3 class="form-card-title">Retire Entra ID Devices from Discovery CSV</h3>
-          <p class="form-help">Reads <code>11_Devices.csv</code> from the discovery folder (or a specific CSV file) and <strong>disables</strong> each device in Entra ID by setting AccountEnabled = false. The device record is preserved — use this during domain removal to prevent old-domain devices from authenticating.</p>
+          <p class="form-help">Reads <code>12_Devices.csv</code> from the discovery folder (or a specific CSV file) and <strong>disables</strong> each device in Entra ID by setting AccountEnabled = false. The device record is preserved — use this during domain removal to prevent old-domain devices from authenticating.</p>
 
           <div class="form-group" style="margin-top:8px;">
-            <label class="form-label">Discovery Folder <span style="font-weight:normal;color:var(--color-text-muted)">(reads 11_Devices.csv)</span></label>
+            <label class="form-label">Discovery Folder <span style="font-weight:normal;color:var(--color-text-muted)">(reads 12_Devices.csv)</span></label>
             <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" id="retireDiscoveryFolder" placeholder="Folder containing 11_Devices.csv...">
+              <input type="text" class="form-input form-input-compact" id="retireDiscoveryFolder" placeholder="Folder containing 12_Devices.csv...">
               <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
             </div>
           </div>
@@ -1708,6 +1708,13 @@
             <label class="form-checkbox">
               <input type="checkbox" id="aliasRemoveSIP" checked>
               <span>IM / SIP addresses (<code>SIP:</code>, <code>EUM:</code> — Skype, Teams, Unified Messaging)</span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="aliasCheckExo">
+              <span>Also check Exchange Online <span style="font-weight:400;color:#6B7280">(off by default — on-prem AD alone gives a shorter, clearer log; turn this on for cloud-only accounts or cloud-only addresses)</span></span>
             </label>
           </div>
 

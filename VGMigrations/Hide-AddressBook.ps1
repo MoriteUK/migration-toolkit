@@ -7,7 +7,7 @@
 
 .NOTES
     Requires : ExchangeOnlineManagement
-    CSVs used: 02_Mailboxes, 03_DistributionGroups, 04_MailContacts,
+    CSVs used: 02_ADUsers, 03_DistributionGroups, 04_MailContacts,
                05_SharedMailboxes, 06_M365Groups
 #>
 
@@ -93,7 +93,7 @@ if (-not $_libLoaded) {
 # equivalent, so they always go through Exchange Online. Everything else may be a hybrid,
 # AD-synced object, so it's tried on-prem first (see Set-HiddenOnPrem).
 $script:SectionDefs = @(
-    [pscustomobject]@{ CsvName='02_Mailboxes.csv';          Label='Mailboxes';             KeyField='UserPrincipalName';    OnPrem=$true  }
+    [pscustomobject]@{ CsvName='02_ADUsers.csv';          Label='Mailboxes';             KeyField='UserPrincipalName';    OnPrem=$true  }
     [pscustomobject]@{ CsvName='03_DistributionGroups.csv'; Label='Distribution Groups';   KeyField='PrimarySmtpAddress';   OnPrem=$true  }
     [pscustomobject]@{ CsvName='04_MailContacts.csv';       Label='Mail Contacts';         KeyField='ExternalEmailAddress'; OnPrem=$true  }
     [pscustomobject]@{ CsvName='05_SharedMailboxes.csv';    Label='Shared Mailboxes';      KeyField='PrimarySmtpAddress';   OnPrem=$true  }
@@ -642,7 +642,7 @@ function Show-HideAddressBookUI {
 
                         try {
                             switch ($csvName) {
-                                '02_Mailboxes.csv'          { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                                '02_ADUsers.csv'          { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
                                 '03_DistributionGroups.csv' { Set-DistributionGroup -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
                                 '04_MailContacts.csv'       { Set-MailContact       -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
                                 '05_SharedMailboxes.csv'    { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
@@ -828,7 +828,7 @@ if ($DiscoveryFolder) {
 
             try {
                 switch ($sec.CsvName) {
-                    '02_Mailboxes.csv'          { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                    '02_ADUsers.csv'          { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
                     '03_DistributionGroups.csv' { Set-DistributionGroup -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
                     '04_MailContacts.csv'       { Set-MailContact       -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
                     '05_SharedMailboxes.csv'    { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
