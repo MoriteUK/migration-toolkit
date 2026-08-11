@@ -560,12 +560,12 @@ function Show-DiscoveryMenu {
 
         try {
             $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($Cmd))
-            Write-Log "Launching pwsh.exe (UseShellExecute, normal window)"
+            Write-Log "Launching pwsh.exe (normal window)"
 
-            # UseShellExecute = $true gives the child its own console window so MSAL
-            # uses that process's HWND for OAuth instead of finding this form's HWND.
-            # WindowStyle must stay Normal (not Minimized) — a minimized window has no
-            # visible HWND for the WAM broker to parent its sign-in dialog to.
+            # The child needs its own console window so MSAL uses that process's HWND for OAuth
+            # instead of finding this form's HWND. WindowStyle must stay Normal (not Minimized) —
+            # a minimized window has no visible HWND for the WAM broker to parent its sign-in
+            # dialog to.
             # NOTE: as of search-domain.ps1 v2.12.0, WAM is disabled outright before Graph/EXO
             # connect (Set-MgGraphOption -DisableLoginByWAM / Connect-ExchangeOnline -DisableWAM)
             # rather than relying on this window being parentable, because the device-code
@@ -575,10 +575,16 @@ function Show-DiscoveryMenu {
             # needs somewhere to parent from, and it's harmless either way.
             # Output is captured by tailing the _Search-M365Domain_*.log file that
             # search-domain.ps1 writes to the output folder.
+            # UseShellExecute=$true resolves through the OS's default handler for .exe files,
+            # which on Windows 11 is Windows Terminal — its GPU-accelerated rendering can fail to
+            # initialize over an RDP session, silently killing the hosted process. UseShellExecute
+            # =$false with CreateNoWindow=$false still gets its own real console/HWND (via
+            # conhost, not Windows Terminal), which doesn't depend on GPU acceleration.
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName        = 'pwsh.exe'
             $psi.Arguments       = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
-            $psi.UseShellExecute = $true
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow  = $false
             $psi.WindowStyle     = [System.Diagnostics.ProcessWindowStyle]::Normal
 
             $proc = [System.Diagnostics.Process]::Start($psi)

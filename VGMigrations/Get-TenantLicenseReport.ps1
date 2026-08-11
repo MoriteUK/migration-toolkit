@@ -521,7 +521,15 @@ foreach ($rec in $tenantRecords) {
                 $psi = New-Object System.Diagnostics.ProcessStartInfo
                 $psi.FileName        = 'pwsh.exe'
                 $psi.Arguments       = "-NoProfile -ExecutionPolicy Bypass -File `"$workerScript`" -TenantId `"$($rec.TenantId)`" -OutputJsonPath `"$workerOutput`""
-                $psi.UseShellExecute = $true
+                # UseShellExecute launches via the OS's default handler for .exe files, which on
+                # Windows 11 is Windows Terminal — its GPU-accelerated rendering can fail to
+                # initialize over an RDP session, silently killing the hosted process before it
+                # ever reaches its own try/catch (observed as the worker producing no output file
+                # at all, with exit code -1073741510 / STATUS_CONTROL_C_EXIT). Setting
+                # UseShellExecute=$false uses the plain CreateProcess console path (conhost),
+                # which doesn't depend on GPU acceleration and works reliably over RDP.
+                $psi.UseShellExecute = $false
+                $psi.CreateNoWindow  = $false
                 $psi.WindowStyle     = [System.Diagnostics.ProcessWindowStyle]::Normal
 
                 $proc = [System.Diagnostics.Process]::Start($psi)

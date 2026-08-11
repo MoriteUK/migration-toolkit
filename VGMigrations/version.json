@@ -1,7 +1,16 @@
 {
-  "version": "2.9.69",
+  "version": "2.9.70",
   "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.70",
+      "date": "2026-08-11",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: Fixed every interactive sign-in fallback dying with 'Isolated sign-in window closed without producing a result (exit code -1073741510)' over RDP — UseShellExecute=$true resolves through Windows' default terminal handler (Windows Terminal on Win11), whose GPU-accelerated rendering can fail to initialize over RDP and kill the hosted process before it runs; switched to UseShellExecute=$false, which uses the plain conhost console path instead",
+        "discovery-menu.ps1: Same fix applied to its isolated MSAL sign-in window spawn",
+        "Fixed config.json.example still showing the old stale Tenant IDs.xlsx path"
+      ]
+    },
     {
       "version": "2.9.69",
       "date": "2026-08-11",
