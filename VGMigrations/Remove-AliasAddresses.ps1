@@ -1,8 +1,18 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Remove-AliasAddresses.ps1 — Strips alias (secondary smtp:) and IM (SIP/EUM) addresses
-    from Exchange Online recipients listed in discovery CSVs.
+    Remove-AliasAddresses.ps1 — Strips alias (secondary smtp:) and IM (SIP/EUM) addresses from
+    recipients listed in discovery CSVs, checking on-prem AD and Exchange Online.
+
+.DESCRIPTION
+    On-prem AD is tried first for hybrid/synced objects (everything except M365 Groups, which
+    are cloud-native). Exchange Online is still checked too regardless of the on-prem result —
+    some addresses (notably Teams/Skype-for-Business-Online auto-generated SIP addresses) are
+    provisioned entirely cloud-side and never appear in on-prem proxyAddresses at all, even
+    though the object itself is DirSync'd. When Exchange Online refuses an edit because the
+    object is synchronized from on-premises, that's reported as "PROTECTED" rather than a
+    generic failure — it means the address only exists in the cloud on an object EXO won't let
+    you edit directly.
 
 .PARAMETER DiscoveryFolder
     Path to the folder containing discovery CSV files (02_Mailboxes, 03_DistributionGroups, etc.)
@@ -53,13 +63,45 @@ function _RawLog {
 
 _RawLog "=== Remove-AliasAddresses.ps1 started  PID=$PID  PSVersion=$($PSVersionTable.PSVersion) ==="
 
+# OnPrem=$false for M365 Groups — cloud-native, no on-premises AD equivalent, always via EXO.
+# Everything else may be a hybrid, AD-synced object — tried on-prem first (see
+# Update-AliasesOnPrem), because Exchange Online outright refuses to modify EmailAddresses on a
+# DirSync'd object ("out of the current user's write scope... should be performed on the object
+# in your on-premises organization") regardless of which specific address is being changed.
 $script:SectionDefs = @(
-    [pscustomobject]@{ CsvName='02_Mailboxes.csv';          Label='Mailboxes';           KeyField='UserPrincipalName';    GetCmd='Get-Mailbox';           SetCmd='Set-Mailbox'           }
-    [pscustomobject]@{ CsvName='03_DistributionGroups.csv'; Label='Distribution Groups'; KeyField='PrimarySmtpAddress';   GetCmd='Get-DistributionGroup'; SetCmd='Set-DistributionGroup' }
-    [pscustomobject]@{ CsvName='04_MailContacts.csv';       Label='Mail Contacts';       KeyField='ExternalEmailAddress'; GetCmd='Get-MailContact';       SetCmd='Set-MailContact'       }
-    [pscustomobject]@{ CsvName='05_SharedMailboxes.csv';    Label='Shared Mailboxes';    KeyField='PrimarySmtpAddress';   GetCmd='Get-Mailbox';           SetCmd='Set-Mailbox'           }
-    [pscustomobject]@{ CsvName='06_M365Groups.csv';         Label='M365 Groups';         KeyField='PrimarySmtpAddress';   GetCmd='Get-UnifiedGroup';      SetCmd='Set-UnifiedGroup'      }
+    [pscustomobject]@{ CsvName='02_Mailboxes.csv';          Label='Mailboxes';           KeyField='UserPrincipalName';    GetCmd='Get-Mailbox';           SetCmd='Set-Mailbox';           OnPrem=$true  }
+    [pscustomobject]@{ CsvName='03_DistributionGroups.csv'; Label='Distribution Groups'; KeyField='PrimarySmtpAddress';   GetCmd='Get-DistributionGroup'; SetCmd='Set-DistributionGroup'; OnPrem=$true  }
+    [pscustomobject]@{ CsvName='04_MailContacts.csv';       Label='Mail Contacts';       KeyField='ExternalEmailAddress'; GetCmd='Get-MailContact';       SetCmd='Set-MailContact';       OnPrem=$true  }
+    [pscustomobject]@{ CsvName='05_SharedMailboxes.csv';    Label='Shared Mailboxes';    KeyField='PrimarySmtpAddress';   GetCmd='Get-Mailbox';           SetCmd='Set-Mailbox';           OnPrem=$true  }
+    [pscustomobject]@{ CsvName='06_M365Groups.csv';         Label='M365 Groups';         KeyField='PrimarySmtpAddress';   GetCmd='Get-UnifiedGroup';      SetCmd='Set-UnifiedGroup';      OnPrem=$false }
 )
+
+$script:AdAvailable = $false
+try { Import-Module ActiveDirectory -ErrorAction Stop; $script:AdAvailable = $true }
+catch { }
+
+# Looks the identity up in on-prem AD (by mail or UserPrincipalName) and, if found, applies the
+# same Split-Addresses removal directly to its proxyAddresses attribute. Returns $null if the
+# object isn't found on-prem (or AD isn't available) so the caller falls back to Exchange Online.
+function Update-AliasesOnPrem {
+    param([string]$Identity, [string]$FilterDomain, [bool]$DoAliases, [bool]$DoSIP, [switch]$WhatIfMode)
+    if (-not $script:AdAvailable) { return $null }
+    try {
+        $obj = Get-ADObject -Filter "mail -eq '$Identity' -or userPrincipalName -eq '$Identity'" -Properties proxyAddresses -ErrorAction Stop | Select-Object -First 1
+        if (-not $obj) { return $null }
+
+        $current = @($obj.proxyAddresses)
+        $split   = Split-Addresses -Addresses $current -FilterDomain $FilterDomain -DoAliases $DoAliases -DoSIP $DoSIP
+        if ($split.Remove.Count -eq 0) { return [pscustomobject]@{ Found = $true; Removed = @() } }
+
+        if (-not $WhatIfMode) {
+            Set-ADObject -Identity $obj.DistinguishedName -Replace @{ proxyAddresses = $split.Keep } -ErrorAction Stop
+        }
+        return [pscustomobject]@{ Found = $true; Removed = $split.Remove }
+    } catch {
+        return $null
+    }
+}
 
 # Returns which addresses to keep and which to remove.
 # Keeps SMTP: (primary) and any type not selected for removal.
@@ -120,7 +162,8 @@ $scopeMsg = ($typeList -join ' and ') + $(if ($Domain) { " matching @$Domain" } 
 Write-Host "=== Remove Alias Addresses$(if ($WhatIf) { ' [WhatIf]' }) ==="
 Write-Host "Discovery folder : $discFolder"
 Write-Host "Removing         : $scopeMsg"
-_RawLog "DiscoveryFolder=$discFolder  Domain=$Domain  SkipAliases=$SkipAliases  SkipSIP=$SkipSIP  WhatIf=$WhatIf"
+Write-Host $(if ($script:AdAvailable) { 'ActiveDirectory module loaded — on-prem objects checked first.' } else { 'ActiveDirectory module not available — all objects handled via Exchange Online only.' })
+_RawLog "DiscoveryFolder=$discFolder  Domain=$Domain  SkipAliases=$SkipAliases  SkipSIP=$SkipSIP  WhatIf=$WhatIf  AdAvailable=$($script:AdAvailable)"
 
 $mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
 if (-not $mod) {
@@ -158,11 +201,31 @@ foreach ($sec in $script:SectionDefs) {
         }
     }
 
-    $ok = 0; $fail = 0; $nochange = 0
+    $ok = 0; $fail = 0; $nochange = 0; $protected = 0
 
     foreach ($r in $rows) {
         $identity = $r.($sec.KeyField)
         if (-not $identity) { continue }
+
+        # Try on-prem AD first. Note this alone isn't sufficient for hybrid objects: some
+        # addresses (notably Teams/Skype-for-Business-Online auto-generated SIP addresses) are
+        # provisioned entirely cloud-side and never appear in on-prem proxyAddresses at all, even
+        # though the object itself is DirSync'd — so Exchange Online is still checked below
+        # regardless of what happened on-prem.
+        $onPremResult = $null
+        if ($sec.OnPrem) {
+            $onPremResult = Update-AliasesOnPrem -Identity $identity -FilterDomain $Domain -DoAliases (-not $SkipAliases) -DoSIP (-not $SkipSIP) -WhatIfMode:$WhatIf
+            if ($onPremResult -and $onPremResult.Removed.Count -gt 0) {
+                $removeList = $onPremResult.Removed -join ', '
+                if ($WhatIf) {
+                    Write-Host "  WhatIf    : $identity  would remove (on-prem AD): $removeList"
+                    _RawLog "WHATIF-ONPREM $identity  remove=[$removeList]"
+                } else {
+                    Write-Host "  Removed   : $identity  (on-prem AD)  [$removeList]"
+                    _RawLog "OK-ONPREM $identity  removed=[$removeList]"
+                }
+            }
+        }
 
         try {
             $obj     = & $sec.GetCmd -Identity $identity -ErrorAction Stop
@@ -170,32 +233,49 @@ foreach ($sec in $script:SectionDefs) {
             $split   = Split-Addresses -Addresses $current -FilterDomain $Domain -DoAliases (-not $SkipAliases) -DoSIP (-not $SkipSIP)
 
             if ($split.Remove.Count -eq 0) {
-                Write-Host "  No change : $identity"
-                $nochange++
+                if ($onPremResult -and $onPremResult.Removed.Count -gt 0) { $ok++ } else { Write-Host "  No change : $identity"; $nochange++ }
                 continue
             }
 
             $removeList = $split.Remove -join ', '
 
             if ($WhatIf) {
-                Write-Host "  WhatIf    : $identity  would remove: $removeList"
+                Write-Host "  WhatIf    : $identity  would remove (Exchange Online): $removeList"
                 _RawLog "WHATIF $identity  remove=[$removeList]"
                 $ok++
             } else {
-                & $sec.SetCmd -Identity $identity -EmailAddresses $split.Keep -ErrorAction Stop
-                Write-Host "  Removed   : $identity  [$removeList]"
-                _RawLog "OK $identity  removed=[$removeList]"
-                $ok++
+                try {
+                    & $sec.SetCmd -Identity $identity -EmailAddresses $split.Keep -ErrorAction Stop
+                    Write-Host "  Removed   : $identity  (Exchange Online)  [$removeList]"
+                    _RawLog "OK $identity  removed=[$removeList]"
+                    $ok++
+                } catch {
+                    $msg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+                    if ($msg -match "write scope|synchronized from your on-premises") {
+                        Write-Host "  PROTECTED : $identity — [$removeList] exist only in Exchange Online on a DirSync'd object EXO won't let this edit through; likely needs Teams/Skype for Business Online admin tools, or will clear once directory sync ends for this domain"
+                        _RawLog "PROTECTED $identity  remove=[$removeList]  $msg"
+                        $protected++
+                    } else {
+                        Write-Host "  FAILED    : $identity — $msg"
+                        _RawLog "FAIL $identity  $msg"
+                        $fail++
+                    }
+                }
             }
         } catch {
             $msg = $_.Exception.Message.Split([Environment]::NewLine)[0]
-            Write-Host "  FAILED    : $identity — $msg"
-            _RawLog "FAIL $identity  $msg"
-            $fail++
+            if ($onPremResult -and $onPremResult.Removed.Count -gt 0) {
+                Write-Host "  (Removed on-prem AD; could not verify Exchange Online for $identity — $msg)"
+                $ok++
+            } else {
+                Write-Host "  FAILED    : $identity — $msg"
+                _RawLog "FAIL $identity  $msg"
+                $fail++
+            }
         }
     }
 
-    Write-Host "  $($sec.Label): $ok processed  |  $nochange unchanged  |  $fail failed"
+    Write-Host "  $($sec.Label): $ok processed  |  $nochange unchanged  |  $protected hybrid-protected  |  $fail failed"
 }
 
 if ($exoConnected) {

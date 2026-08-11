@@ -89,12 +89,15 @@ if (-not $_libLoaded) {
 }
 
 # ── Section definitions — only the object types that support HiddenFromAddressListsEnabled ──
+# OnPrem=$false for M365 Groups/Teams — those are cloud-native objects with no on-premises AD
+# equivalent, so they always go through Exchange Online. Everything else may be a hybrid,
+# AD-synced object, so it's tried on-prem first (see Set-HiddenOnPrem).
 $script:SectionDefs = @(
-    [pscustomobject]@{ CsvName='02_Mailboxes.csv';          Label='Mailboxes';             KeyField='UserPrincipalName' }
-    [pscustomobject]@{ CsvName='03_DistributionGroups.csv'; Label='Distribution Groups';   KeyField='PrimarySmtpAddress' }
-    [pscustomobject]@{ CsvName='04_MailContacts.csv';       Label='Mail Contacts';         KeyField='ExternalEmailAddress' }
-    [pscustomobject]@{ CsvName='05_SharedMailboxes.csv';    Label='Shared Mailboxes';      KeyField='PrimarySmtpAddress' }
-    [pscustomobject]@{ CsvName='06_M365Groups.csv';         Label='M365 Groups (+ Teams)'; KeyField='PrimarySmtpAddress' }
+    [pscustomobject]@{ CsvName='02_Mailboxes.csv';          Label='Mailboxes';             KeyField='UserPrincipalName';    OnPrem=$true  }
+    [pscustomobject]@{ CsvName='03_DistributionGroups.csv'; Label='Distribution Groups';   KeyField='PrimarySmtpAddress';   OnPrem=$true  }
+    [pscustomobject]@{ CsvName='04_MailContacts.csv';       Label='Mail Contacts';         KeyField='ExternalEmailAddress'; OnPrem=$true  }
+    [pscustomobject]@{ CsvName='05_SharedMailboxes.csv';    Label='Shared Mailboxes';      KeyField='PrimarySmtpAddress';   OnPrem=$true  }
+    [pscustomobject]@{ CsvName='06_M365Groups.csv';         Label='M365 Groups (+ Teams)'; KeyField='PrimarySmtpAddress';   OnPrem=$false }
 )
 
 function Show-HideAddressBookUI {
@@ -550,6 +553,25 @@ function Show-HideAddressBookUI {
                 }
             }
 
+            # On-prem AD is tried first for hybrid/synced objects — in a hybrid tenant,
+            # HiddenFromAddressListsEnabled in Exchange Online is sourced from on-prem AD's
+            # msExchHideFromAddressLists and gets overwritten back by the next Azure AD Connect
+            # sync if only set in the cloud. Non-fatal if AD isn't available (cloud-only tenant).
+            $adAvailable = $false
+            try { Import-Module ActiveDirectory -ErrorAction Stop; $adAvailable = $true; QLog 'ActiveDirectory module loaded — on-prem objects will be hidden there first.' 'OK' }
+            catch { QLog 'ActiveDirectory module not available — all objects will be hidden via Exchange Online.' 'WARN' }
+
+            function Set-HiddenOnPrem {
+                param([string]$Identity)
+                if (-not $adAvailable) { return $false }
+                try {
+                    $obj = Get-ADObject -Filter "mail -eq '$Identity' -or userPrincipalName -eq '$Identity'" -Properties msExchHideFromAddressLists -ErrorAction Stop | Select-Object -First 1
+                    if (-not $obj) { return $false }
+                    Set-ADObject -Identity $obj.DistinguishedName -Replace @{ msExchHideFromAddressLists = $true } -ErrorAction Stop
+                    return $true
+                } catch { return $false }
+            }
+
             function Read-SectionCsv {
                 param([string]$CsvName)
                 $path = Join-Path $discoveryFolder $CsvName
@@ -596,36 +618,45 @@ function Show-HideAddressBookUI {
                     $rows = Read-SectionCsv $csvName
                     if (-not $rows) { continue }
 
-                    $connected = $whatIf -or (Ensure-ExoConnected)
-                    if (-not $connected) { $rs.Progress += $rows.Count; continue }
-
-                    $ok = 0; $fail = 0
+                    $ok = 0; $fail = 0; $onPrem = 0
 
                     foreach ($r in $rows) {
                         $identity = $r.($sec.KeyField)
 
                         if ($whatIf) {
-                            QLog "WhatIf: would hide $identity  [$($sec.Label)]" 'WARN'
+                            $viaOnPrem = $sec.OnPrem -and $adAvailable -and (Get-ADObject -Filter "mail -eq '$identity' -or userPrincipalName -eq '$identity'" -ErrorAction SilentlyContinue | Select-Object -First 1)
+                            QLog "WhatIf: would hide $identity  [$($sec.Label)]$(if ($viaOnPrem) { ' — on-prem AD' } else { ' — Exchange Online' })" 'WARN'
                             $ok++
-                        } else {
-                            try {
-                                switch ($csvName) {
-                                    '02_Mailboxes.csv'          { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                                    '03_DistributionGroups.csv' { Set-DistributionGroup -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                                    '04_MailContacts.csv'       { Set-MailContact       -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                                    '05_SharedMailboxes.csv'    { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                                    '06_M365Groups.csv'         { Set-UnifiedGroup     -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                                }
-                                QLog "HIDDEN  $identity  [$($sec.Label)]" 'OK'
-                                $ok++
-                            } catch {
-                                QLog "FAILED  ${identity}: $($_.Exception.Message.Split([Environment]::NewLine)[0])" 'ERROR'
-                                $fail++
+                            $rs.Progress++
+                            continue
+                        }
+
+                        if ($sec.OnPrem -and (Set-HiddenOnPrem -Identity $identity)) {
+                            QLog "HIDDEN (on-prem AD)  $identity  [$($sec.Label)]" 'OK'
+                            $ok++; $onPrem++
+                            $rs.Progress++
+                            continue
+                        }
+
+                        if (-not (Ensure-ExoConnected)) { $rs.Progress++; $fail++; continue }
+
+                        try {
+                            switch ($csvName) {
+                                '02_Mailboxes.csv'          { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                                '03_DistributionGroups.csv' { Set-DistributionGroup -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                                '04_MailContacts.csv'       { Set-MailContact       -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                                '05_SharedMailboxes.csv'    { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                                '06_M365Groups.csv'         { Set-UnifiedGroup     -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
                             }
+                            QLog "HIDDEN (Exchange Online)  $identity  [$($sec.Label)]" 'OK'
+                            $ok++
+                        } catch {
+                            QLog "FAILED  ${identity}: $($_.Exception.Message.Split([Environment]::NewLine)[0])" 'ERROR'
+                            $fail++
                         }
                         $rs.Progress++
                     }
-                    QLog "$($sec.Label) — hidden: $ok  |  failed: $fail" $(if ($fail -eq 0) {'OK'} else {'WARN'})
+                    QLog "$($sec.Label) — hidden: $ok ($onPrem on-prem)  |  failed: $fail" $(if ($fail -eq 0) {'OK'} else {'WARN'})
                 }
 
                 QLog '=== All selected sections processed ===' 'OK'
@@ -721,6 +752,26 @@ if ($DiscoveryFolder) {
     Write-Host "=== Hide from Address Book$(if ($WhatIf) { ' [WhatIf]' }) ==="
     Write-Host "Discovery folder: $discFolder"
 
+    # On-prem AD is tried first for hybrid/synced objects — in a hybrid tenant,
+    # HiddenFromAddressListsEnabled in Exchange Online is sourced from on-prem AD's
+    # msExchHideFromAddressLists and gets overwritten back by the next Azure AD Connect sync if
+    # only set in the cloud. Non-fatal if AD isn't available (cloud-only tenant) — everything
+    # just falls through to Exchange Online as before.
+    $adAvailable = $false
+    try { Import-Module ActiveDirectory -ErrorAction Stop; $adAvailable = $true; Write-Host 'ActiveDirectory module loaded — on-prem objects will be hidden there first.' }
+    catch { Write-Host 'ActiveDirectory module not available — all objects will be hidden via Exchange Online.' }
+
+    function Set-HiddenOnPrem {
+        param([string]$Identity)
+        if (-not $adAvailable) { return $false }
+        try {
+            $obj = Get-ADObject -Filter "mail -eq '$Identity' -or userPrincipalName -eq '$Identity'" -Properties msExchHideFromAddressLists -ErrorAction Stop | Select-Object -First 1
+            if (-not $obj) { return $false }
+            Set-ADObject -Identity $obj.DistinguishedName -Replace @{ msExchHideFromAddressLists = $true } -ErrorAction Stop
+            return $true
+        } catch { return $false }
+    }
+
     $mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
     if (-not $mod) {
         Write-Host 'ERROR: ExchangeOnlineManagement module is not installed.'
@@ -744,45 +795,53 @@ if ($DiscoveryFolder) {
 
         if ($rows.Count -eq 0) { continue }
 
-        if (-not $WhatIf -and -not $exoConnected) {
-            Write-Host 'Connecting to Exchange Online — sign in when the browser opens...'
-            try {
-                $cmds = @('Set-Mailbox','Set-MailContact','Set-DistributionGroup','Set-UnifiedGroup')
-                Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
-                $exoConnected = $true
-                Write-Host 'Exchange Online connected.'
-            } catch {
-                Write-Host "ERROR: Failed to connect to Exchange Online: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
-                exit 1
-            }
-        }
-
-        $ok = 0; $fail = 0
+        $ok = 0; $fail = 0; $onPrem = 0
         foreach ($r in $rows) {
             $identity = $r.($sec.KeyField)
             if (-not $identity) { continue }
 
             if ($WhatIf) {
-                Write-Host "  WhatIf: would hide $identity  [$($sec.Label)]"
+                $viaOnPrem = $sec.OnPrem -and $adAvailable -and (Get-ADObject -Filter "mail -eq '$identity' -or userPrincipalName -eq '$identity'" -ErrorAction SilentlyContinue | Select-Object -First 1)
+                Write-Host "  WhatIf: would hide $identity  [$($sec.Label)]$(if ($viaOnPrem) { ' — on-prem AD' } else { ' — Exchange Online' })"
                 $ok++
-            } else {
+                continue
+            }
+
+            if ($sec.OnPrem -and (Set-HiddenOnPrem -Identity $identity)) {
+                Write-Host "  Hidden (on-prem AD): $identity"
+                $ok++; $onPrem++
+                continue
+            }
+
+            if (-not $exoConnected) {
+                Write-Host 'Connecting to Exchange Online — sign in when the browser opens...'
                 try {
-                    switch ($sec.CsvName) {
-                        '02_Mailboxes.csv'          { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                        '03_DistributionGroups.csv' { Set-DistributionGroup -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                        '04_MailContacts.csv'       { Set-MailContact       -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                        '05_SharedMailboxes.csv'    { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                        '06_M365Groups.csv'         { Set-UnifiedGroup     -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
-                    }
-                    Write-Host "  Hidden: $identity"
-                    $ok++
+                    $cmds = @('Set-Mailbox','Set-MailContact','Set-DistributionGroup','Set-UnifiedGroup')
+                    Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
+                    $exoConnected = $true
+                    Write-Host 'Exchange Online connected.'
                 } catch {
-                    Write-Host "  FAILED: $identity — $($_.Exception.Message.Split([Environment]::NewLine)[0])"
-                    $fail++
+                    Write-Host "ERROR: Failed to connect to Exchange Online: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+                    exit 1
                 }
             }
+
+            try {
+                switch ($sec.CsvName) {
+                    '02_Mailboxes.csv'          { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                    '03_DistributionGroups.csv' { Set-DistributionGroup -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                    '04_MailContacts.csv'       { Set-MailContact       -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                    '05_SharedMailboxes.csv'    { Set-Mailbox          -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                    '06_M365Groups.csv'         { Set-UnifiedGroup     -Identity $identity -HiddenFromAddressListsEnabled $true -Confirm:$false -ErrorAction Stop }
+                }
+                Write-Host "  Hidden (Exchange Online): $identity"
+                $ok++
+            } catch {
+                Write-Host "  FAILED: $identity — $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+                $fail++
+            }
         }
-        Write-Host "  $($sec.Label): $ok hidden  |  $fail failed"
+        Write-Host "  $($sec.Label): $ok hidden ($onPrem on-prem)  |  $fail failed"
     }
 
     if ($exoConnected) {
