@@ -91,7 +91,7 @@
 #>
 
 param(
-    [string]$TenantsFile = 'C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations\Tenant IDs.xlsx',
+    [string]$TenantsFile = 'C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Tenant IDs.xlsx',
 
     [string]$DomainColumn    = 'A',
     [string]$TenantIdColumn  = 'B',

@@ -1,7 +1,15 @@
 {
-  "version": "2.9.67",
+  "version": "2.9.68",
   "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.68",
+      "date": "2026-08-11",
+      "changes": [
+        "Fixed stale default Tenant IDs.xlsx path (C:\\Users\\Andy White\\Volaris Group\\...) across Check-TenantBaselineStatus.ps1, Get-TenantLicenseReport.ps1, Check-DomainMigrationReadiness.ps1, discovery-menu.ps1, New-Package.ps1, and the Domain Verification Check UI panel — corrected to C:\\Users\\andyw\\OneDrive - Volaris Group\\...- 3. Execution\\M365 Migrations",
+        "License Report and Domain Verification Check were silently pointing at a nonexistent path with no way to override it since the file-picker UI field was removed in a recent update"
+      ]
+    },
     {
       "version": "2.9.67",
       "date": "2026-08-11",

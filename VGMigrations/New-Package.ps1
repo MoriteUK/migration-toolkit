@@ -27,7 +27,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$defaultDir = 'C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations\Scripts\Avepoint'
+$defaultDir = 'C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Scripts\Avepoint'
 
 function Write-Step($message) { Write-Host "`n==> $message" -ForegroundColor Cyan }
 function Write-Ok  ($message) { Write-Host "    [OK]   $message" -ForegroundColor Green }

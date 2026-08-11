@@ -62,7 +62,7 @@ if (-not $_libLoaded) {
     }
 }
 
-$OutputDir    = 'C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations\2. InProgress Migrations'
+$OutputDir    = 'C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\2. InProgress Migrations'
 $SingleScript = Join-Path $PSScriptRoot 'search-domain.ps1'
 $MultiScript  = Join-Path $PSScriptRoot 'run-multiple-domains.ps1'
 
