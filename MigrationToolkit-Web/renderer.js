@@ -3522,7 +3522,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sipModeEl) {
     const sipToggle = () => {
       const isRemove = sipModeEl.value === 'Remove';
-      document.getElementById('sipRemoveFields').style.display   = isRemove ? '' : 'none';
       document.getElementById('sipNewDomainGroup').style.display = isRemove ? 'none' : '';
     };
     sipModeEl.addEventListener('change', sipToggle);
@@ -3536,8 +3535,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const mode      = document.getElementById('sipMode').value;
       const oldDomain = document.getElementById('sipOldDomain').value.trim();
       const newDomain = document.getElementById('sipNewDomain').value.trim();
-      const skuId     = document.getElementById('sipLicenceSkuId').value.trim();
-      const waitMins  = parseInt(document.getElementById('sipWaitMinutes').value, 10) || 5;
       const whatIf    = document.getElementById('sipWhatIf').checked;
 
       if (!oldDomain) { alert('Please enter the old domain.'); return; }
@@ -3554,9 +3551,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const args = ['-OldDomain', oldDomain, '-Mode', mode];
       if (mode === 'Replace') {
         args.push('-NewDomain', newDomain);
-      } else {
-        if (skuId) args.push('-LicenseSkuId', skuId);
-        args.push('-WaitMinutes', String(waitMins));
       }
       if (whatIf) args.push('-WhatIf');
 

@@ -1,7 +1,17 @@
 {
-  "version": "2.9.63",
-  "releaseDate": "2026-08-10",
+  "version": "2.9.64",
+  "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.64",
+      "date": "2026-08-11",
+      "changes": [
+        "Update-SIPDomain.ps1: Now checks both on-premises AD (proxyAddresses) and Exchange Online, and updates whichever location actually holds the matching SIP/EUM/IM address per recipient",
+        "Update-SIPDomain.ps1: Fixes cloud-migrated tenants (e.g. mailboxes already moved to Exchange Online) showing 0 matches when the on-prem-only search found nothing",
+        "Update-SIPDomain.ps1: Added -SkipOnPrem and -SkipExchangeOnline switches for known single-location tenants",
+        "MigrationToolkit-Web: Removed stale 'Licence SKU ID' / 'Wait (minutes)' fields from the SIP/IM Addresses panel — leftover from the pre-v2.9.49 temp-license flow, they were being passed as -LicenseSkuId/-WaitMinutes to a script that no longer accepts them, breaking every Remove-mode run"
+      ]
+    },
     {
       "version": "2.9.63",
       "date": "2026-08-10",
