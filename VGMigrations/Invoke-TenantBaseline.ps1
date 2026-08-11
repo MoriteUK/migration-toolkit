@@ -26,7 +26,7 @@ param(
 
 # Default log locations live under the app's own writable log folder (not the
 # script folder, which is read-only in a perMachine install).
-$script:BaselineLogDir = Join-Path $env:APPDATA 'FlyMigration\Logs'
+$script:BaselineLogDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $script:BaselineLogDir)) { New-Item -ItemType Directory -Path $script:BaselineLogDir -Force | Out-Null }
 if (-not $LogPath) { $LogPath = Join-Path $script:BaselineLogDir "BaselineFullRun_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
 

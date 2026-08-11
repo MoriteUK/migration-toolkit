@@ -1,7 +1,16 @@
 {
-  "version": "2.9.75",
+  "version": "2.9.76",
   "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.76",
+      "date": "2026-08-11",
+      "changes": [
+        "All script-run logs (main.js's centralized per-run log, and every VGMigrations script's own internal log) now write to a shared OneDrive folder — C:\\Users\\andyw\\OneDrive - Andy White\\Contracts\\Jolera\\Migrations\\Logs — instead of each machine's local %APPDATA%\\FlyMigration\\Logs or VGMigrations\\logs, so logs from all 3 devices land in one place",
+        "The 'Open Logs' button (Settings) now opens the same shared folder",
+        "Remove-EntraUsers.ps1: Fixed Get-MgUser -Filter \"endsWith(...)\" failing with 'ConsistencyLevel:eventual header is missing' — added -ConsistencyLevel eventual -CountVariable, required by Microsoft Graph for the endsWith/startsWith advanced query operators"
+      ]
+    },
     {
       "version": "2.9.75",
       "date": "2026-08-11",

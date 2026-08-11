@@ -67,7 +67,7 @@ $SingleScript = Join-Path $PSScriptRoot 'search-domain.ps1'
 $MultiScript  = Join-Path $PSScriptRoot 'run-multiple-domains.ps1'
 
 # ── File logging (shadows lib.ps1 Write-Log which requires $script:rtbLog) ───
-$_logDir = Join-Path $PSScriptRoot 'logs'
+$_logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Force | Out-Null }
 $script:LogFile = Join-Path $_logDir "discovery-menu-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 function Write-Log {
@@ -551,7 +551,7 @@ function Show-DiscoveryMenu {
         }
 
         $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-        $script:discLogFile   = Join-Path (Join-Path $PSScriptRoot 'logs') "discovery-output-$stamp.log"
+        $script:discLogFile   = Join-Path ('C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs') "discovery-output-$stamp.log"
         $script:searchLogFile = $null
         $script:searchLogPos  = 0
         $rtbLog.Clear()

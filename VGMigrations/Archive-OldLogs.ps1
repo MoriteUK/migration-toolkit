@@ -11,7 +11,7 @@
 #>
 param(
     [int]$DaysOld = 7,
-    [string]$LogPath = (Join-Path $PSScriptRoot "logs")
+    [string]$LogPath = ('C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs')
 )
 
 try {

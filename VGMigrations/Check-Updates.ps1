@@ -28,7 +28,7 @@ $ErrorActionPreference = 'Stop'
 $ScriptRoot = $PSScriptRoot
 
 # ── Logging ────────────────────────────────────────────────────────────────────
-$_logDir = Join-Path $ScriptRoot 'logs'
+$_logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Force | Out-Null }
 $LogFile = Join-Path $_logDir "updates-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 

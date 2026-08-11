@@ -36,7 +36,7 @@ $env:AZURE_IDENTITY_DISABLE_BROKER = 'true'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-$_logDir = Join-Path $script:RootDir 'logs'
+$_logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Force | Out-Null }
 $script:LogFile = Join-Path $_logDir "update-upn-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 

@@ -433,7 +433,7 @@ function Show-ConnectionsForm {
     })
 
     $script:ctrl['BtnOpenLogs'].Add_Click({
-        $logsDir = Join-Path $PSScriptRoot 'logs'
+        $logsDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
         if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
         Start-Process explorer.exe $logsDir
         Set-Status "Opened: $logsDir"

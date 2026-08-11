@@ -575,7 +575,7 @@ function Move-OldLogs {
     #>
     param([int]$DaysOld = 7)
 
-    $logPath = Join-Path $PSScriptRoot "logs"
+    $logPath = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
     if (-not (Test-Path $logPath)) { return }
 
     # Create old folder if needed

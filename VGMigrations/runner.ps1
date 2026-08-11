@@ -7,7 +7,7 @@ function Show-MigrationRunnerForm {
 
     $script:ConfigPath         = Join-Path $env:APPDATA "FlyMigration\config.json"
     $script:WorkloadConfigPath = Join-Path $PSScriptRoot "workloads.json"
-    $script:LogDir             = Join-Path $PSScriptRoot "logs"
+    $script:LogDir             = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
     $script:LogFile            = Join-Path $script:LogDir ("FlyRunner_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
     if (-not (Test-Path $script:LogDir)) { New-Item -ItemType Directory -Path $script:LogDir -Force | Out-Null }
 
@@ -636,7 +636,7 @@ function Show-MigrationRunnerForm {
     }.GetNewClosure())
 
     $btnConnLogs.Add_Click({
-        $logsDir = Join-Path $PSScriptRoot 'logs'
+        $logsDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
         if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
         Start-Process explorer.exe $logsDir
     }.GetNewClosure())

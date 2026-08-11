@@ -59,7 +59,7 @@ param(
 
 $script:RootDir = $PSScriptRoot
 
-$_logDir = Join-Path $script:RootDir 'logs'
+$_logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Force | Out-Null }
 $logFile = Join-Path $_logDir "restore-proxy-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 function Log { param([string]$m) $ts = Get-Date -Format 'HH:mm:ss'; "$ts $m" | Tee-Object -FilePath $logFile -Append | Write-Host }

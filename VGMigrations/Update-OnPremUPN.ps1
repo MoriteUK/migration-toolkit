@@ -51,7 +51,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # ── Logging ───────────────────────────────────────────────────────────────────
-$_logDir = Join-Path $script:RootDir 'logs'
+$_logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Force | Out-Null }
 $script:LogFile = Join-Path $_logDir "update-onprem-upn-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 

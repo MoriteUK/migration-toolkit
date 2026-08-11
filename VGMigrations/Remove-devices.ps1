@@ -34,7 +34,7 @@ $libPath      = Join-Path $PSScriptRoot 'lib.ps1'
 $settingsPath = Join-Path $PSScriptRoot 'settings.ps1'
 
 # ── File logging — initialised before lib load so any load error is captured ──
-$_logDir = Join-Path $PSScriptRoot 'logs'
+$_logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Force | Out-Null }
 $script:LogFile = Join-Path $_logDir "remove-devices-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 

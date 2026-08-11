@@ -5,7 +5,7 @@
 Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
 
 # ── File logging — defined before dot-sourcing so startup errors are captured ─
-$_logDir = Join-Path $PSScriptRoot 'logs'
+$_logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Force | Out-Null }
 $script:LogFile = Join-Path $_logDir "main-menu-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 function Write-Log {

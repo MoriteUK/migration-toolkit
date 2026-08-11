@@ -115,7 +115,7 @@ try {
 } catch { Write-Error "Failed to import Fly.Client: $_"; exit 1 }
 
 # Set up log file
-$logsDir = Join-Path $env:APPDATA "FlyMigration\Logs"
+$logsDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
 $logFile = Join-Path $logsDir "workflow-$CustomerPrefix-$Workload-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 

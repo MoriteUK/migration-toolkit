@@ -10,6 +10,10 @@ const PS_SCRIPT_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'VGMigrations')
   : path.join(__dirname, '..', 'VGMigrations');
 
+// Shared OneDrive folder so script-run logs land in one place across every device, instead of
+// each machine's own local %APPDATA%\FlyMigration\Logs.
+const LOGS_DIR = 'C:\\Users\\andyw\\OneDrive - Andy White\\Contracts\\Jolera\\Migrations\\Logs';
+
 let mainWindow;
 
 function createWindow() {
@@ -69,7 +73,7 @@ function createWindow() {
 // Shared: open a timestamped log file for a script run
 function openScriptLog(scriptName) {
   const fs = require('fs');
-  const logsDir = path.join(process.env.APPDATA, 'FlyMigration', 'Logs');
+  const logsDir = LOGS_DIR;
   if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const base = scriptName.replace(/\.ps1$/i, '');
@@ -243,7 +247,7 @@ function registerIPCHandlers() {
     try {
       const { shell } = require('electron');
       const fs = require('fs');
-      const logsPath = path.join(process.env.APPDATA, 'FlyMigration', 'Logs');
+      const logsPath = LOGS_DIR;
       if (!fs.existsSync(logsPath)) fs.mkdirSync(logsPath, { recursive: true });
       shell.openPath(logsPath);
       return { success: true };

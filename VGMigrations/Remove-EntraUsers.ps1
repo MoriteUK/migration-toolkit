@@ -33,7 +33,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$outDir = if ($OutputFolder) { $OutputFolder.Trim().Trim('"') } else { Join-Path $PSScriptRoot 'logs' }
+$outDir = if ($OutputFolder) { $OutputFolder.Trim().Trim('"') } else { 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs' }
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -64,6 +64,7 @@ $props = @('Id','DisplayName','GivenName','Surname','UserPrincipalName','Mail',
            'MobilePhone','BusinessPhones','AssignedLicenses','ProxyAddresses',
            'OnPremisesSyncEnabled','CreatedDateTime','UsageLocation')
 $users = @(Get-MgUser -Filter "endsWith(userPrincipalName,'@$Domain')" -All `
+    -ConsistencyLevel eventual -CountVariable qCount `
     -Property $props -ErrorAction Stop)
 
 Log "Found $($users.Count) user(s) with UPN @$Domain"
