@@ -1,7 +1,15 @@
 {
-  "version": "2.9.68",
+  "version": "2.9.69",
   "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.69",
+      "date": "2026-08-11",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Fixed every tenant failing to authenticate with 'Could not load file or assembly Microsoft.Graph.Authentication ... Assembly with same name is already loaded' — the script called Get-MgOrganization (from Microsoft.Graph.Identity.DirectoryManagement) without pinning that module through Ensure-GraphModules.ps1, so PowerShell auto-loaded a mismatched version alongside the pinned Microsoft.Graph.Authentication",
+        "Check-TenantBaselineStatus.ps1: Now pins Microsoft.Graph.Identity.DirectoryManagement the same way Get-TenantLicenseReport.ps1 already does"
+      ]
+    },
     {
       "version": "2.9.68",
       "date": "2026-08-11",

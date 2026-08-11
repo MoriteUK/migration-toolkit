@@ -131,7 +131,7 @@ if (-not (Test-Path $TenantsFile)) {
     exit 1
 }
 
-. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1')
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Identity.DirectoryManagement')
 
 if (-not $OutputPath) {
     $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
