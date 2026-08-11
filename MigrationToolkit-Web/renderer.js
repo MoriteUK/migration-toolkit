@@ -1771,6 +1771,7 @@ function switchView(viewName) {
     'avepoint-monitor': 'avepointMonitorView',
     // Misc Scripts sub-views
     'misc-baseline': 'miscBaselineView',
+    'misc-baseline-status': 'miscBaselineStatusView',
     'misc-onedrive': 'miscOneDriveView',
     'misc-teams': 'miscTeamsView',
     'misc-deduplicate': 'miscDeduplicateView',
@@ -3271,6 +3272,48 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         tenantLicensesRunBtn.disabled = false;
         tenantLicensesRunBtn.textContent = '▶ Run License Report';
+      }
+    });
+  }
+
+  // ── Check Baseline Status ───────────────────────────────────────────────
+  const baselineStatusRunBtn = document.getElementById('baselineStatusRunBtn');
+  const baselineStatusLogPre = document.getElementById('baselineStatusLogPre');
+
+  function appendBaselineStatusLog(text) {
+    if (!baselineStatusLogPre) return;
+    const clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+    const fileMarker = clean.match(/##OPEN_FILE:(.+?)##/);
+    if (fileMarker) {
+      window.electronAPI.openFile(fileMarker[1].trim());
+      baselineStatusLogPre.textContent += clean.replace(/##OPEN_FILE:.+?##/g, '').replace(/^\n/, '');
+    } else {
+      baselineStatusLogPre.textContent += clean;
+    }
+    baselineStatusLogPre.scrollTop = baselineStatusLogPre.scrollHeight;
+  }
+
+  if (baselineStatusRunBtn) {
+    baselineStatusRunBtn.addEventListener('click', async () => {
+      const processAll = document.getElementById('baselineStatusProcessAll')?.checked;
+
+      baselineStatusRunBtn.disabled = true;
+      baselineStatusRunBtn.textContent = 'Running…';
+      if (baselineStatusLogPre) baselineStatusLogPre.textContent = '';
+
+      const args = [];
+      if (processAll) args.push('-ProcessAll');
+
+      window.electronAPI.onPsOutput(appendBaselineStatusLog);
+      try {
+        const result = await window.electronAPI.streamPowerShell('Check-TenantBaselineStatus.ps1', args);
+        appendBaselineStatusLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendBaselineStatusLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        baselineStatusRunBtn.disabled = false;
+        baselineStatusRunBtn.textContent = '▶ Run Baseline Status Check';
       }
     });
   }

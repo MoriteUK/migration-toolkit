@@ -688,6 +688,7 @@ try {
     $policies = @(
         '{"displayName":"Block Access Outside Approved Countries","state":"disabled","conditions":{"users":{"includeUsers":["All"]},"applications":{"includeApplications":["All"]},"locations":{"includeLocations":["All"],"excludeLocations":[]}},"grantControls":{"operator":"OR","builtInControls":["block"]}}'
         '{"displayName":"Block Legacy Authentication","state":"disabled","conditions":{"users":{"includeUsers":["All"]},"applications":{"includeApplications":["All"]},"clientAppTypes":["exchangeActiveSync","other"],"locations":{"includeLocations":["All"]}},"grantControls":{"operator":"OR","builtInControls":["block"]}}'
+        '{"displayName":"Block Device Code Flow","state":"disabled","conditions":{"users":{"includeUsers":["All"]},"applications":{"includeApplications":["All"]},"authenticationFlows":{"transferMethods":"deviceCodeFlow"},"locations":{"includeLocations":["All"]}},"grantControls":{"operator":"OR","builtInControls":["block"]}}'
         '{"displayName":"Require MFA for Admin Portals - 8hr","state":"disabled","conditions":{"users":{"includeUsers":["All"]},"applications":{"includeApplications":["MicrosoftAdminPortals"]},"locations":{"includeLocations":["All"]}},"grantControls":{"operator":"OR","builtInControls":["mfa"]},"sessionControls":{"signInFrequency":{"value":8,"type":"hours","isEnabled":true}}}'
         '{"displayName":"Require MFA for Admin Roles - 8hr","state":"disabled","conditions":{"users":{"includeRoles":["62e90394-69f5-4237-9190-012177145e10"]},"applications":{"includeApplications":["All"]},"locations":{"includeLocations":["All"]}},"grantControls":{"operator":"OR","builtInControls":["mfa"]},"sessionControls":{"signInFrequency":{"value":8,"type":"hours","isEnabled":true}}}'
         '{"displayName":"MFA for All Users - Browser Only - 8hr","state":"disabled","conditions":{"users":{"includeUsers":["all"]},"applications":{"includeApplications":["All"]},"clientAppTypes":["browser"],"locations":{"includeLocations":["All"]}},"grantControls":{"operator":"OR","builtInControls":["mfa"]},"sessionControls":{"signInFrequency":{"value":8,"type":"hours","isEnabled":true}}}'
@@ -990,6 +991,7 @@ try {
     $expectedPolicyNames = @(
         "Block Access Outside Approved Countries"
         "Block Legacy Authentication"
+        "Block Device Code Flow"
         "Require MFA for Admin Portals - 8hr"
         "Require MFA for Admin Roles - 8hr"
         "MFA for All Users - Browser Only - 8hr"

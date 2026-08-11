@@ -81,6 +81,9 @@
             <button type="button" class="sidebar-subitem" data-view="misc-baseline">
               <span class="sidebar-sublabel">Tenant Baseline Config</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-baseline-status">
+              <span class="sidebar-sublabel">Check Baseline Status</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="discovery-tenant-licenses">
               <span class="sidebar-sublabel">License Report</span>
             </button>
@@ -821,6 +824,33 @@
 
           <div id="baselineLog" style="margin-top:12px;">
             <pre id="baselineLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Check Baseline Status -->
+      <div id="miscBaselineStatusView" class="view-container hidden">
+        <h2 class="view-title">Check Baseline Status</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Check Baseline Config Across Multiple Tenants</h3>
+          <p class="form-help">Read-only — reports whether Tenant Baseline Config has already been applied in each tenant listed in <strong>Tenant IDs.xlsx</strong>, without changing anything. Uses the same stored app registration as License Report (no new app registration is created); tenants with no app registration on file are skipped. Exchange Online settings (EOP/ATP presets, transport rules, audit logging) aren't covered — those need a manual check. Writes one consolidated CSV, one row per tenant, and opens it automatically when done.</p>
+
+          <div style="margin-top:10px;">
+            <label class="form-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="baselineStatusProcessAll" style="cursor:pointer;">
+              <span>Process all tenants (ignore column N cutover status)</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-success btn-xs" id="baselineStatusRunBtn">
+              ▶ Run Baseline Status Check
+            </button>
+          </div>
+
+          <div id="baselineStatusLog" style="margin-top:12px;">
+            <pre id="baselineStatusLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
         </div>
       </div>

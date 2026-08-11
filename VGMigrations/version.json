@@ -1,7 +1,19 @@
 {
-  "version": "2.9.66",
+  "version": "2.9.67",
   "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.67",
+      "date": "2026-08-11",
+      "changes": [
+        "Added Check-TenantBaselineStatus.ps1: Read-only, multi-tenant report on whether Invoke-TenantBaseline.ps1's configuration has already been applied — authorization policy, admin consent workflow, Intune MDM scope, dynamic device groups, enrollment restrictions, BitLocker/Windows compliance, iOS/Android app protection, Conditional Access policy set, LAPS",
+        "Check-TenantBaselineStatus.ps1: Reuses the same per-tenant app registration as License Report (no new app registration created); tenants with none on file are skipped, no interactive fallback",
+        "Check-TenantBaselineStatus.ps1: A 403 on an individual check is reported as 'Unknown (insufficient permission)' rather than failing the tenant — the license-report app registration needs Policy.Read.All/Group.Read.All/DeviceManagementConfiguration.Read.All/DeviceManagementApps.Read.All/DeviceManagementServiceConfig.Read.All added for full results",
+        "Check-TenantBaselineStatus.ps1: Exchange Online settings (EOP/ATP presets, transport rules, audit logging) are not covered — app-only Graph credentials don't reach Exchange Online",
+        "Invoke-TenantBaseline.ps1: Added 'Block Device Code Flow' Conditional Access policy (disabled by default, same as the other baseline CA policies)",
+        "MigrationToolkit-Web: Added 'Check Baseline Status' under Misc Scripts"
+      ]
+    },
     {
       "version": "2.9.66",
       "date": "2026-08-11",
