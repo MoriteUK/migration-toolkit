@@ -67,7 +67,7 @@ if ($Mode -eq 'Replace') { Log "Replace with  : @$NewDomain" }
 
 $oldEsc = [regex]::Escape($OldDomain)
 $onPremOk = 0; $onPremFail = 0; $onPremNoChange = 0
-$exoOk = 0; $exoFail = 0; $exoNoChange = 0
+$exoOk = 0; $exoFail = 0; $exoNoChange = 0; $exoProtected = 0
 $onPremRan = $false; $exoRan = $false
 
 # ── Phase 1 — On-premises Active Directory ────────────────────────────────────
@@ -262,8 +262,14 @@ if ($SkipExchangeOnline) {
                 Log "    Updated OK"
                 $exoOk++
             } catch {
-                Log "    FAILED: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
-                $exoFail++
+                $msg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+                if ($msg -match 'write scope|synchronized from your on-premises') {
+                    Log "    PROTECTED: this address exists only in Exchange Online on a DirSync'd object — EXO won't let this edit through directly. It wasn't found in on-prem AD's proxyAddresses either (see the On-premises AD section above), which usually means it's a Teams/Skype-for-Business-Online auto-generated SIP address. May need Teams/Skype for Business Online admin tools, or will clear once directory sync ends for this domain."
+                    $exoProtected++
+                } else {
+                    Log "    FAILED: $msg"
+                    $exoFail++
+                }
             }
         }
     } catch {
@@ -281,7 +287,7 @@ if ($onPremRan) {
     Log "On-premises AD : updated $onPremOk  |  failed $onPremFail  |  skipped/unchanged $onPremNoChange"
 }
 if ($exoRan) {
-    Log "Exchange Online: updated $exoOk  |  failed $exoFail  |  skipped/unchanged $exoNoChange"
+    Log "Exchange Online: updated $exoOk  |  failed $exoFail  |  hybrid-protected $exoProtected  |  skipped/unchanged $exoNoChange"
 }
 if (-not $onPremRan -and -not $exoRan) {
     Log 'Neither on-premises AD nor Exchange Online could be searched — nothing was done.'
