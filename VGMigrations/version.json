@@ -1,7 +1,14 @@
 {
-  "version": "2.9.73",
+  "version": "2.9.74",
   "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.74",
+      "date": "2026-08-11",
+      "changes": [
+        "Clear-EmployeeId.ps1: Fixed 150/151 users showing NOT FOUND when the mapping CSV's Source domain had already been renamed on-prem earlier in the Domain Removal workflow — now falls back to matching by local-part (UserPrincipalName/mail/SamAccountName) when the exact pre-rename identity isn't found"
+      ]
+    },
     {
       "version": "2.9.73",
       "date": "2026-08-11",

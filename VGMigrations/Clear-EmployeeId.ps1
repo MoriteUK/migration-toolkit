@@ -10,6 +10,12 @@
     identity column (email/UPN), looks each user up in on-premise Active Directory by
     UserPrincipalName or mail, and clears (blanks) their EmployeeID attribute.
 
+    If the exact identity isn't found, falls back to matching by local-part (the portion before
+    "@") against UserPrincipalName, mail, or SamAccountName — the mapping CSV's Source column
+    always reflects the pre-rename domain, but on-prem AD may already have been updated to the
+    new domain by an earlier Domain Removal workflow step (Update On-Prem UPNs / Rename Domain)
+    by the time this runs.
+
     This is an on-premise AD operation, not a cloud/Entra ID one — it must run on a host that
     can reach a domain controller (a Domain Controller itself, or any machine with the
     ActiveDirectory RSAT module installed).
@@ -101,6 +107,19 @@ foreach ($identity in $identities) {
     try {
         $adUser = Get-ADUser -Filter "UserPrincipalName -eq '$identity' -or mail -eq '$identity'" -Properties EmployeeID -ErrorAction Stop |
             Select-Object -First 1
+
+        # Fall back to matching by local-part only if the exact identity isn't found — the
+        # mapping CSV's "Source" column always reflects the pre-rename domain, but on-prem AD's
+        # UserPrincipalName/mail may already have been updated to the new domain by an earlier
+        # step in the Domain Removal workflow (e.g. Update On-Prem UPNs / Rename Domain).
+        if (-not $adUser -and $identity -match '^([^@]+)@') {
+            $localPart = $Matches[1]
+            $adUser = Get-ADUser -Filter "UserPrincipalName -like '$localPart@*' -or mail -like '$localPart@*' -or SamAccountName -eq '$localPart'" -Properties EmployeeID -ErrorAction Stop |
+                Select-Object -First 1
+            if ($adUser) {
+                Write-Host "  (matched by local-part after domain rename: $($adUser.UserPrincipalName))" -ForegroundColor DarkGray
+            }
+        }
 
         if (-not $adUser) {
             Write-Host "NOT FOUND: $identity" -ForegroundColor Yellow
