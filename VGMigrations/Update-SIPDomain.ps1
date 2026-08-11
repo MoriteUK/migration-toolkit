@@ -182,11 +182,16 @@ if ($SkipExchangeOnline) {
         $exoConnected = $true
         Log 'Connected to Exchange Online.'
 
-        Log "Searching for recipients with SIP/EUM/IM addresses matching @$OldDomain ..."
-        $sipRecips = @(Get-Recipient -Filter "EmailAddresses -like 'SIP:*@$OldDomain'" -ResultSize Unlimited -ErrorAction Stop)
-        $eumRecips = @(Get-Recipient -Filter "EmailAddresses -like 'EUM:*@$OldDomain'" -ResultSize Unlimited -ErrorAction Stop)
-        $imRecips  = @(Get-Recipient -Filter "EmailAddresses -like 'IM:*@$OldDomain'"  -ResultSize Unlimited -ErrorAction Stop)
-        $affected  = (@($sipRecips) + @($eumRecips) + @($imRecips)) | Sort-Object -Property Identity -Unique
+        Log "Searching for recipients with addresses matching @$OldDomain ..."
+        # A server-side filter on a type-prefixed pattern (e.g. "EmailAddresses -like 'SIP:*@domain'")
+        # unreliably returns 0 matches in Exchange Online even when such addresses exist — the OPath
+        # filter engine doesn't handle a fixed prefix + wildcard well for this property. Every other
+        # script in this repo that searches EmailAddresses by domain works around this by using a broad,
+        # unprefixed wildcard server-side, then filtering precisely client-side — same approach here.
+        $candidates = @(Get-Recipient -Filter "EmailAddresses -like '*@$OldDomain'" -ResultSize Unlimited -ErrorAction Stop)
+        $affected   = @($candidates | Where-Object {
+            $_.EmailAddresses | Where-Object { "$_" -imatch ('^(sip|eum|im):.*@' + $oldEsc + '$') }
+        })
 
         Log "Found $($affected.Count) Exchange Online recipient(s) with SIP/EUM/IM addresses on @$OldDomain"
         $exoRan = $true
