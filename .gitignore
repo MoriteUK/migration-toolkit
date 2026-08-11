@@ -13,6 +13,12 @@ MigrationToolkit-Web/dist/
 # Playwright auth session (contains live auth tokens — never commit)
 VGMigrations/auth/
 
+# Machine-specific config (each machine has different paths)
+VGMigrations/config.json
+
+# Tenant app credentials (contains client secrets — never commit)
+VGMigrations/appcreds_*.json
+
 # Tenant-specific data files (large, customer-specific — excluded from repo)
 VGMigrations/tenant-sites.json
 VGMigrations/tenant-sites.meta.json

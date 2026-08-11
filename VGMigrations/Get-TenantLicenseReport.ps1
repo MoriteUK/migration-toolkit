@@ -91,7 +91,7 @@
 #>
 
 param(
-    [string]$TenantsFile = 'C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Tenant IDs.xlsx',
+    [string]$TenantsFile,
 
     [string]$DomainColumn    = 'A',
     [string]$TenantIdColumn  = 'B',
@@ -123,6 +123,25 @@ function Get-CleanErrorMessage($ErrorRecord) {
     $lines = @($ErrorRecord.Exception.Message -split "`r?`n" | Where-Object { $_.Trim() })
     if ($lines.Count -eq 0) { return $ErrorRecord.Exception.GetType().Name }
     return ($lines | Select-Object -First 3) -join ' | '
+}
+
+# Load TenantsFile path from config.json if not provided as parameter
+if ([string]::IsNullOrWhiteSpace($TenantsFile)) {
+    $configPath = Join-Path $PSScriptRoot 'config.json'
+    if (Test-Path $configPath) {
+        try {
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json
+            $TenantsFile = $config.TenantsFilePath
+        } catch {
+            Write-Host "ERROR: Failed to read config.json: $_" -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        Write-Host "ERROR: No -TenantsFile parameter provided and config.json not found." -ForegroundColor Red
+        Write-Host "Create config.json in the VGMigrations folder with:" -ForegroundColor Yellow
+        Write-Host '{ "TenantsFilePath": "C:\\path\\to\\Tenant IDs.xlsx" }' -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 Write-Host "=== Get-TenantLicenseReport ===" -ForegroundColor Cyan
