@@ -91,7 +91,7 @@
 #>
 
 param(
-    [string]$TenantsFile = 'C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Tenant IDs.xlsx',
+    [string]$TenantsFile = 'C:\Users\Andy White\Volaris Group\GRP Data Security (Volaris Consolidated) - M365 Migrations\Tenant IDs.xlsx',
 
     [string]$DomainColumn    = 'A',
     [string]$TenantIdColumn  = 'B',
@@ -210,12 +210,17 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
     }
 
     $excelRows = @(Import-Excel -Path $lookupFile -NoHeader -StartRow ($HeaderRow + 1) -ErrorAction Stop)
+    Write-Host "DEBUG: Read $($excelRows.Count) rows from Excel" -ForegroundColor Magenta
     $skippedCount = 0
+    $emptyIdCount = 0
     foreach ($row in $excelRows) {
         $idVal    = $row."P$idIdx"
         $skipVal  = $row."P$skipIdx"
         $licOkVal = $row."P$licOkIdx"
-        if ([string]::IsNullOrWhiteSpace($idVal)) { continue }
+        if ([string]::IsNullOrWhiteSpace($idVal)) {
+            $emptyIdCount++
+            continue
+        }
 
         # Only apply skip logic if -ProcessAll is NOT set
         if (-not $ProcessAll) {
@@ -229,13 +234,42 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
             }
         }
 
+        # Get AppId/Secret - ALWAYS prefer stored JSON file over Excel columns C/D
+        # (JSON files have tenant-specific app registrations; Excel often has stale/global creds)
+        $tidTrimmed = $idVal.ToString().Trim()
+        $finalAppId = $null
+        $finalAppSecret = $null
+
+        # Try to load from stored appcreds JSON file FIRST
+        $credsFile = Join-Path $PSScriptRoot "appcreds_$tidTrimmed.json"
+        if (Test-Path $credsFile) {
+            try {
+                $creds = Get-Content $credsFile -Raw | ConvertFrom-Json
+                $finalAppId = $creds.AppId
+                $finalAppSecret = $creds.ClientSecret
+            } catch {
+                # Failed to load JSON, fall back to Excel
+            }
+        }
+
+        # Only use Excel if JSON didn't have credentials
+        if ([string]::IsNullOrWhiteSpace($finalAppId)) {
+            $excelAppId = $row."P$appIdIdx"
+            $excelAppSecret = $row."P$appSecIdx"
+            if (-not [string]::IsNullOrWhiteSpace($excelAppId) -and -not [string]::IsNullOrWhiteSpace($excelAppSecret)) {
+                $finalAppId = $excelAppId
+                $finalAppSecret = $excelAppSecret
+            }
+        }
+
         $tenantRecords.Add([pscustomobject]@{
             Domain    = $row."P$domainIdx"
-            TenantId  = $idVal.ToString().Trim()
-            AppId     = $row."P$appIdIdx"
-            AppSecret = $row."P$appSecIdx"
+            TenantId  = $tidTrimmed
+            AppId     = $finalAppId
+            AppSecret = $finalAppSecret
         })
     }
+    Write-Host "DEBUG: Empty ID count: $emptyIdCount, Skipped: $skippedCount, Added to list: $($tenantRecords.Count)" -ForegroundColor Magenta
     if ($skippedCount -gt 0) { Write-Host "$skippedCount tenant(s) skipped (column $SkipColumn or $LicensesOkColumn = '$SkipValue')." -ForegroundColor Yellow }
 } else {
     # Detect CSV encoding from BOM — same helper as Import-FlyMappings.ps1 / search-domain.ps1.
@@ -289,18 +323,24 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
 }
 
 # Dedup by TenantId, keeping the first occurrence of each.
+Write-Host "DEBUG: Before dedup: $($tenantRecords.Count) tenants" -ForegroundColor Magenta
+Write-Host "DEBUG: First 3 TenantIds: $($tenantRecords | Select-Object -First 3 | ForEach-Object { $_.TenantId })" -ForegroundColor Magenta
 $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $tenantRecords = @($tenantRecords | Where-Object { $_.TenantId -and $seen.Add($_.TenantId) })
+Write-Host "DEBUG: After dedup: $($tenantRecords.Count) tenants" -ForegroundColor Magenta
 
 # Exclude the Volaris management tenant itself (and any other -ExcludeDomains match) — it's
 # the source/management tenant, not a customer to be checked.
 if ($ExcludeDomains -and $ExcludeDomains.Count -gt 0) {
     $beforeCount = $tenantRecords.Count
+    Write-Host "DEBUG: Before domain exclusion: $beforeCount tenants" -ForegroundColor Magenta
+    Write-Host "DEBUG: First 3 domains: $($tenantRecords | Select-Object -First 3 | ForEach-Object { $_.Domain })" -ForegroundColor Magenta
     $tenantRecords = @($tenantRecords | Where-Object {
         $rec = $_
         -not ($ExcludeDomains | Where-Object { $rec.Domain -and $rec.Domain -match [regex]::Escape($_) })
     })
     $excludedByDomain = $beforeCount - $tenantRecords.Count
+    Write-Host "DEBUG: After domain exclusion: $($tenantRecords.Count) tenants, excluded: $excludedByDomain" -ForegroundColor Magenta
     if ($excludedByDomain -gt 0) {
         Write-Host "$excludedByDomain tenant(s) excluded (domain matches: $($ExcludeDomains -join ', '))." -ForegroundColor Yellow
     }

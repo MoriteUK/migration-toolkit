@@ -3202,16 +3202,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (tenantLicensesRunBtn) {
     tenantLicensesRunBtn.addEventListener('click', async () => {
-      const csvFile = tenantLicensesCsvFile?.value?.trim();
-      if (!csvFile) { alert('Please browse for the tenants CSV file.'); return; }
+      const processAll = document.getElementById('tenantLicensesProcessAll')?.checked;
 
       tenantLicensesRunBtn.disabled = true;
       tenantLicensesRunBtn.textContent = 'Running…';
       if (tenantLicensesLogPre) tenantLicensesLogPre.textContent = '';
 
+      // Script uses hardcoded default path, only pass -ProcessAll if checked
+      const args = [];
+      if (processAll) {
+        args.push('-ProcessAll');
+      }
+
       window.electronAPI.onPsOutput(appendTenantLicensesLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Get-TenantLicenseReport.ps1', ['-TenantsFile', csvFile]);
+        const result = await window.electronAPI.streamPowerShell('Get-TenantLicenseReport.ps1', args);
         appendTenantLicensesLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
       } catch (err) {
         appendTenantLicensesLog(`\nError: ${err.message || err}\n`);

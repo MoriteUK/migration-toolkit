@@ -1007,15 +1007,13 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Check Licenses Across Multiple Tenants</h3>
-          <p class="form-help">Reads tenant ID (column B), domain (column A), and app registration credentials (columns C/D) from the workbook below, connects to each tenant in turn, and reports only licenses that grant a mailbox and/or OneDrive — friendly product name, enabled/consumed/available units. Skips rows with "Yes" in column L (cutover already done) or column I (licenses already confirmed correct), and excludes the ourvolaris management tenant itself. The script always reads from a local copy of the workbook (refreshed automatically at most twice a week) so the original stays free for you to keep open in Excel. Writes one consolidated CSV report next to the original file and opens it automatically when done. Tenants with a stored App ID + Secret connect automatically, no sign-in needed; any others open a separate isolated sign-in window (a fresh one per tenant, to avoid sign-in state getting stuck between tenants) with the tenant's domain shown right before it opens so you know which account to use.</p>
+          <p class="form-help">Reads tenant ID (column B), domain (column A), and optionally app registration credentials (columns C/D) from <strong>Tenant IDs.xlsx</strong>, connects to each tenant in turn, and reports only licenses that grant a mailbox and/or OneDrive — friendly product name, enabled/consumed/available units. Skips rows with "Yes" in column N (cutover already done) or column J (licenses already confirmed correct), and excludes the ourvolaris management tenant. The script always reads from a local copy of the workbook (refreshed automatically at most twice a week) so the original stays free for you to keep open in Excel. Writes one consolidated CSV report next to the original file and opens it automatically when done. App credentials are loaded from Excel columns C/D if present, otherwise from stored appcreds_*.json files in the VGMigrations folder. Tenants with credentials connect automatically, no sign-in needed; any others open a separate isolated sign-in window (a fresh one per tenant, to avoid sign-in state getting stuck between tenants) with the tenant's domain shown right before it opens so you know which account to use.</p>
 
-          <div class="form-group-tight">
-            <label class="form-label">Tenants Workbook</label>
-            <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" id="tenantLicensesCsvFile" value="C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Tenant IDs.xlsx" readonly>
-              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx,xlsm,xls,csv">Browse</button>
-            </div>
-            <small class="form-help">Defaults to the standing Volaris tenant list — columns A/B/C/D (domain/tenant ID/App ID/App Secret), skips rows with "Yes" in column L or column I, and excludes the ourvolaris tenant itself</small>
+          <div style="margin-top:10px;">
+            <label class="form-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="tenantLicensesProcessAll" style="cursor:pointer;">
+              <span>Process all domains (ignore skip columns N and J)</span>
+            </label>
           </div>
 
           <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
