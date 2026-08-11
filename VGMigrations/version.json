@@ -1,7 +1,14 @@
 {
-  "version": "2.9.72",
+  "version": "2.9.73",
   "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.73",
+      "date": "2026-08-11",
+      "changes": [
+        "Remove-AliasAddresses.ps1: Fixed a confusing false-alarm where a successful on-prem AD removal was immediately followed by a PROTECTED report for the exact same addresses — Exchange Online's copy still shows them for a while after removal since Azure AD Connect sync isn't instant. The Exchange Online check now excludes anything already removed on-prem before deciding what (if anything) still needs attention there"
+      ]
+    },
     {
       "version": "2.9.72",
       "date": "2026-08-11",

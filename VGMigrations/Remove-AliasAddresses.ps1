@@ -232,6 +232,15 @@ foreach ($sec in $script:SectionDefs) {
             $current = @($obj.EmailAddresses | ForEach-Object { "$_" })
             $split   = Split-Addresses -Addresses $current -FilterDomain $Domain -DoAliases (-not $SkipAliases) -DoSIP (-not $SkipSIP)
 
+            # Exclude anything already removed on-prem — Azure AD Connect sync isn't instant, so
+            # Exchange Online's copy still shows these for a while after a successful on-prem
+            # removal. Without this, every on-prem success is immediately followed by a confusing
+            # "PROTECTED" re-attempt on the exact same addresses that were just fixed.
+            if ($onPremResult -and $onPremResult.Removed.Count -gt 0) {
+                $onPremRemovedLower = @($onPremResult.Removed | ForEach-Object { $_.ToLowerInvariant() })
+                $split.Remove = @($split.Remove | Where-Object { $onPremRemovedLower -notcontains $_.ToLowerInvariant() })
+            }
+
             if ($split.Remove.Count -eq 0) {
                 if ($onPremResult -and $onPremResult.Removed.Count -gt 0) { $ok++ } else { Write-Host "  No change : $identity"; $nochange++ }
                 continue
