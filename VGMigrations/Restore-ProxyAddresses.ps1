@@ -10,11 +10,14 @@
     still missing back onto the corresponding recipient in whichever tenant the signed-in
     account belongs to — normally the NEW/destination tenant, once accounts have moved there.
 
-    Recipients are matched by PrimarySmtpAddress first (falls back to UserPrincipalName if that
-    lookup fails, since a mailbox move can sometimes change one but not the other). Restored
-    addresses are always added as SECONDARY (lowercase prefix) — even if a row's IsPrimary was
-    true in the old tenant — so nothing here can override whatever primary address the
-    destination mailbox already has. Addresses already present (case-insensitive) are skipped.
+    Recipients are matched by PrimarySmtpAddress first, then UserPrincipalName, then by
+    local-part across any domain — the destination mailbox may already be sitting on the
+    tenant's default onmicrosoft.com address (e.g. user@mbubinarysystems.onmicrosoft.com)
+    rather than the final vanity domain the CSV was captured against, and that default domain
+    varies per tenant so it can't be assumed. Restored addresses are always added as SECONDARY
+    (lowercase prefix) — even if a row's IsPrimary was true in the old tenant — so nothing here
+    can override whatever primary address the destination mailbox already has. Addresses already
+    present (case-insensitive) are skipped.
 
     X500 addresses are internal Exchange routing addresses tied to the OLD mailbox's GUID and
     are skipped by default — pass -IncludeX500 to restore them too if you specifically need
@@ -150,6 +153,21 @@ foreach ($group in $groups) {
             $r = Get-Recipient -Identity $identity -ErrorAction Stop
             break
         } catch { }
+    }
+
+    # Fall back to matching by local-part across any domain — by the time this runs the mailbox
+    # may already be sitting on the destination tenant's default onmicrosoft.com address (e.g.
+    # user@mbubinarysystems.onmicrosoft.com) rather than the final vanity domain the CSV was
+    # captured against, and that default domain varies per tenant so it can't be guessed in
+    # advance. Matches search-domain.ps1's own EmailAddresses wildcard convention.
+    if (-not $r) {
+        $localPart = @($primarySmtp, $upn) | Where-Object { $_ -match '^([^@]+)@' } | ForEach-Object { ($_ -split '@')[0] } | Select-Object -First 1
+        if ($localPart) {
+            try {
+                $r = Get-Recipient -Filter "EmailAddresses -like '$localPart@*'" -ErrorAction Stop | Select-Object -First 1
+                if ($r) { Log "  $displayName  [$primarySmtp]  — matched by local-part: $($r.PrimarySmtpAddress)" }
+            } catch { }
+        }
     }
 
     if (-not $r) {

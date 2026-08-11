@@ -1,7 +1,14 @@
 {
-  "version": "2.9.76",
+  "version": "2.9.77",
   "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.77",
+      "date": "2026-08-11",
+      "changes": [
+        "Restore-ProxyAddresses.ps1: Recipients not found by PrimarySmtpAddress/UserPrincipalName now also get matched by local-part across any domain — the destination mailbox may already be sitting on the tenant's default onmicrosoft.com address (e.g. user@mbubinarysystems.onmicrosoft.com) rather than the vanity domain the CSV was captured against, and that default domain varies per tenant so it can't be assumed"
+      ]
+    },
     {
       "version": "2.9.76",
       "date": "2026-08-11",
