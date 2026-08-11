@@ -1,7 +1,17 @@
 {
-  "version": "2.9.65",
+  "version": "2.9.66",
   "releaseDate": "2026-08-11",
   "changelog": [
+    {
+      "version": "2.9.66",
+      "date": "2026-08-11",
+      "changes": [
+        "Added Restore-ProxyAddresses.ps1: Re-adds proxy addresses captured before migration (13_ProxyAddresses.csv) to matching accounts in the new tenant, as secondary aliases",
+        "Restore-ProxyAddresses.ps1: Matches recipients by PrimarySmtpAddress, falls back to UserPrincipalName; never overrides the destination mailbox's current primary address",
+        "Restore-ProxyAddresses.ps1: X500 addresses skipped by default (-IncludeX500 to opt in) since they're tied to the old mailbox's GUID",
+        "MigrationToolkit-Web: Added 'Restore Proxy Addresses' under Misc Scripts"
+      ]
+    },
     {
       "version": "2.9.65",
       "date": "2026-08-11",

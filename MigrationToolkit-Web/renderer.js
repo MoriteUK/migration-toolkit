@@ -1776,6 +1776,7 @@ function switchView(viewName) {
     'misc-deduplicate': 'miscDeduplicateView',
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-domain-devices': 'miscDomainDevicesView',
+    'misc-restore-proxy': 'miscRestoreProxyView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -3125,6 +3126,52 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         purgeSpoRunBtn.disabled = false;
         purgeSpoRunBtn.textContent = '🗑 Purge Deleted Sites';
+      }
+    });
+  }
+
+  // ── Restore Proxy Addresses ───────────────────────────────────────────────
+  const restoreProxyRunBtn = document.getElementById('restoreProxyRunBtn');
+  if (restoreProxyRunBtn) {
+    restoreProxyRunBtn.addEventListener('click', async () => {
+      const folder   = document.getElementById('restoreProxyDiscoveryFolder').value.trim();
+      const domain   = document.getElementById('restoreProxyDomain').value.trim();
+      const doSMTP   = document.getElementById('restoreProxySMTP').checked;
+      const doSIP    = document.getElementById('restoreProxySIP').checked;
+      const doX500   = document.getElementById('restoreProxyX500').checked;
+      const whatIf   = document.getElementById('restoreProxyWhatIf').checked;
+
+      if (!folder) { alert('Please select a discovery folder.'); return; }
+      if (!doSMTP && !doSIP && !doX500) { alert('Select at least one address type to restore.'); return; }
+
+      const logSection = document.getElementById('restoreProxyLog');
+      const logOutput  = document.getElementById('restoreProxyLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      restoreProxyRunBtn.disabled = true;
+      restoreProxyRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder];
+      if (domain) args.push('-Domain', domain);
+      if (!doSMTP) args.push('-SkipSMTP');
+      if (!doSIP)  args.push('-SkipSIP');
+      if (doX500)  args.push('-IncludeX500');
+      if (whatIf)  args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Restore-ProxyAddresses.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        restoreProxyRunBtn.disabled = false;
+        restoreProxyRunBtn.textContent = '▶ Run';
       }
     });
   }

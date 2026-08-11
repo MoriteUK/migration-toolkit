@@ -123,6 +123,9 @@
             <button type="button" class="sidebar-subitem" data-view="misc-domain-devices">
               <span class="sidebar-sublabel">Get Domain Devices</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-restore-proxy">
+              <span class="sidebar-sublabel">Restore Proxy Addresses</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="domain-devices">
               <span class="sidebar-sublabel">Remove Entra Devices</span>
             </button>
@@ -998,6 +1001,61 @@
               ▶ Open Get Domain Devices
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Restore Proxy Addresses -->
+      <div id="miscRestoreProxyView" class="view-container hidden">
+        <h2 class="view-title">Restore Proxy Addresses</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Restore Proxy Addresses in the New Tenant</h3>
+          <p class="form-help">Reads 13_ProxyAddresses.csv from the domain's discovery folder (captured from the old tenant before cutover) and adds any addresses still missing back onto the matching accounts — as secondary aliases only, never overriding whatever primary address the account already has in the new tenant. Sign in with the DESTINATION tenant admin account when prompted.</p>
+
+          <div class="form-group">
+            <label class="form-label">Discovery Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="restoreProxyDiscoveryFolder" placeholder="Folder containing discovery CSVs...">
+              <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Domain Filter <span style="font-weight:400;color:#6B7280">(optional — leave blank to restore every row in the CSV)</span></label>
+            <input type="text" class="form-input form-input-compact" id="restoreProxyDomain" placeholder="e.g. olddomain.com">
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">What to restore</label>
+            <label class="form-checkbox" style="margin-bottom:4px;">
+              <input type="checkbox" id="restoreProxySMTP" checked>
+              <span>SMTP addresses (primary addresses from the old tenant are restored as secondary aliases)</span>
+            </label>
+            <label class="form-checkbox" style="margin-bottom:4px;">
+              <input type="checkbox" id="restoreProxySIP" checked>
+              <span>SIP / EUM addresses (Skype, Teams, Unified Messaging)</span>
+            </label>
+            <label class="form-checkbox">
+              <input type="checkbox" id="restoreProxyX500">
+              <span>X500 addresses <span style="font-weight:400;color:#6B7280">(advanced — internal Exchange routing addresses, only needed for legacy-DN redirects)</span></span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="restoreProxyWhatIf" checked>
+              <span>WhatIf — preview which addresses would be added</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="restoreProxyRunBtn">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="restoreProxyLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="restoreProxyLogOutput"></div>
         </div>
       </div>
 
