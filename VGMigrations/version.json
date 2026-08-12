@@ -1,7 +1,15 @@
 {
-  "version": "2.9.77",
-  "releaseDate": "2026-08-11",
+  "version": "2.9.78",
+  "releaseDate": "2026-08-12",
   "changelog": [
+    {
+      "version": "2.9.78",
+      "date": "2026-08-12",
+      "changes": [
+        "Added a 'Tenant IDs Xlsx Path' field to Settings > Discovery — set the Tenant IDs.xlsx path once per machine through the UI instead of hand-editing a config.json file",
+        "Get-TenantLicenseReport.ps1 and Check-TenantBaselineStatus.ps1 now read TenantsFilePath from %APPDATA%\\FlyMigration\\config.json (the same file/field Settings writes) instead of a hardcoded default or a separate VGMigrations\\config.json — each device can point at its own copy since OneDrive paths differ by username"
+      ]
+    },
     {
       "version": "2.9.77",
       "date": "2026-08-11",

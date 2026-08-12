@@ -87,7 +87,7 @@
 #>
 
 param(
-    [string]$TenantsFile = 'C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Tenant IDs.xlsx',
+    [string]$TenantsFile,
 
     [string]$DomainColumn    = 'A',
     [string]$TenantIdColumn  = 'B',
@@ -124,6 +124,25 @@ function Test-InsufficientPermission($ErrorRecord) {
 }
 
 Write-Host "=== Check-TenantBaselineStatus ===" -ForegroundColor Cyan
+
+# Load TenantsFile path from the app's settings config if not provided as parameter — same file
+# (and the same TenantsFilePath field) the "Tenant IDs Xlsx Path" field in Settings > Discovery
+# reads and writes, so setting it once there is enough.
+if ([string]::IsNullOrWhiteSpace($TenantsFile)) {
+    $configPath = Join-Path $env:APPDATA 'FlyMigration\config.json'
+    if (Test-Path $configPath) {
+        try {
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json
+            $TenantsFile = $config.TenantsFilePath
+        } catch { }
+    }
+    if ([string]::IsNullOrWhiteSpace($TenantsFile)) {
+        Write-Host "ERROR: No -TenantsFile parameter provided and no Tenant IDs Xlsx Path set." -ForegroundColor Red
+        Write-Host "Set it in the app: Settings (gear icon) > Discovery tab > Tenant IDs Xlsx Path." -ForegroundColor Yellow
+        exit 1
+    }
+}
+
 Write-Host "Tenants file: $TenantsFile" -ForegroundColor White
 
 if (-not (Test-Path $TenantsFile)) {

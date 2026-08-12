@@ -2075,6 +2075,7 @@ async function openSettings() {
       document.getElementById('discoveryOutputPath').value = result.config.DiscoveryOutputPath || '';
       document.getElementById('vbuCsvPath').value = result.config.VbuCsvPath || '';
       document.getElementById('targetDomain').value = result.config.TargetDomain || 'ourvolaris.onmicrosoft.com';
+      document.getElementById('tenantsFilePath').value = result.config.TenantsFilePath || '';
 
       // Load customers into table
       const customerTableBody = document.getElementById('customerTableBody');
@@ -2160,6 +2161,7 @@ async function saveSettings() {
     const discoveryOutputPath = document.getElementById('discoveryOutputPath').value.trim();
     const vbuCsvPath = document.getElementById('vbuCsvPath').value.trim();
     const targetDomain = document.getElementById('targetDomain').value.trim();
+    const tenantsFilePath = document.getElementById('tenantsFilePath').value.trim();
 
     // Collect customer data from table
     const customerRows = document.querySelectorAll('#customerTableBody tr');
@@ -2192,6 +2194,7 @@ async function saveSettings() {
       DiscoveryOutputPath: discoveryOutputPath,
       VbuCsvPath: vbuCsvPath,
       TargetDomain: targetDomain,
+      TenantsFilePath: tenantsFilePath,
       Customers: customers
     };
 

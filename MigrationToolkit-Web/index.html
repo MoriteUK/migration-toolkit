@@ -1937,6 +1937,14 @@
             <input type="text" class="form-input" id="targetDomain" placeholder="ourvolaris.onmicrosoft.com">
             <small class="form-help">Default target domain for domain rename operations. Email addresses will be renamed to this domain (without @).</small>
           </div>
+          <div class="form-group">
+            <label class="form-label">TENANT IDS XLSX PATH</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input" id="tenantsFilePath" placeholder="C:\path\to\Tenant IDs.xlsx">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx,xlsm,xls,csv">Browse</button>
+            </div>
+            <small class="form-help">Set once per machine — used by License Report and Check Baseline Status. Each device can point at its own copy since OneDrive paths differ by username.</small>
+          </div>
         </div>
       </div>
       <div class="dialog-footer">

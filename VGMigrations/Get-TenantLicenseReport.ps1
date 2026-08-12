@@ -125,9 +125,11 @@ function Get-CleanErrorMessage($ErrorRecord) {
     return ($lines | Select-Object -First 3) -join ' | '
 }
 
-# Load TenantsFile path from config.json if not provided as parameter
+# Load TenantsFile path from the app's settings config if not provided as parameter — same file
+# (and the same TenantsFilePath field) the "Tenant IDs Xlsx Path" field in Settings > Discovery
+# reads and writes, so setting it once there is enough.
 if ([string]::IsNullOrWhiteSpace($TenantsFile)) {
-    $configPath = Join-Path $PSScriptRoot 'config.json'
+    $configPath = Join-Path $env:APPDATA 'FlyMigration\config.json'
     if (Test-Path $configPath) {
         try {
             $config = Get-Content $configPath -Raw | ConvertFrom-Json
@@ -136,10 +138,10 @@ if ([string]::IsNullOrWhiteSpace($TenantsFile)) {
             Write-Host "ERROR: Failed to read config.json: $_" -ForegroundColor Red
             exit 1
         }
-    } else {
-        Write-Host "ERROR: No -TenantsFile parameter provided and config.json not found." -ForegroundColor Red
-        Write-Host "Create config.json in the VGMigrations folder with:" -ForegroundColor Yellow
-        Write-Host '{ "TenantsFilePath": "C:\\path\\to\\Tenant IDs.xlsx" }' -ForegroundColor Yellow
+    }
+    if ([string]::IsNullOrWhiteSpace($TenantsFile)) {
+        Write-Host "ERROR: No -TenantsFile parameter provided and no Tenant IDs Xlsx Path set." -ForegroundColor Red
+        Write-Host "Set it in the app: Settings (gear icon) > Discovery tab > Tenant IDs Xlsx Path." -ForegroundColor Yellow
         exit 1
     }
 }
