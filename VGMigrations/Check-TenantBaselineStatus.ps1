@@ -499,7 +499,7 @@ foreach ($rec in $tenantRecords) {
     $overall = "$configuredCount/$($checks.Count) configured"
     if ($unknownCount -gt 0) { $overall += ", $unknownCount unknown (permissions)" }
 
-    Write-Host "  $overall — $($org.DisplayName)" -ForegroundColor (if ($configuredCount -eq $checks.Count) { 'Green' } else { 'Yellow' })
+    Write-Host "  $overall — $($org.DisplayName)" -ForegroundColor $(if ($configuredCount -eq $checks.Count) { 'Green' } else { 'Yellow' })
 
     $allRows.Add([pscustomobject]@{
         Domain                    = $rec.Domain

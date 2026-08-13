@@ -1,7 +1,14 @@
 {
-  "version": "2.9.78",
-  "releaseDate": "2026-08-12",
+  "version": "2.9.79",
+  "releaseDate": "2026-08-13",
   "changelog": [
+    {
+      "version": "2.9.79",
+      "date": "2026-08-13",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Fixed 'if is not recognized as a name of a cmdlet' crash on line 502 — Write-Host -ForegroundColor used an `(if ...)` grouping expression, which PowerShell doesn't allow for statement keywords; changed to `$(if ...)` subexpression syntax"
+      ]
+    },
     {
       "version": "2.9.78",
       "date": "2026-08-12",
