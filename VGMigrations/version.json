@@ -1,7 +1,15 @@
 {
-  "version": "2.9.83",
+  "version": "2.9.84",
   "releaseDate": "2026-08-13",
   "changelog": [
+    {
+      "version": "2.9.84",
+      "date": "2026-08-13",
+      "changes": [
+        "Set-DistributionGroupExternalSenders.ps1: Fixed sign-in falling back to device-code auth, which is blocked tenant-wide by Conditional Access on these tenants ('AADSTS...blocked' style failure) — this script was the only one in the toolkit not yet using -DisableWAM. Now uses -DisableWAM directly (plain browser popup) like every other Exchange Online connect in this codebase, with no device-code fallback attempted at all",
+        "(App registrations were considered as an alternative but ruled out: the stored per-tenant app registrations use a client secret, and Exchange Online's app-only auth only supports certificate-based auth, not secrets — reusing them would need new certificate + RBAC infrastructure per tenant)"
+      ]
+    },
     {
       "version": "2.9.83",
       "date": "2026-08-13",

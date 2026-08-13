@@ -69,14 +69,12 @@ function Ensure-EXOConnection {
         # A specific tenant was requested — disconnect any existing session first so a
         # cached connection to a different tenant is never silently reused.
         try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue | Out-Null } catch {}
-        Write-Host "Connecting to Exchange Online ($TenantDomain)..." -ForegroundColor Cyan
-        try {
-            Connect-ExchangeOnline -Organization $TenantDomain -ShowBanner:$false -ErrorAction Stop
-        }
-        catch {
-            Write-Host "Interactive/WAM sign-in failed, falling back to device code..." -ForegroundColor Yellow
-            Connect-ExchangeOnline -Organization $TenantDomain -ShowBanner:$false -Device -ErrorAction Stop
-        }
+        Write-Host "Connecting to Exchange Online ($TenantDomain) — sign in when the browser opens..." -ForegroundColor Cyan
+        # -DisableWAM: this script is spawned headlessly (no window handle) by the Electron app,
+        # which breaks the WAM broker outright, and its device-code fallback is blocked tenant-wide
+        # by Conditional Access on these tenants anyway. -DisableWAM uses a plain browser popup
+        # instead, sidestepping both problems (same fix used throughout this toolkit).
+        Connect-ExchangeOnline -Organization $TenantDomain -ShowBanner:$false -DisableWAM -ErrorAction Stop
         return
     }
 
@@ -87,14 +85,8 @@ function Ensure-EXOConnection {
     } catch { $connected = $false }
 
     if (-not $connected) {
-        Write-Host "Connecting to Exchange Online..." -ForegroundColor Cyan
-        try {
-            Connect-ExchangeOnline -ShowBanner:$false -ErrorAction Stop
-        }
-        catch {
-            Write-Host "Interactive/WAM sign-in failed, falling back to device code..." -ForegroundColor Yellow
-            Connect-ExchangeOnline -ShowBanner:$false -Device -ErrorAction Stop
-        }
+        Write-Host "Connecting to Exchange Online — sign in when the browser opens..." -ForegroundColor Cyan
+        Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -ErrorAction Stop
     }
 }
 
