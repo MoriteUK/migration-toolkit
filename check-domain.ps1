@@ -84,7 +84,10 @@ do {
 
     Write-Host "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Pass $pass - Users: $($scan.UserCount) scanned / $userHits matches | Groups: $($scan.GroupCount) scanned / $groupHits matches | Contacts: $($scan.ContactCount) scanned / $contactHits matches | Total remaining: $($results.Count)" -ForegroundColor Magenta
 
-    $results | Export-Csv -Path $csvPath -NoTypeInformation
+    if ($pass -eq 1 -and $results.Count -gt 0) {
+        $results | Export-Csv -Path $csvPath -NoTypeInformation
+        Write-Host "  Baseline exported to $csvPath (for use by the rename objects script)" -ForegroundColor Cyan
+    }
 
     if ($results.Count -eq 0) { break }
 
