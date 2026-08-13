@@ -1,7 +1,16 @@
 {
-  "version": "2.9.84",
+  "version": "2.9.85",
   "releaseDate": "2026-08-13",
   "changelog": [
+    {
+      "version": "2.9.85",
+      "date": "2026-08-13",
+      "changes": [
+        "Provision-OneDrives.ps1: Fixed every user failing with 'Authentication needed. Please call Connect-MgGraph.' immediately after a successful-looking Connect-MgGraph — now disconnects any existing session before connecting (a stale session from an earlier script run, possibly with narrower scopes or a different tenant, was otherwise silently reusable), connects with -ContextScope Process, and logs the actually-granted scopes right after sign-in with a clear warning if Sites.ReadWrite.All wasn't granted",
+        "Provision-OneDrives.ps1: Per-user failures now show the full multi-line error (Get-CleanErrorMessage, same helper used elsewhere in this toolkit) instead of just the first line, which was hiding the real cause behind a generic message",
+        "Check-OneDriveStatus.ps1: Same Connect-MgGraph fix applied — this script shares the identical connect pattern and would otherwise silently misreport every user as 'No OneDrive' under the same failure, with no visible error at all since it swallows per-user exceptions by design"
+      ]
+    },
     {
       "version": "2.9.84",
       "date": "2026-08-13",

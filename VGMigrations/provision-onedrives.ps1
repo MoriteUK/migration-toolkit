@@ -20,6 +20,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# MSAL/Graph exceptions frequently put the actual detail on the second (or later) line, with a
+# generic message on the first — taking only the first line silently discards the real reason.
+function Get-CleanErrorMessage($ErrorRecord) {
+    $lines = @($ErrorRecord.Exception.Message -split "`r?`n" | Where-Object { $_.Trim() })
+    if ($lines.Count -eq 0) { return $ErrorRecord.Exception.GetType().Name }
+    return ($lines | Select-Object -First 3) -join ' | '
+}
+
 Write-Host "=== Provision OneDrives ===" -ForegroundColor Cyan
 Write-Host "File: $MappingFile"
 if ($WhatIf) { Write-Host "Mode: WhatIf (no changes will be made)" -ForegroundColor Yellow }
@@ -77,8 +85,16 @@ Write-Host "`nLoading Microsoft Graph modules..." -ForegroundColor Cyan
 Write-Host "Graph modules loaded." -ForegroundColor Green
 
 Write-Host "`nConnecting to Microsoft Graph — sign in with the browser window that opens..." -ForegroundColor Cyan
-Connect-MgGraph -Scopes 'Sites.ReadWrite.All','User.Read.All' -NoWelcome -ErrorAction Stop
-Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
+# Disconnect first — a stale session left over from an earlier script run (narrower scopes, or
+# a different tenant) can otherwise be silently reused instead of prompting fresh sign-in.
+try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
+Connect-MgGraph -Scopes 'Sites.ReadWrite.All','User.Read.All' -ContextScope Process -NoWelcome -ErrorAction Stop
+$ctx = Get-MgContext
+Write-Host "Connected to Microsoft Graph as $($ctx.Account) (tenant $($ctx.TenantId))." -ForegroundColor Green
+Write-Host "Granted scopes: $($ctx.Scopes -join ', ')" -ForegroundColor DarkGray
+if ($ctx.Scopes -notcontains 'Sites.ReadWrite.All' -and $ctx.Scopes -notcontains 'Sites.FullControl.All') {
+    Write-Host "WARNING: 'Sites.ReadWrite.All' was not granted — every Get-MgUserDrive call below will fail. Re-run and approve that permission when prompted, or ask an admin to grant consent." -ForegroundColor Yellow
+}
 
 # Accessing each user's drive triggers OneDrive provisioning if not yet provisioned
 Write-Host "`nProvisioning $($upns.Count) OneDrive(s)..." -ForegroundColor Cyan
@@ -91,7 +107,7 @@ foreach ($upn in $upns) {
         Write-Host "  OK  $upn  ($($drive.DriveType))" -ForegroundColor Green
         $ok++
     } catch {
-        $msg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+        $msg = Get-CleanErrorMessage $_
         Write-Host "  FAIL $upn — $msg" -ForegroundColor Red
         $fail++
     }

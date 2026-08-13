@@ -73,8 +73,16 @@ Write-Host "`nLoading Microsoft Graph modules..." -ForegroundColor Cyan
 Write-Host "Graph modules loaded." -ForegroundColor Green
 
 Write-Host "`nConnecting to Microsoft Graph — sign in with the browser window that opens..." -ForegroundColor Cyan
-Connect-MgGraph -Scopes 'Sites.ReadWrite.All','User.Read.All' -NoWelcome -ErrorAction Stop
-Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
+# Disconnect first — a stale session left over from an earlier script run (narrower scopes, or
+# a different tenant) can otherwise be silently reused instead of prompting fresh sign-in.
+try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
+Connect-MgGraph -Scopes 'Sites.ReadWrite.All','User.Read.All' -ContextScope Process -NoWelcome -ErrorAction Stop
+$ctx = Get-MgContext
+Write-Host "Connected to Microsoft Graph as $($ctx.Account) (tenant $($ctx.TenantId))." -ForegroundColor Green
+Write-Host "Granted scopes: $($ctx.Scopes -join ', ')" -ForegroundColor DarkGray
+if ($ctx.Scopes -notcontains 'Sites.ReadWrite.All' -and $ctx.Scopes -notcontains 'Sites.FullControl.All') {
+    Write-Host "WARNING: 'Sites.ReadWrite.All' was not granted — every user below will incorrectly show as 'No OneDrive'. Re-run and approve that permission when prompted, or ask an admin to grant consent." -ForegroundColor Yellow
+}
 
 # Check each UPN for OneDrive
 Write-Host "`nChecking $($orderedUpns.Count) UPN(s)..." -ForegroundColor Cyan
