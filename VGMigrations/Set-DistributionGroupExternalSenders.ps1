@@ -25,19 +25,29 @@
     Optional output folder for the timestamped CSV report. Defaults to the shared
     OneDrive logs folder used by the other misc scripts in this toolkit.
 
+.PARAMETER TenantDomain
+    Optional domain of the tenant to sign in to (e.g. contoso.com or
+    contoso.onmicrosoft.com), passed to Connect-ExchangeOnline -Organization so sign-in
+    targets that specific tenant. When set, any existing Exchange Online session is
+    disconnected first so a cached connection to a different tenant is never silently
+    reused. If omitted, sign-in uses whatever tenant an existing/interactive session
+    resolves to.
+
 .EXAMPLE
     ./Set-DistributionGroupExternalSenders.ps1
     Dry run - reports all DLs and whether they currently allow external senders.
 
 .EXAMPLE
-    ./Set-DistributionGroupExternalSenders.ps1 -Commit
-    Reports, then updates every DL that is blocking external senders so it allows them.
+    ./Set-DistributionGroupExternalSenders.ps1 -TenantDomain contoso.com -Commit
+    Signs in to contoso.com, reports, then updates every DL that is blocking external
+    senders so it allows them.
 #>
 
 [CmdletBinding()]
 param(
     [switch]$Commit,
-    [string]$CsvPath = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
+    [string]$CsvPath = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs',
+    [string]$TenantDomain
 )
 
 if (-not (Test-Path $CsvPath)) {
@@ -47,11 +57,28 @@ if (-not (Test-Path $CsvPath)) {
 $ErrorActionPreference = 'Stop'
 
 function Ensure-EXOConnection {
+    param([string]$TenantDomain)
+
     if (-not (Get-Module -ListAvailable -Name ExchangeOnlineManagement)) {
         Write-Host "ExchangeOnlineManagement module not found - installing for current user..." -ForegroundColor Yellow
         Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber
     }
     Import-Module ExchangeOnlineManagement -ErrorAction Stop
+
+    if ($TenantDomain) {
+        # A specific tenant was requested — disconnect any existing session first so a
+        # cached connection to a different tenant is never silently reused.
+        try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue | Out-Null } catch {}
+        Write-Host "Connecting to Exchange Online ($TenantDomain)..." -ForegroundColor Cyan
+        try {
+            Connect-ExchangeOnline -Organization $TenantDomain -ShowBanner:$false -ErrorAction Stop
+        }
+        catch {
+            Write-Host "Interactive/WAM sign-in failed, falling back to device code..." -ForegroundColor Yellow
+            Connect-ExchangeOnline -Organization $TenantDomain -ShowBanner:$false -Device -ErrorAction Stop
+        }
+        return
+    }
 
     $connected = $false
     try {
@@ -71,7 +98,7 @@ function Ensure-EXOConnection {
     }
 }
 
-Ensure-EXOConnection
+Ensure-EXOConnection -TenantDomain $TenantDomain
 
 Write-Host "Retrieving all distribution groups (this may take a moment for large tenants)..." -ForegroundColor Cyan
 $allGroups = Get-DistributionGroup -ResultSize Unlimited

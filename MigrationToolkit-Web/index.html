@@ -85,10 +85,10 @@
               <span class="sidebar-sublabel">Check Baseline Status</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="discovery-tenant-licenses">
-              <span class="sidebar-sublabel">License Report</span>
+              <span class="sidebar-sublabel">Check Licenses</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="domainReadiness">
-              <span class="sidebar-sublabel">Domain Readiness</span>
+              <span class="sidebar-sublabel">Check Domain Readiness</span>
             </button>
           </div>
 
@@ -408,7 +408,7 @@
 
       <!-- Domain Readiness View -->
       <div id="domainReadinessView" class="view-container hidden">
-        <h2 class="view-title">✅ Domain Migration Readiness</h2>
+        <h2 class="view-title">✅ Check Domain Readiness</h2>
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Domain Verification Check</h3>
@@ -837,7 +837,7 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Check Baseline Config Across Multiple Tenants</h3>
-          <p class="form-help">Read-only — reports whether Tenant Baseline Config has already been applied in each tenant listed in <strong>Tenant IDs.xlsx</strong>, without changing anything. Uses the same stored app registration as License Report (no new app registration is created); tenants with no app registration on file are skipped. Rows with "Yes" in column N (cutover already done) are always skipped — a migrated tenant is never re-checked. Exchange Online settings (EOP/ATP presets, transport rules, audit logging) aren't covered — those need a manual check. Writes one consolidated CSV, one row per tenant, and opens it automatically when done.</p>
+          <p class="form-help">Read-only — reports whether Tenant Baseline Config has already been applied in each tenant listed in <strong>Tenant IDs.xlsx</strong>, without changing anything. Uses the same stored app registration as Check Licenses (no new app registration is created); tenants with no app registration on file are skipped. Rows with "Yes" in column N (cutover already done) are always skipped — a migrated tenant is never re-checked. Exchange Online settings (EOP/ATP presets, transport rules, audit logging) aren't covered — those need a manual check. Writes one consolidated CSV, one row per tenant, and opens it automatically when done.</p>
 
           <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
             <button type="button" class="btn btn-success btn-xs" id="baselineStatusRunBtn">
@@ -1091,7 +1091,19 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Audit / Fix External Sender Access on Distribution Groups</h3>
-          <p class="form-help">Checks every distribution group in the connected tenant for whether it accepts messages from external (outside-org) senders. Runs as a dry-run report by default — tick "Apply fixes" to actually update any group found blocking external mail so it allows them. Sign in with the tenant's Exchange admin account when prompted. Writes a timestamped CSV report either way.</p>
+          <p class="form-help">Checks every distribution group in the selected tenant for whether it accepts messages from external (outside-org) senders, and always writes a timestamped CSV report of what it found. Tick "Apply fixes" to also update any group found blocking external mail so it allows them — without it, the run is a read-only report.</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">Tenant</label>
+            <select class="form-input form-input-compact" id="dlExternalSendersTenant">
+              <option value="">Use current/cached sign-in session</option>
+            </select>
+          </div>
+
+          <div class="form-group-tight" style="margin-top:8px;">
+            <label class="form-label">One-off Tenant Domain <small style="font-weight:normal; color:#6B7280;">(overrides selection above — not saved)</small></label>
+            <input type="text" class="form-input form-input-compact" id="dlExternalSendersTenantOverride" placeholder="e.g. contoso.com or contoso.onmicrosoft.com">
+          </div>
 
           <div class="form-group" style="margin-top:8px;">
             <label class="form-checkbox">
@@ -1121,7 +1133,7 @@
 
       <!-- Discovery - Tenant License Report -->
       <div id="discoveryTenantLicensesView" class="view-container hidden">
-        <h2 class="view-title">License Report</h2>
+        <h2 class="view-title">Check Licenses</h2>
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Check Licenses Across Multiple Tenants</h3>
@@ -1136,7 +1148,7 @@
 
           <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
             <button type="button" class="btn btn-success btn-xs" id="tenantLicensesRunBtn">
-              ▶ Run License Report
+              ▶ Run Check Licenses
             </button>
           </div>
 
@@ -1973,7 +1985,7 @@
               <input type="text" class="form-input" id="tenantsFilePath" placeholder="C:\path\to\Tenant IDs.xlsx">
               <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx,xlsm,xls,csv">Browse</button>
             </div>
-            <small class="form-help">Set once per machine — used by License Report and Check Baseline Status. Each device can point at its own copy since OneDrive paths differ by username.</small>
+            <small class="form-help">Set once per machine — used by Check Licenses, Check Domain Readiness, and Check Baseline Status. Each device can point at its own copy since OneDrive paths differ by username.</small>
           </div>
         </div>
       </div>

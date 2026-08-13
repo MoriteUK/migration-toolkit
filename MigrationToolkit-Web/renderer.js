@@ -1564,6 +1564,31 @@ async function loadOneDriveTenants() {
   }
 }
 
+// Populate tenant dropdown for DL External Senders from customer settings
+async function loadDLExternalSendersTenants() {
+  try {
+    const tenantSelect = document.getElementById('dlExternalSendersTenant');
+    if (!tenantSelect) return;
+
+    const config = await window.electronAPI.getConfig();
+    if (config.success && config.config && config.config.Customers) {
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
+      tenantSelect.innerHTML = '<option value="">Use current/cached sign-in session</option>';
+
+      customers.forEach(customer => {
+        if (customer.Domain) {
+          const option = document.createElement('option');
+          option.value = customer.Domain;
+          option.textContent = `${customer.Prefix} (${customer.Domain})`;
+          tenantSelect.appendChild(option);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error loading DL External Senders tenants:', error);
+  }
+}
+
 // Populate Monitor project dropdown from customer settings
 async function loadMonitorProjects() {
   try {
@@ -1807,6 +1832,8 @@ function switchView(viewName) {
         loadTargetDomain();
       } else if (viewName === 'misc-onedrive') {
         loadOneDriveTenants();
+      } else if (viewName === 'misc-dl-external-senders') {
+        loadDLExternalSendersTenants();
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
@@ -3184,8 +3211,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const dlExternalSendersRunBtn = document.getElementById('dlExternalSendersRunBtn');
   if (dlExternalSendersRunBtn) {
     dlExternalSendersRunBtn.addEventListener('click', async () => {
-      const commit  = document.getElementById('dlExternalSendersCommit').checked;
-      const csvPath = document.getElementById('dlExternalSendersCsvPath').value.trim();
+      const commit   = document.getElementById('dlExternalSendersCommit').checked;
+      const csvPath  = document.getElementById('dlExternalSendersCsvPath').value.trim();
+      const tenant   = document.getElementById('dlExternalSendersTenant').value.trim();
+      const override = document.getElementById('dlExternalSendersTenantOverride').value.trim();
+      const tenantDomain = override || tenant;
 
       const logSection = document.getElementById('dlExternalSendersLog');
       const logOutput  = document.getElementById('dlExternalSendersLogOutput');
@@ -3196,8 +3226,9 @@ document.addEventListener('DOMContentLoaded', () => {
       dlExternalSendersRunBtn.textContent = 'Running…';
 
       const args = [];
-      if (commit)  args.push('-Commit');
-      if (csvPath) args.push('-CsvPath', csvPath);
+      if (commit)       args.push('-Commit');
+      if (csvPath)      args.push('-CsvPath', csvPath);
+      if (tenantDomain) args.push('-TenantDomain', tenantDomain);
 
       window.electronAPI.onPsOutput((text) => {
         logOutput.textContent += text;
@@ -3310,7 +3341,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } finally {
         window.electronAPI.offPsOutput();
         tenantLicensesRunBtn.disabled = false;
-        tenantLicensesRunBtn.textContent = '▶ Run License Report';
+        tenantLicensesRunBtn.textContent = '▶ Run Check Licenses';
       }
     });
   }

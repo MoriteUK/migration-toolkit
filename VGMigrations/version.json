@@ -1,7 +1,16 @@
 {
-  "version": "2.9.82",
+  "version": "2.9.83",
   "releaseDate": "2026-08-13",
   "changelog": [
+    {
+      "version": "2.9.83",
+      "date": "2026-08-13",
+      "changes": [
+        "Renamed 'License Report' to 'Check Licenses' and 'Domain Readiness' to 'Check Domain Readiness' throughout the sidebar, view titles, and buttons for consistency with 'Check Baseline Status'",
+        "Set-DistributionGroupExternalSenders.ps1: Added -TenantDomain, passed to Connect-ExchangeOnline -Organization so sign-in targets a specific tenant; when set, any existing Exchange Online session is disconnected first so a cached connection to a different tenant is never silently reused",
+        "MigrationToolkit-Web: DL External Senders panel now has a Tenant dropdown (from Settings > Customers) plus a one-off tenant-domain override, matching the OneDrive Provisioning panel's pattern"
+      ]
+    },
     {
       "version": "2.9.82",
       "date": "2026-08-13",
