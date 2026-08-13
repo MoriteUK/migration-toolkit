@@ -1,6 +1,15 @@
-$domain = "bravurasecurity.com"
-$outDir = "C:\temp"
-$pollSeconds = 300
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$Domain,
+
+    [string]$OutDir = "C:\temp",
+
+    [int]$PollSeconds = 120
+)
+
+$domain = $Domain
+$outDir = $OutDir
+$pollSeconds = $PollSeconds
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 
 Import-Module ActiveDirectory
