@@ -11,7 +11,11 @@
     admin consent workflow, Intune MDM scope, dynamic device groups, blocked personal
     enrollment, BitLocker/Windows compliance policies, iOS/Android app protection, the
     Conditional Access policy set, and LAPS. Writes one consolidated CSV, one row per tenant,
-    one column per check, plus an overall summary column.
+    with a headline PoliciesCreated column (Yes/No/Unknown) plus one detail column per
+    individual check. PoliciesCreated is Yes only if every check is confirmed Configured, No if
+    any check is confirmed NOT configured (including partially configured), and Unknown when
+    nothing is confirmed missing but one or more checks couldn't be verified (a permission gap
+    on the app registration, not a real answer either way).
 
     Connects using ONLY the existing per-tenant app registration already used by
     Get-TenantLicenseReport.ps1 (stored appcreds_<tenantid>.json, or the workbook's AppId/
@@ -348,6 +352,7 @@ foreach ($rec in $tenantRecords) {
         Write-Host "  No app registration on file for this tenant — skipped (no interactive fallback)." -ForegroundColor Yellow
         $allRows.Add([pscustomobject]@{
             Domain = $rec.Domain; TenantId = $rec.TenantId; TenantName = '(not checked)'
+            PoliciesCreated = 'Unknown'
             AuthorizationPolicy = 'Skipped'; AdminConsentWorkflow = 'Skipped'; IntuneMDMScope = 'Skipped'
             DynamicDeviceGroups = 'Skipped'; BlockPersonalEnrollment = 'Skipped'; BitLockerPolicy = 'Skipped'
             WindowsCompliancePolicy = 'Skipped'; iOSAppProtection = 'Skipped'; AndroidAppProtection = 'Skipped'
@@ -371,6 +376,7 @@ foreach ($rec in $tenantRecords) {
         Write-Host "  FAILED to authenticate: $errMsg" -ForegroundColor Red
         $allRows.Add([pscustomobject]@{
             Domain = $rec.Domain; TenantId = $rec.TenantId; TenantName = '(FAILED)'
+            PoliciesCreated = 'Unknown'
             AuthorizationPolicy = 'Skipped'; AdminConsentWorkflow = 'Skipped'; IntuneMDMScope = 'Skipped'
             DynamicDeviceGroups = 'Skipped'; BlockPersonalEnrollment = 'Skipped'; BitLockerPolicy = 'Skipped'
             WindowsCompliancePolicy = 'Skipped'; iOSAppProtection = 'Skipped'; AndroidAppProtection = 'Skipped'
@@ -490,17 +496,30 @@ foreach ($rec in $tenantRecords) {
 
     $checks = @($authPolicyStatus, $adminConsentStatus, $intuneScopeStatus, $dynGroupsStatus, $blockPersonalStatus,
                 $bitLockerStatus, $winComplianceStatus, $iosProtectionStatus, $androidProtectionStatus, $caStatus, $lapsStatus)
-    $configuredCount = @($checks | Where-Object { $_ -eq 'Configured' }).Count
-    $unknownCount    = @($checks | Where-Object { $_ -like 'Unknown*' }).Count
+    $configuredCount    = @($checks | Where-Object { $_ -eq 'Configured' }).Count
+    $notConfiguredCount = @($checks | Where-Object { $_ -eq 'NotConfigured' -or $_ -like 'Partial*' }).Count
+    $unknownCount       = @($checks | Where-Object { $_ -like 'Unknown*' }).Count
+
+    # PoliciesCreated: Yes only if every check confirms Configured. No if any check confirms it
+    # is NOT configured (Partial counts as No — the baseline isn't fully applied). Unknown only
+    # when nothing is confirmed missing but one or more checks couldn't be verified (permission
+    # gap on the app registration) — kept distinct from No so a permissions gap is never mistaken
+    # for a genuinely missing policy.
+    $policiesCreated = if ($configuredCount -eq $checks.Count) { 'Yes' }
+                        elseif ($notConfiguredCount -gt 0) { 'No' }
+                        else { 'Unknown' }
+
     $overall = "$configuredCount/$($checks.Count) configured"
     if ($unknownCount -gt 0) { $overall += ", $unknownCount unknown (permissions)" }
 
-    Write-Host "  $overall — $($org.DisplayName)" -ForegroundColor $(if ($configuredCount -eq $checks.Count) { 'Green' } else { 'Yellow' })
+    $summaryColor = switch ($policiesCreated) { 'Yes' { 'Green' } 'No' { 'Red' } default { 'Yellow' } }
+    Write-Host "  Policies created: $policiesCreated  ($overall) — $($org.DisplayName)" -ForegroundColor $summaryColor
 
     $allRows.Add([pscustomobject]@{
         Domain                    = $rec.Domain
         TenantId                  = $org.Id
         TenantName                = $org.DisplayName
+        PoliciesCreated           = $policiesCreated
         AuthorizationPolicy       = $authPolicyStatus
         AdminConsentWorkflow      = $adminConsentStatus
         IntuneMDMScope            = $intuneScopeStatus

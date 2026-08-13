@@ -1,7 +1,15 @@
 {
-  "version": "2.9.85",
+  "version": "2.9.86",
   "releaseDate": "2026-08-13",
   "changelog": [
+    {
+      "version": "2.9.86",
+      "date": "2026-08-13",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Added a headline PoliciesCreated column (Yes/No/Unknown) so you don't need to read all 11 per-check columns to see whether a tenant's baseline is done — Yes only if every check confirms Configured, No if any check confirms something is NOT configured (partial counts as No), Unknown when nothing is confirmed missing but a check couldn't be verified due to an app-registration permission gap",
+        "The per-tenant console line and CSV both show the new column; the existing 11 detail columns are unchanged for troubleshooting which specific policy is missing"
+      ]
+    },
     {
       "version": "2.9.85",
       "date": "2026-08-13",
