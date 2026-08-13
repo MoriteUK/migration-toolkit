@@ -1,7 +1,15 @@
 {
-  "version": "2.9.79",
+  "version": "2.9.80",
   "releaseDate": "2026-08-13",
   "changelog": [
+    {
+      "version": "2.9.80",
+      "date": "2026-08-13",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: -TenantIDsPath now defaults to the 'Tenant IDs Xlsx Path' set in Settings > Discovery (config.json's TenantsFilePath), same as Get-TenantLicenseReport.ps1 — was previously hardcoded to a specific user's OneDrive path, which silently used a stale/wrong file on any other machine or account",
+        "MigrationToolkit-Web: Domain Readiness's 'Tenant IDs Excel File' field is now an optional override (blank by default) instead of a required field pre-filled with the same stale hardcoded path"
+      ]
+    },
     {
       "version": "2.9.79",
       "date": "2026-08-13",

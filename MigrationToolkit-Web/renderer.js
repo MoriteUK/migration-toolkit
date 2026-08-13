@@ -396,12 +396,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       try {
         const tenantIDsPath = document.getElementById('domainTenantIDsPath').value.trim();
-        if (!tenantIDsPath) {
-          logOutput.textContent += '\n✗ Error: Please specify the Tenant IDs Excel file path\n';
-          return;
+        // Script falls back to Settings > Discovery > Tenant IDs Xlsx Path when omitted.
+        const args = [];
+        if (tenantIDsPath) {
+          args.push('-TenantIDsPath', tenantIDsPath);
         }
-
-        const args = ['-TenantIDsPath', tenantIDsPath];
         if (processAll) {
           args.push('-ProcessAll');
         }

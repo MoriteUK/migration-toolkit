@@ -12,7 +12,9 @@
     2. If not, checks if MS-verify TXT record exists in public DNS
     3. Reports readiness status for each domain
 .PARAMETER TenantIDsPath
-    Path to the Tenant IDs.xlsx file. Defaults to the standard location.
+    Path to the Tenant IDs.xlsx file. Defaults to the "Tenant IDs Xlsx Path" set in the app's
+    Settings > Discovery tab (TenantsFilePath in %APPDATA%\FlyMigration\config.json) — same
+    file/field Get-TenantLicenseReport.ps1 reads, so setting it once there is enough.
 .PARAMETER OutputPath
     Path where the report will be saved
 .PARAMETER ProcessAll
@@ -24,7 +26,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$TenantIDsPath = "C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Tenant IDs.xlsx",
+    [string]$TenantIDsPath,
 
     [string]$OutputPath = "C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations",
 
@@ -248,6 +250,28 @@ function Check-DNSForRecord {
 }
 
 Write-Log "=== Domain Migration Readiness Check Started ==="
+
+# Load TenantIDsPath from the app's settings config if not provided as parameter — same file
+# (and the same TenantsFilePath field) the "Tenant IDs Xlsx Path" field in Settings > Discovery
+# reads and writes, so setting it once there is enough. Matches Get-TenantLicenseReport.ps1.
+if ([string]::IsNullOrWhiteSpace($TenantIDsPath)) {
+    $configPath = Join-Path $env:APPDATA 'FlyMigration\config.json'
+    if (Test-Path $configPath) {
+        try {
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json
+            $TenantIDsPath = $config.TenantsFilePath
+        } catch {
+            Write-Log "ERROR: Failed to read config.json: $_" "ERROR"
+            exit 1
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($TenantIDsPath)) {
+        Write-Log "ERROR: No -TenantIDsPath parameter provided and no Tenant IDs Xlsx Path set." "ERROR"
+        Write-Log "Set it in the app: Settings (gear icon) > Discovery tab > Tenant IDs Xlsx Path." "ERROR"
+        exit 1
+    }
+}
+
 Write-Log "Tenant IDs file: $TenantIDsPath"
 
 # Check if file exists
