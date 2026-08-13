@@ -18,7 +18,8 @@
 .PARAMETER OutputPath
     Path where the report will be saved
 .PARAMETER ProcessAll
-    Process all rows. If false (default), skips rows with "Yes" in column J or N
+    Process all rows, ignoring column L (DNS Already Requested). Column N (Cutover Done) is
+    always skipped regardless of this switch — a cutover-complete tenant is never re-checked.
 .EXAMPLE
     .\Check-DomainMigrationReadiness.ps1
 .EXAMPLE
@@ -308,12 +309,15 @@ try {
         $tenantName = if ($row.P1) { $row.P1.ToString().Trim() } else { "" }
         if ([string]::IsNullOrWhiteSpace($tenantName)) { continue }
 
+        # Column N (cutover done) is always respected, regardless of -ProcessAll — a
+        # cutover-complete tenant is never worth re-checking for domain readiness.
+        $colN = if ($row.P14) { $row.P14.ToString().Trim() } else { "" }
+        if ($colN.ToLower() -eq "yes") {
+            Write-Log "Row $rowNum : [$tenantName] - Skipping (Migration Complete)"
+            continue
+        }
+
         if (-not $ProcessAll) {
-            $colN = if ($row.P14) { $row.P14.ToString().Trim() } else { "" }
-            if ($colN.ToLower() -eq "yes") {
-                Write-Log "Row $rowNum : [$tenantName] - Skipping (Migration Complete)"
-                continue
-            }
             $colL = if ($row.P12) { $row.P12.ToString().Trim() } else { "" }
             if ($colL.ToLower() -eq "yes") {
                 Write-Log "Row $rowNum : [$tenantName] - Skipping (DNS Already Requested)"

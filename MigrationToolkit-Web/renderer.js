@@ -3334,14 +3334,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (baselineStatusRunBtn) {
     baselineStatusRunBtn.addEventListener('click', async () => {
-      const processAll = document.getElementById('baselineStatusProcessAll')?.checked;
-
       baselineStatusRunBtn.disabled = true;
       baselineStatusRunBtn.textContent = 'Running…';
       if (baselineStatusLogPre) baselineStatusLogPre.textContent = '';
 
       const args = [];
-      if (processAll) args.push('-ProcessAll');
 
       window.electronAPI.onPsOutput(appendBaselineStatusLog);
       try {

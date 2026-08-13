@@ -79,8 +79,10 @@
     Refresh the lookup copy from -TenantsFile now, regardless of its age.
 
 .PARAMETER ProcessAll
-    Process all tenants, ignoring both SkipColumn and LicensesOkColumn. Still respects
-    ExcludeDomains (e.g., 'ourvolaris') to avoid processing the management tenant itself.
+    Process all tenants, ignoring LicensesOkColumn. SkipColumn (cutover done, column N by
+    default) is always respected regardless of this switch — a cutover-complete tenant is
+    never re-checked. Still respects ExcludeDomains (e.g., 'ourvolaris') to avoid processing
+    the management tenant itself.
 
 .EXAMPLE
     .\Get-TenantLicenseReport.ps1

@@ -1,7 +1,17 @@
 {
-  "version": "2.9.81",
+  "version": "2.9.82",
   "releaseDate": "2026-08-13",
   "changelog": [
+    {
+      "version": "2.9.82",
+      "date": "2026-08-13",
+      "changes": [
+        "Standardized cutover-column skip logic across all three multi-tenant Excel-driven scripts: column N ('cutover done') is now ALWAYS skipped, even with -ProcessAll / 'Process all' checked in the UI — a migrated tenant is never worth re-checking",
+        "Check-DomainMigrationReadiness.ps1: Fixed the GUI mislabeling its skip column as 'J' when the code has always actually used column L ('DNS Already Requested') — GUI text now correctly says L; -ProcessAll now only bypasses L, never N (previously bypassed both)",
+        "Check-TenantBaselineStatus.ps1: Removed the now-meaningless -ProcessAll switch (and its 'Process all tenants' checkbox in the UI) — it only ever bypassed column N, which is now always enforced, so the switch had nothing left to do",
+        "Get-TenantLicenseReport.ps1: No behavior change (its -ProcessAll already only bypassed column J, never N) — corrected a misleading doc comment that implied ProcessAll bypassed both"
+      ]
+    },
     {
       "version": "2.9.81",
       "date": "2026-08-13",

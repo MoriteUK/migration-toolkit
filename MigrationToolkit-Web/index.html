@@ -429,8 +429,9 @@
           <div class="form-group">
             <label class="form-checkbox">
               <input type="checkbox" id="domainProcessAll">
-              <span>Process all rows (ignore "Yes" in columns J/N)</span>
+              <span>Process all rows (ignore "Yes" in column L — DNS Already Requested)</span>
             </label>
+            <p class="form-help" style="margin-top:4px;">Column N (cutover already done) is always skipped, regardless of this option.</p>
           </div>
 
           <div class="form-actions">
@@ -836,14 +837,7 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Check Baseline Config Across Multiple Tenants</h3>
-          <p class="form-help">Read-only — reports whether Tenant Baseline Config has already been applied in each tenant listed in <strong>Tenant IDs.xlsx</strong>, without changing anything. Uses the same stored app registration as License Report (no new app registration is created); tenants with no app registration on file are skipped. Exchange Online settings (EOP/ATP presets, transport rules, audit logging) aren't covered — those need a manual check. Writes one consolidated CSV, one row per tenant, and opens it automatically when done.</p>
-
-          <div style="margin-top:10px;">
-            <label class="form-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-              <input type="checkbox" id="baselineStatusProcessAll" style="cursor:pointer;">
-              <span>Process all tenants (ignore column N cutover status)</span>
-            </label>
-          </div>
+          <p class="form-help">Read-only — reports whether Tenant Baseline Config has already been applied in each tenant listed in <strong>Tenant IDs.xlsx</strong>, without changing anything. Uses the same stored app registration as License Report (no new app registration is created); tenants with no app registration on file are skipped. Rows with "Yes" in column N (cutover already done) are always skipped — a migrated tenant is never re-checked. Exchange Online settings (EOP/ATP presets, transport rules, audit logging) aren't covered — those need a manual check. Writes one consolidated CSV, one row per tenant, and opens it automatically when done.</p>
 
           <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
             <button type="button" class="btn btn-success btn-xs" id="baselineStatusRunBtn">

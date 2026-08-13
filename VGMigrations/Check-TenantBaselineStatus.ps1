@@ -46,7 +46,8 @@
 
 .PARAMETER SkipColumn
     Excel column letter holding the "cutover done" skip flag (.xlsx only) — rows where this
-    column equals -SkipValue are excluded. Default 'N'.
+    column equals -SkipValue are excluded. Default 'N'. Always enforced — a cutover-complete
+    tenant is never worth re-checking, so there is no bypass switch for it.
 
 .PARAMETER SkipValue
     Value in -SkipColumn that marks a tenant to be skipped (case-insensitive). Default 'Yes'.
@@ -70,9 +71,6 @@
 .PARAMETER ForceRefreshLookup
     Refresh the lookup copy from -TenantsFile now, regardless of its age.
 
-.PARAMETER ProcessAll
-    Process all tenants, ignoring SkipColumn. Still respects ExcludeDomains.
-
 .NOTES
     The existing per-tenant app registration only needs Organization.Read.All for
     Get-TenantLicenseReport.ps1. To get real answers (not "Unknown (insufficient permission)")
@@ -83,7 +81,6 @@
 .EXAMPLE
     .\Check-TenantBaselineStatus.ps1
     .\Check-TenantBaselineStatus.ps1 -TenantsFile C:\tenants.csv
-    .\Check-TenantBaselineStatus.ps1 -ProcessAll
 #>
 
 param(
@@ -104,8 +101,7 @@ param(
     [string]$OutputPath,
 
     [double]$RefreshIntervalDays = 3.5,
-    [switch]$ForceRefreshLookup,
-    [switch]$ProcessAll
+    [switch]$ForceRefreshLookup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -219,7 +215,7 @@ if ($ext -in @('.xlsx', '.xlsm', '.xls')) {
         $skipVal = $row."P$skipIdx"
         if ([string]::IsNullOrWhiteSpace($idVal)) { continue }
 
-        if (-not $ProcessAll -and $skipVal -and $skipVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($skipVal -and $skipVal.ToString().Trim().Equals($SkipValue, [System.StringComparison]::OrdinalIgnoreCase)) {
             $skippedCount++
             continue
         }
