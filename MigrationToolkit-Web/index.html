@@ -129,6 +129,9 @@
             <button type="button" class="sidebar-subitem" data-view="misc-restore-proxy">
               <span class="sidebar-sublabel">Restore Proxy Addresses</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-dl-external-senders">
+              <span class="sidebar-sublabel">DL External Senders</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="domain-devices">
               <span class="sidebar-sublabel">Remove Entra Devices</span>
             </button>
@@ -1085,6 +1088,40 @@
         <div class="log-section hidden" id="restoreProxyLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="restoreProxyLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Distribution Group External Senders -->
+      <div id="miscDLExternalSendersView" class="view-container hidden">
+        <h2 class="view-title">Distribution Group External Senders</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Audit / Fix External Sender Access on Distribution Groups</h3>
+          <p class="form-help">Checks every distribution group in the connected tenant for whether it accepts messages from external (outside-org) senders. Runs as a dry-run report by default — tick "Apply fixes" to actually update any group found blocking external mail so it allows them. Sign in with the tenant's Exchange admin account when prompted. Writes a timestamped CSV report either way.</p>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="dlExternalSendersCommit">
+              <span>Apply fixes (-Commit) — <strong>without this, it's a read-only report</strong></span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">CSV Output Folder <span style="font-weight:400;color:#6B7280">(optional — leave blank for the default shared Logs folder)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="dlExternalSendersCsvPath" placeholder="Leave blank to use the default Logs folder">
+              <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="dlExternalSendersRunBtn">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="dlExternalSendersLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="dlExternalSendersLogOutput"></div>
         </div>
       </div>
 

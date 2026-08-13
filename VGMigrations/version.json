@@ -1,7 +1,15 @@
 {
-  "version": "2.9.80",
+  "version": "2.9.81",
   "releaseDate": "2026-08-13",
   "changelog": [
+    {
+      "version": "2.9.81",
+      "date": "2026-08-13",
+      "changes": [
+        "Added Set-DistributionGroupExternalSenders.ps1: Audits every distribution group in the connected tenant for whether it accepts external (outside-org) senders (RequireSenderAuthenticationEnabled), reporting to a timestamped CSV; -Commit fixes any group found blocking external mail",
+        "MigrationToolkit-Web: Added 'DL External Senders' under Misc Scripts — dry-run/Commit checkbox, optional CSV output folder override, streaming log panel"
+      ]
+    },
     {
       "version": "2.9.80",
       "date": "2026-08-13",

@@ -22,8 +22,8 @@
     is updated to $false so it accepts external senders.
 
 .PARAMETER CsvPath
-    Optional output folder for the timestamped CSV report. Defaults to current
-    directory.
+    Optional output folder for the timestamped CSV report. Defaults to the shared
+    OneDrive logs folder used by the other misc scripts in this toolkit.
 
 .EXAMPLE
     ./Set-DistributionGroupExternalSenders.ps1
@@ -37,8 +37,12 @@
 [CmdletBinding()]
 param(
     [switch]$Commit,
-    [string]$CsvPath = (Get-Location).Path
+    [string]$CsvPath = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 )
+
+if (-not (Test-Path $CsvPath)) {
+    New-Item -ItemType Directory -Path $CsvPath -Force | Out-Null
+}
 
 $ErrorActionPreference = 'Stop'
 

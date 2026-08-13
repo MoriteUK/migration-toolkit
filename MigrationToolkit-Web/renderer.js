@@ -1777,6 +1777,7 @@ function switchView(viewName) {
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-domain-devices': 'miscDomainDevicesView',
     'misc-restore-proxy': 'miscRestoreProxyView',
+    'misc-dl-external-senders': 'miscDLExternalSendersView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -3175,6 +3176,42 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         restoreProxyRunBtn.disabled = false;
         restoreProxyRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Misc Scripts - Distribution Group External Senders ─────────────────────
+  const dlExternalSendersRunBtn = document.getElementById('dlExternalSendersRunBtn');
+  if (dlExternalSendersRunBtn) {
+    dlExternalSendersRunBtn.addEventListener('click', async () => {
+      const commit  = document.getElementById('dlExternalSendersCommit').checked;
+      const csvPath = document.getElementById('dlExternalSendersCsvPath').value.trim();
+
+      const logSection = document.getElementById('dlExternalSendersLog');
+      const logOutput  = document.getElementById('dlExternalSendersLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      dlExternalSendersRunBtn.disabled = true;
+      dlExternalSendersRunBtn.textContent = 'Running…';
+
+      const args = [];
+      if (commit)  args.push('-Commit');
+      if (csvPath) args.push('-CsvPath', csvPath);
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.streamPowerShell('Set-DistributionGroupExternalSenders.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        dlExternalSendersRunBtn.disabled = false;
+        dlExternalSendersRunBtn.textContent = '▶ Run';
       }
     });
   }
