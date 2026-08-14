@@ -1,10 +1,21 @@
 param(
-    [string]$CsvPath   = "C:\temp\bravurasecurity_com_AD_usage.csv",
-    [string]$OldDomain = "bravurasecurity.com",
+    [Parameter(Mandatory = $true)]
+    [string]$Domain,
+
     [string]$NewDomain = "ourvolaris.onmicrosoft.com",
-    [string]$LogPath   = "C:\temp\bravurasecurity_com_remediation_$(Get-Date -Format yyyyMMdd_HHmmss).csv",
+
+    [string]$OutDir = "C:\temp",
+
+    [string]$CsvPath,
+
+    [string]$LogPath,
+
     [switch]$Apply      # omit = dry run. Add -Apply to make real changes.
 )
+
+$OldDomain = $Domain
+if (-not $CsvPath) { $CsvPath = Join-Path $OutDir "${Domain}_AD_usage.csv" }
+if (-not $LogPath) { $LogPath = Join-Path $OutDir "${Domain}_remediation_$(Get-Date -Format yyyyMMdd_HHmmss).csv" }
 
 Import-Module ActiveDirectory
 
