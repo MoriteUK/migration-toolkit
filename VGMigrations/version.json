@@ -1,7 +1,16 @@
 {
-  "version": "2.9.86",
-  "releaseDate": "2026-08-13",
+  "version": "2.9.87",
+  "releaseDate": "2026-08-18",
   "changelog": [
+    {
+      "version": "2.9.87",
+      "date": "2026-08-18",
+      "changes": [
+        "Added Search-OneDriveFiles.ps1: standalone WinForms tool for when a user reports missing files — connects to a single user's OneDrive and builds a searchable, filterable, exportable list of every file, covering both the live Documents library and the Recycle Bin (first-stage user-recoverable and second-stage admin-recoverable)",
+        "Uses PnP PowerShell with interactive browser sign-in (as a SharePoint/Global admin) rather than app-only auth — confirmed Microsoft Graph has no API to list a OneDrive-for-Business Recycle Bin, and the classic SharePoint REST recycle-bin API requires the legacy Azure ACS app-only auth model, which Microsoft retired on 2026-04-02, ruling out reuse of the existing Fly/AOS app registration for this",
+        "Temporarily grants the signed-in admin site collection access to the target OneDrive via Set-PnPTenantSite so it can enumerate files and the Recycle Bin; this access is not auto-revoked afterwards (documented in the script's header)"
+      ]
+    },
     {
       "version": "2.9.86",
       "date": "2026-08-13",
