@@ -283,6 +283,7 @@ function Show-SearchOneDriveUI {
     $script:tickBusy    = $false
 
     $btnRun.Add_Click({
+      try {
         $targetUpn  = $txtUpn.Text.Trim()
         $adminUrl   = $txtAdminUrl.Text.Trim().TrimEnd('/')
         $yourUpn    = $txtYourUpn.Text.Trim()
@@ -301,7 +302,7 @@ function Show-SearchOneDriveUI {
         $oneDriveAccount = ($targetUpn -replace '[.@]', '_')
         $oneDriveUrl = "https://$tenantHost-my.sharepoint.com/personal/$oneDriveAccount"
 
-        Write-Log "Run clicked — target=$targetUpn  oneDriveUrl=$oneDriveUrl  admin=$yourUpn"
+        _RawLog "Run clicked — target=$targetUpn  oneDriveUrl=$oneDriveUrl  admin=$yourUpn"
 
         $btnRun.Enabled = $false; $btnExport.Enabled = $false; $btnClose.Enabled = $false
         $txtFilter.Enabled = $false; $txtFilter.Text = ''
@@ -448,43 +449,66 @@ function Show-SearchOneDriveUI {
         $script:sofHandle = $script:sofPS.BeginInvoke()
 
         $rs2 = $rs
+
+        function Set-CtlText {
+            param($Control, [string]$Value)
+            if ($Control -and -not $Control.IsDisposed) { $Control.Text = $Value }
+        }
+
         $script:sofTimer = New-Object System.Windows.Forms.Timer
         $script:sofTimer.Interval = 300
         $script:sofTimer.Add_Tick({
             if ($script:tickBusy) { return }
             $script:tickBusy = $true
             try {
+                if ($form.IsDisposed) { $script:sofTimer.Stop(); return }
+
                 while ($rs2.LogQueue.Count -gt 0) {
                     $raw   = $rs2.LogQueue.Dequeue()
                     $level = if ($raw -match '^\[(\w+)\]') { $matches[1] } else { 'INFO' }
                     $msg   = $raw -replace '^\[\w+\] ', ''
-                    $lblStatus.Text = $msg
-                    Write-Log $msg $level
+                    Set-CtlText $lblStatus $msg
+                    _RawLog "[$level] $msg"
                 }
                 while ($rs2.Rows.Count -gt 0) {
                     $row = $rs2.Rows[0]
                     $rs2.Rows.RemoveAt(0)
-                    [void]$dt.Rows.Add($row.Status, $row.Name, $row.Location, $row.SizeKB, $row.Date, $row.ModifiedOrDeletedBy)
+                    [void]$dt.Rows.Add($row.Status, $row.Name, $row.Location, [double]$row.SizeKB, $row.Date, $row.ModifiedOrDeletedBy)
                 }
                 if ($rs2.Done) {
                     $script:sofTimer.Stop()
-                    $progress.Style = [System.Windows.Forms.ProgressBarStyle]::Continuous
-                    $progress.Value = 100
+                    if (-not $progress.IsDisposed) { $progress.Style = [System.Windows.Forms.ProgressBarStyle]::Continuous; $progress.Value = 100 }
                     if ($rs2.FatalError) {
-                        $lblStatus.Text = "Failed — $($rs2.FatalError)"
-                        Write-Log '=== Search failed ===' 'ERROR'
+                        Set-CtlText $lblStatus "Failed — $($rs2.FatalError)"
+                        _RawLog "=== Search failed: $($rs2.FatalError) ==="
                     } else {
-                        $lblStatus.Text = "Done — $($dt.Rows.Count) row(s). Use Filter to search, or Export CSV."
-                        Write-Log '=== Search complete ===' 'OK'
-                        $txtFilter.Enabled = $true
-                        $btnExport.Enabled = ($dt.Rows.Count -gt 0)
+                        Set-CtlText $lblStatus "Done — $($dt.Rows.Count) row(s). Use Filter to search, or Export CSV."
+                        _RawLog "=== Search complete — $($dt.Rows.Count) row(s) ==="
+                        if (-not $txtFilter.IsDisposed) { $txtFilter.Enabled = $true }
+                        if (-not $btnExport.IsDisposed) { $btnExport.Enabled = ($dt.Rows.Count -gt 0) }
                     }
-                    $btnRun.Enabled = $true; $btnClose.Enabled = $true
+                    if (-not $btnRun.IsDisposed)   { $btnRun.Enabled = $true }
+                    if (-not $btnClose.IsDisposed) { $btnClose.Enabled = $true }
                     try { $script:sofRunspace.Close(); $script:sofRunspace.Dispose() } catch {}
+                }
+            } catch {
+                _RawLog "Tick handler error: $($_.Exception.Message)"
+                _RawLog $_.ScriptStackTrace
+                try { $script:sofTimer.Stop() } catch {}
+                try { if ($script:sofRunspace) { $script:sofRunspace.Close(); $script:sofRunspace.Dispose() } } catch {}
+                if (-not $form.IsDisposed) {
+                    Set-CtlText $lblStatus "Failed — $($_.Exception.Message)"
+                    if (-not $btnRun.IsDisposed)   { $btnRun.Enabled = $true }
+                    if (-not $btnClose.IsDisposed) { $btnClose.Enabled = $true }
                 }
             } finally { $script:tickBusy = $false }
         }.GetNewClosure())
         $script:sofTimer.Start()
+      } catch {
+        _RawLog "Run-click error: $($_.Exception.Message)"
+        [System.Windows.Forms.MessageBox]::Show("Failed to start search: $($_.Exception.Message)", 'Error', 'OK', 'Error') | Out-Null
+        $btnRun.Enabled = $true; $btnExport.Enabled = $true; $btnClose.Enabled = $true
+      }
     }.GetNewClosure())
 
     $form.Add_FormClosing({
@@ -502,7 +526,7 @@ function Show-SearchOneDriveUI {
     [System.Windows.Forms.Application]::Run($form)
 }
 
-Write-Log '=== Search-OneDriveFiles.ps1 starting ==='
+_RawLog '=== Search-OneDriveFiles.ps1 starting ==='
 try { Show-SearchOneDriveUI }
 catch {
     Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue

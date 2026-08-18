@@ -1,7 +1,16 @@
 {
-  "version": "2.9.87",
+  "version": "2.9.88",
   "releaseDate": "2026-08-18",
   "changelog": [
+    {
+      "version": "2.9.88",
+      "date": "2026-08-18",
+      "changes": [
+        "Search-OneDriveFiles.ps1: fixed a crash-to-desktop (.NET unhandled-exception/JIT-debugger dialog, killing the whole pwsh.exe process) — the background-progress Timer's tick handler had a try/finally with no catch, so any error inside it (e.g. a UI control briefly unavailable during a Close-while-running race) propagated straight out of the WinForms event callback instead of being handled",
+        "Timer tick handler now has a real catch block, every control write is guarded with an IsDisposed check via a new Set-CtlText helper, and status logging no longer calls lib.ps1's shared Write-Log (which assumes a RichTextBox log panel this script doesn't have) — replaced with a simple file-only logger throughout",
+        "Sign In and Search button handler is now wrapped in try/catch too, so a failure before the background search even starts shows a message box and re-enables the UI instead of risking the same crash"
+      ]
+    },
     {
       "version": "2.9.87",
       "date": "2026-08-18",
