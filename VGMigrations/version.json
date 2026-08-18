@@ -1,7 +1,16 @@
 {
-  "version": "2.9.89",
+  "version": "2.9.90",
   "releaseDate": "2026-08-18",
   "changelog": [
+    {
+      "version": "2.9.90",
+      "date": "2026-08-18",
+      "changes": [
+        "Search-OneDriveFiles.ps1: fixed the actual connect failure ('Specified method is not supported') and the resulting infinite error loop by dropping the background-runspace + Timer architecture entirely — the search now runs synchronously on the UI thread with periodic Application.DoEvents() calls to keep the window responsive",
+        "Root cause: Connect-PnPOnline -Interactive shows its own embedded browser dialog, which needs an active WinForms message pump on the calling thread. The main UI thread has one (Application.Run($form)); the background runspace used previously did not, which is what threw NotSupportedException. This matches this repo's own prior finding in Deduplicate-Inventory.ps1 (v2.9.53) that PnP's popup-based auth is unreliable here and Connect-SPOService -UseSystemBrowser was the fix that actually worked for SharePoint interactive sign-in",
+        "As a side effect this also removes the unrelated infinite-loop bug from 2.9.88/2.9.89: reading $script:-scoped Timer/Runspace handles from inside a Timer.Tick handler nested inside another closure was unreliable and kept re-throwing on every tick — there's no longer a Timer or background runspace for that to happen to"
+      ]
+    },
     {
       "version": "2.9.89",
       "date": "2026-08-18",

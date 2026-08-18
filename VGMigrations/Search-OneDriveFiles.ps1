@@ -286,10 +286,13 @@ function Show-SearchOneDriveUI {
     }.GetNewClosure())
 
     # ── Run ───────────────────────────────────────────────────────────────────
-    $script:sofTimer    = $null
-    $script:sofRunspace = $null
-    $script:sofPS       = $null
-    $script:tickBusy    = $false
+    # Runs synchronously on the UI thread (with periodic Application.DoEvents() calls
+    # to keep the window repainting) rather than on a background runspace. PnP's
+    # -Interactive sign-in shows its own embedded browser dialog, which needs an active
+    # WinForms message pump on the thread that calls it — the main UI thread has one
+    # (Application.Run($form) below); a background runspace does not, which is what
+    # produced the "Specified method is not supported" failure when this ran there.
+    $script:sofRunning = $false
 
     $btnRun.Add_Click({
       try {
@@ -313,217 +316,137 @@ function Show-SearchOneDriveUI {
 
         _RawLog "Run clicked — target=$targetUpn  oneDriveUrl=$oneDriveUrl  admin=$yourUpn"
 
+        function GetProp {
+            param($Obj, [string]$Name)
+            if ($null -eq $Obj) { return $null }
+            $p = $Obj.PSObject.Properties[$Name]
+            if ($p) { return $p.Value }
+            return $null
+        }
+
+        function Set-Status {
+            param([string]$Msg, [string]$Level = 'INFO')
+            Set-CtlText $lblStatus $Msg
+            _RawLog "[$Level] $Msg"
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+
+        $script:sofRunning = $true
         $btnRun.Enabled = $false; $btnExport.Enabled = $false; $btnClose.Enabled = $false
         $txtFilter.Enabled = $false; $txtFilter.Text = ''
         $dt.Rows.Clear()
         $progress.Style = [System.Windows.Forms.ProgressBarStyle]::Marquee
-        $lblStatus.Text = 'Connecting — sign in with the browser window that opens...'
 
-        $logFilePath = $script:LogFile
-
-        $rs = [hashtable]::Synchronized(@{
-            Done       = $false
-            FatalError = $null
-            Rows       = [System.Collections.Generic.List[object]]::new()
-            LogQueue   = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
-        })
-
-        $script:sofRunspace = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
-        $script:sofRunspace.ApartmentState = 'STA'
-        $script:sofRunspace.ThreadOptions  = 'ReuseThread'
-        $script:sofRunspace.Open()
-
-        $script:sofPS = [System.Management.Automation.PowerShell]::Create()
-        $script:sofPS.Runspace = $script:sofRunspace
-
-        [void]$script:sofPS.AddScript({
-            param($adminUrl, $oneDriveUrl, $yourUpn, $rs, $logFilePath)
-
-            function QLog {
-                param([string]$Msg, [string]$Level = 'INFO')
-                $rs.LogQueue.Enqueue("[$Level] $Msg")
-                try { "$(Get-Date -Format 'HH:mm:ss') [$Level] $Msg" | Add-Content $logFilePath -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+        try {
+            Set-Status 'Checking for PnP.PowerShell module...'
+            if (-not (Get-Module -ListAvailable -Name PnP.PowerShell)) {
+                Set-Status 'PnP.PowerShell not found — installing from PSGallery (CurrentUser scope)...' 'WARN'
+                Install-Module -Name PnP.PowerShell -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
             }
+            Import-Module PnP.PowerShell -ErrorAction Stop
+            Set-Status 'PnP.PowerShell loaded.' 'OK'
 
-            function GetProp {
-                param($Obj, [string]$Name)
-                if ($null -eq $Obj) { return $null }
-                $p = $Obj.PSObject.Properties[$Name]
-                if ($p) { return $p.Value }
-                return $null
-            }
+            Set-Status "Connecting to SharePoint Admin ($adminUrl) — sign in as $yourUpn in the window that opens..."
+            Connect-PnPOnline -Url $adminUrl -Interactive -ErrorAction Stop
+            Set-Status 'Connected to SharePoint Admin.' 'OK'
 
+            Set-Status "Granting temporary site collection admin on the target OneDrive to $yourUpn..."
             try {
-                QLog 'Checking for PnP.PowerShell module...'
-                if (-not (Get-Module -ListAvailable -Name PnP.PowerShell)) {
-                    QLog 'PnP.PowerShell not found — installing from PSGallery (CurrentUser scope)...' 'WARN'
-                    Install-Module -Name PnP.PowerShell -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
-                }
-                Import-Module PnP.PowerShell -ErrorAction Stop
-                QLog 'PnP.PowerShell loaded.' 'OK'
-
-                QLog "Connecting to SharePoint Admin ($adminUrl) — sign in as $yourUpn..."
-                Connect-PnPOnline -Url $adminUrl -Interactive -ErrorAction Stop
-                QLog 'Connected to SharePoint Admin.' 'OK'
-
-                QLog "Granting temporary site collection admin on the target OneDrive to $yourUpn..."
-                try {
-                    Set-PnPTenantSite -Url $oneDriveUrl -Owners @($yourUpn) -ErrorAction Stop
-                    QLog 'Access granted.' 'OK'
-                } catch {
-                    throw "Could not grant access to the target OneDrive ($oneDriveUrl). Confirm the UPN is correct and that the OneDrive has been provisioned. Underlying error: $($_.Exception.Message)"
-                }
-
-                Disconnect-PnPOnline -ErrorAction SilentlyContinue
-                QLog "Connecting to the target OneDrive ($oneDriveUrl)..."
-                Connect-PnPOnline -Url $oneDriveUrl -Interactive -ErrorAction Stop
-                QLog 'Connected to target OneDrive.' 'OK'
-
-                # ── Live files ────────────────────────────────────────────────
-                QLog 'Locating the Documents library...'
-                $lib = Get-PnPList -ErrorAction Stop | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden } | Select-Object -First 1
-                if (-not $lib) { $lib = Get-PnPList -Identity 'Documents' -ErrorAction SilentlyContinue }
-
-                if ($lib) {
-                    QLog "Enumerating files in '$($lib.Title)' (this can take a while for large OneDrives)..."
-                    $items = Get-PnPListItem -List $lib -PageSize 500 -Fields 'FileLeafRef','FileRef','FSObjType','Modified','Editor','File_x0020_Size' -ErrorAction Stop
-                    $fileCount = 0
-                    foreach ($item in $items) {
-                        $fsType = GetProp $item.FieldValues 'FSObjType'
-                        if ($fsType -ne 0) { continue }   # 0 = file, 1 = folder
-                        $fileCount++
-                        $name     = GetProp $item.FieldValues 'FileLeafRef'
-                        $path     = GetProp $item.FieldValues 'FileRef'
-                        $modified = GetProp $item.FieldValues 'Modified'
-                        $editor   = GetProp $item.FieldValues 'Editor'
-                        $editorName = if ($editor -and $editor.Email) { $editor.Email } elseif ($editor -and $editor.LookupValue) { $editor.LookupValue } else { '' }
-                        $sizeBytes = GetProp $item.FieldValues 'File_x0020_Size'
-                        $sizeKB = if ($sizeBytes) { [math]::Round([double]$sizeBytes / 1KB, 1) } else { 0 }
-
-                        $rs.Rows.Add([ordered]@{
-                            Status               = 'Live'
-                            Name                 = $name
-                            Location             = (Split-Path $path -Parent)
-                            SizeKB               = $sizeKB
-                            Date                 = if ($modified) { $modified.ToString('yyyy-MM-dd HH:mm') } else { '' }
-                            ModifiedOrDeletedBy  = $editorName
-                        })
-                        if ($fileCount % 250 -eq 0) { QLog "  ...$fileCount live file(s) so far" }
-                    }
-                    QLog "Live files: $fileCount" 'OK'
-                } else {
-                    QLog 'Could not locate a Documents library — skipping live file enumeration.' 'WARN'
-                }
-
-                # ── Recycle bin (both stages) ────────────────────────────────
-                foreach ($stage in @('FirstStage','SecondStage')) {
-                    QLog "Enumerating Recycle Bin ($stage)..."
-                    $binItems = if ($stage -eq 'FirstStage') { Get-PnPRecycleBinItem -FirstStage -ErrorAction Stop } else { Get-PnPRecycleBinItem -SecondStage -ErrorAction Stop }
-                    $binItems = @($binItems)
-                    $label = if ($stage -eq 'FirstStage') { 'Recycle Bin (user-recoverable)' } else { 'Recycle Bin (admin-recoverable only)' }
-                    foreach ($bi in $binItems) {
-                        $itemType = GetProp $bi 'ItemType'
-                        if ($itemType -and $itemType -ne 'File') { continue }
-                        $title      = GetProp $bi 'Title'
-                        $dir        = GetProp $bi 'DirName'
-                        $deletedBy  = GetProp $bi 'DeletedByEmail'
-                        if (-not $deletedBy) { $deletedBy = GetProp $bi 'DeletedBy' }
-                        $deletedDt  = GetProp $bi 'DeletedDate'
-                        $size       = GetProp $bi 'Size'
-                        $sizeKB = if ($size) { [math]::Round([double]$size / 1KB, 1) } else { 0 }
-
-                        $rs.Rows.Add([ordered]@{
-                            Status               = $label
-                            Name                 = $title
-                            Location             = $dir
-                            SizeKB               = $sizeKB
-                            Date                 = if ($deletedDt) { ([datetime]$deletedDt).ToString('yyyy-MM-dd HH:mm') } else { '' }
-                            ModifiedOrDeletedBy  = $deletedBy
-                        })
-                    }
-                    QLog "$label items: $($binItems.Count)" 'OK'
-                }
-
-                QLog "Done — $($rs.Rows.Count) total row(s)." 'OK'
-
+                Set-PnPTenantSite -Url $oneDriveUrl -Owners @($yourUpn) -ErrorAction Stop
+                Set-Status 'Access granted.' 'OK'
             } catch {
-                $rs.FatalError = $_.Exception.Message
-                QLog "Fatal: $($_.Exception.Message)" 'ERROR'
-            } finally {
-                try { Disconnect-PnPOnline -ErrorAction SilentlyContinue } catch {}
-                $rs.Done = $true
+                throw "Could not grant access to the target OneDrive ($oneDriveUrl). Confirm the UPN is correct and that the OneDrive has been provisioned. Underlying error: $($_.Exception.Message)"
             }
-        })
-        [void]$script:sofPS.AddParameters(@{ adminUrl = $adminUrl; oneDriveUrl = $oneDriveUrl; yourUpn = $yourUpn; rs = $rs; logFilePath = $logFilePath })
-        $script:sofHandle = $script:sofPS.BeginInvoke()
 
-        $rs2 = $rs
+            Disconnect-PnPOnline -ErrorAction SilentlyContinue
+            Set-Status "Connecting to the target OneDrive ($oneDriveUrl)..."
+            Connect-PnPOnline -Url $oneDriveUrl -Interactive -ErrorAction Stop
+            Set-Status 'Connected to target OneDrive.' 'OK'
 
-        $script:sofTimer = New-Object System.Windows.Forms.Timer
-        $script:sofTimer.Interval = 300
-        $script:sofTimer.Add_Tick({
-            if ($script:tickBusy) { return }
-            $script:tickBusy = $true
-            try {
-                if ($form.IsDisposed) { $script:sofTimer.Stop(); return }
+            # ── Live files ────────────────────────────────────────────────
+            Set-Status 'Locating the Documents library...'
+            $lib = Get-PnPList -ErrorAction Stop | Where-Object { $_.BaseType -eq 'DocumentLibrary' -and -not $_.Hidden } | Select-Object -First 1
+            if (-not $lib) { $lib = Get-PnPList -Identity 'Documents' -ErrorAction SilentlyContinue }
 
-                while ($rs2.LogQueue.Count -gt 0) {
-                    $raw   = $rs2.LogQueue.Dequeue()
-                    $level = if ($raw -match '^\[(\w+)\]') { $matches[1] } else { 'INFO' }
-                    $msg   = $raw -replace '^\[\w+\] ', ''
-                    Set-CtlText $lblStatus $msg
-                    _RawLog "[$level] $msg"
-                }
-                while ($rs2.Rows.Count -gt 0) {
-                    $row = $rs2.Rows[0]
-                    $rs2.Rows.RemoveAt(0)
-                    [void]$dt.Rows.Add($row.Status, $row.Name, $row.Location, [double]$row.SizeKB, $row.Date, $row.ModifiedOrDeletedBy)
-                }
-                if ($rs2.Done) {
-                    $script:sofTimer.Stop()
-                    if (-not $progress.IsDisposed) { $progress.Style = [System.Windows.Forms.ProgressBarStyle]::Continuous; $progress.Value = 100 }
-                    if ($rs2.FatalError) {
-                        Set-CtlText $lblStatus "Failed — $($rs2.FatalError)"
-                        _RawLog "=== Search failed: $($rs2.FatalError) ==="
-                    } else {
-                        Set-CtlText $lblStatus "Done — $($dt.Rows.Count) row(s). Use Filter to search, or Export CSV."
-                        _RawLog "=== Search complete — $($dt.Rows.Count) row(s) ==="
-                        if (-not $txtFilter.IsDisposed) { $txtFilter.Enabled = $true }
-                        if (-not $btnExport.IsDisposed) { $btnExport.Enabled = ($dt.Rows.Count -gt 0) }
+            $fileCount = 0
+            if ($lib) {
+                Set-Status "Enumerating files in '$($lib.Title)' (this can take a while for large OneDrives)..."
+                $items = Get-PnPListItem -List $lib -PageSize 500 -Fields 'FileLeafRef','FileRef','FSObjType','Modified','Editor','File_x0020_Size' -ErrorAction Stop
+                foreach ($item in $items) {
+                    $fsType = GetProp $item.FieldValues 'FSObjType'
+                    if ($fsType -ne 0) { continue }   # 0 = file, 1 = folder
+                    $fileCount++
+                    $name     = GetProp $item.FieldValues 'FileLeafRef'
+                    $path     = GetProp $item.FieldValues 'FileRef'
+                    $modified = GetProp $item.FieldValues 'Modified'
+                    $editor   = GetProp $item.FieldValues 'Editor'
+                    $editorName = if ($editor -and $editor.Email) { $editor.Email } elseif ($editor -and $editor.LookupValue) { $editor.LookupValue } else { '' }
+                    $sizeBytes = GetProp $item.FieldValues 'File_x0020_Size'
+                    $sizeKB = if ($sizeBytes) { [math]::Round([double]$sizeBytes / 1KB, 1) } else { 0 }
+
+                    [void]$dt.Rows.Add('Live', $name, (Split-Path $path -Parent), [double]$sizeKB,
+                        $(if ($modified) { $modified.ToString('yyyy-MM-dd HH:mm') } else { '' }), $editorName)
+
+                    if ($fileCount % 100 -eq 0) {
+                        Set-Status "  ...$fileCount live file(s) so far"
                     }
-                    if (-not $btnRun.IsDisposed)   { $btnRun.Enabled = $true }
-                    if (-not $btnClose.IsDisposed) { $btnClose.Enabled = $true }
-                    try { $script:sofRunspace.Close(); $script:sofRunspace.Dispose() } catch {}
                 }
-            } catch {
-                _RawLog "Tick handler error: $($_.Exception.Message)"
-                _RawLog $_.ScriptStackTrace
-                try { $script:sofTimer.Stop() } catch {}
-                try { if ($script:sofRunspace) { $script:sofRunspace.Close(); $script:sofRunspace.Dispose() } } catch {}
-                if (-not $form.IsDisposed) {
-                    Set-CtlText $lblStatus "Failed — $($_.Exception.Message)"
-                    if (-not $btnRun.IsDisposed)   { $btnRun.Enabled = $true }
-                    if (-not $btnClose.IsDisposed) { $btnClose.Enabled = $true }
+                Set-Status "Live files: $fileCount" 'OK'
+            } else {
+                Set-Status 'Could not locate a Documents library — skipping live file enumeration.' 'WARN'
+            }
+
+            # ── Recycle bin (both stages) ────────────────────────────────
+            foreach ($stage in @('FirstStage','SecondStage')) {
+                Set-Status "Enumerating Recycle Bin ($stage)..."
+                $binItems = if ($stage -eq 'FirstStage') { Get-PnPRecycleBinItem -FirstStage -ErrorAction Stop } else { Get-PnPRecycleBinItem -SecondStage -ErrorAction Stop }
+                $binItems = @($binItems)
+                $label = if ($stage -eq 'FirstStage') { 'Recycle Bin (user-recoverable)' } else { 'Recycle Bin (admin-recoverable only)' }
+                foreach ($bi in $binItems) {
+                    $itemType = GetProp $bi 'ItemType'
+                    if ($itemType -and $itemType -ne 'File') { continue }
+                    $title      = GetProp $bi 'Title'
+                    $dir        = GetProp $bi 'DirName'
+                    $deletedBy  = GetProp $bi 'DeletedByEmail'
+                    if (-not $deletedBy) { $deletedBy = GetProp $bi 'DeletedBy' }
+                    $deletedDt  = GetProp $bi 'DeletedDate'
+                    $size       = GetProp $bi 'Size'
+                    $sizeKB = if ($size) { [math]::Round([double]$size / 1KB, 1) } else { 0 }
+
+                    [void]$dt.Rows.Add($label, $title, $dir, [double]$sizeKB,
+                        $(if ($deletedDt) { ([datetime]$deletedDt).ToString('yyyy-MM-dd HH:mm') } else { '' }), $deletedBy)
                 }
-            } finally { $script:tickBusy = $false }
-        }.GetNewClosure())
-        $script:sofTimer.Start()
+                Set-Status "$label items: $($binItems.Count)" 'OK'
+            }
+
+            Set-Status "Done — $($dt.Rows.Count) row(s). Use Filter to search, or Export CSV." 'OK'
+            $txtFilter.Enabled = $true
+            $btnExport.Enabled = ($dt.Rows.Count -gt 0)
+
+        } catch {
+            Set-Status "Failed — $($_.Exception.Message)" 'ERROR'
+            _RawLog $_.ScriptStackTrace
+        } finally {
+            try { Disconnect-PnPOnline -ErrorAction SilentlyContinue } catch {}
+            $progress.Style = [System.Windows.Forms.ProgressBarStyle]::Continuous
+            $progress.Value = 100
+            $btnRun.Enabled = $true; $btnClose.Enabled = $true
+            $script:sofRunning = $false
+        }
       } catch {
         _RawLog "Run-click error: $($_.Exception.Message)"
         [System.Windows.Forms.MessageBox]::Show("Failed to start search: $($_.Exception.Message)", 'Error', 'OK', 'Error') | Out-Null
         $btnRun.Enabled = $true; $btnExport.Enabled = $true; $btnClose.Enabled = $true
+        $script:sofRunning = $false
       }
     }.GetNewClosure())
 
     $form.Add_FormClosing({
         param($s, $e)
-        if ($script:sofTimer -and $script:sofTimer.Enabled) {
+        if ($script:sofRunning) {
             $r = [System.Windows.Forms.MessageBox]::Show('Search is still running. Close anyway?', 'In Progress', 'YesNo', 'Warning')
             if ($r -eq [System.Windows.Forms.DialogResult]::No) { $e.Cancel = $true; return }
         }
-        if ($script:sofTimer)    { try { $script:sofTimer.Stop();    $script:sofTimer.Dispose() }    catch {} }
-        if ($script:sofPS)       { try { $script:sofPS.Stop();       $script:sofPS.Dispose() }        catch {} }
-        if ($script:sofRunspace) { try { $script:sofRunspace.Close(); $script:sofRunspace.Dispose() } catch {} }
     }.GetNewClosure())
 
     $form.Add_Shown({ $form.BringToFront(); $form.Activate() }.GetNewClosure())
