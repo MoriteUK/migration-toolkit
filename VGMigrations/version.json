@@ -1,7 +1,15 @@
 {
-  "version": "2.9.88",
+  "version": "2.9.89",
   "releaseDate": "2026-08-18",
   "changelog": [
+    {
+      "version": "2.9.89",
+      "date": "2026-08-18",
+      "changes": [
+        "Search-OneDriveFiles.ps1: fixed the same crash-to-desktop recurring after 2.9.88's fix — the new Set-CtlText helper was defined as a local 'function' inside the Sign In and Search click handler, but .GetNewClosure() only captures variables, not locally-defined functions, so the Timer's separately-closured Add_Tick handler couldn't see it and threw CommandNotFoundException, which (like the original bug) escaped the WinForms callback unhandled",
+        "Set-CtlText moved to true top-level script scope (alongside _RawLog, which is why that one always worked) so it's visible from every event handler regardless of which closure defined it"
+      ]
+    },
     {
       "version": "2.9.88",
       "date": "2026-08-18",

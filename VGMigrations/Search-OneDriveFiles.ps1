@@ -50,6 +50,15 @@ function _RawLog {
     "$(Get-Date -Format 'HH:mm:ss.fff') $Msg" | Add-Content -Path $script:LogFile -Encoding UTF8 -ErrorAction SilentlyContinue
 }
 
+# Top-level (not nested in a scriptblock) so it's visible from any GetNewClosure()'d event
+# handler — functions defined inside a closure are NOT captured by GetNewClosure(), only
+# variables are, so a nested "function Set-CtlText" would be invisible to sibling handlers
+# like the Timer's Add_Tick and throw CommandNotFoundException when called from there.
+function Set-CtlText {
+    param($Control, [string]$Value)
+    if ($Control -and -not $Control.IsDisposed) { $Control.Text = $Value }
+}
+
 _RawLog "=== Search-OneDriveFiles.ps1 started  PID=$PID  PSVersion=$($PSVersionTable.PSVersion) ==="
 
 if (Test-Path $libPath) {
@@ -449,11 +458,6 @@ function Show-SearchOneDriveUI {
         $script:sofHandle = $script:sofPS.BeginInvoke()
 
         $rs2 = $rs
-
-        function Set-CtlText {
-            param($Control, [string]$Value)
-            if ($Control -and -not $Control.IsDisposed) { $Control.Text = $Value }
-        }
 
         $script:sofTimer = New-Object System.Windows.Forms.Timer
         $script:sofTimer.Interval = 300
