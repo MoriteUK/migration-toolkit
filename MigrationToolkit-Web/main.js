@@ -1,7 +1,11 @@
 // Migration Toolkit - Electron Main Process
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
+
+// Tracks the currently-running streamed PowerShell child process (one at a time — the UI only
+// ever has one active streaming run/log panel), so a Stop button can cancel it mid-run.
+let currentPsProcess = null;
 
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
@@ -318,6 +322,7 @@ function registerIPCHandlers() {
       const scriptPath = path.join(PS_SCRIPT_PATH, scriptName);
       const psArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args];
       const ps = spawn('pwsh.exe', psArgs, { cwd: PS_SCRIPT_PATH });
+      currentPsProcess = ps;
 
       const logFile = openScriptLog(scriptName);
       logFile.write(`Args: ${args.join(' ')}\n\n`);
@@ -333,14 +338,30 @@ function registerIPCHandlers() {
         if (!event.sender.isDestroyed()) event.sender.send('ps-output', text);
       });
       ps.on('close', (code) => {
+        if (currentPsProcess === ps) currentPsProcess = null;
         logFile.write(`\n=== Exit code: ${code} ===\n`);
         logFile.end();
         resolve({ success: code === 0, code });
       });
       ps.on('error', (err) => {
+        if (currentPsProcess === ps) currentPsProcess = null;
         logFile.write(`\n=== Error: ${err.message} ===\n`);
         logFile.end();
         resolve({ success: false, error: err.message });
+      });
+    });
+  });
+
+  // Stop the currently-running streamed PowerShell script (Stop button). Uses taskkill /T to
+  // kill the whole process tree — pwsh.exe itself, plus anything it spawned (e.g. an isolated
+  // sign-in window) — since a plain ChildProcess.kill() only signals the immediate process.
+  ipcMain.handle('stop-powershell', async () => {
+    const ps = currentPsProcess;
+    if (!ps || ps.pid == null) return { success: false, error: 'No script is currently running.' };
+    return new Promise((resolve) => {
+      exec(`taskkill /PID ${ps.pid} /T /F`, (err) => {
+        if (err) resolve({ success: false, error: err.message });
+        else resolve({ success: true });
       });
     });
   });

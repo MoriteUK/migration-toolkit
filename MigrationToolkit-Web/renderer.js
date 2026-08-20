@@ -70,6 +70,39 @@ document.addEventListener('click', (e) => {
   openFileBrowser(input);
 });
 
+// ---------------------------------------------------------------------------
+// Global Stop button — one floating control shared by every streaming script
+// panel, so any run (Rename Domain, Retire Devices, Discovery, etc.) can be
+// cancelled mid-run if the wrong details were entered. Only one streamed
+// script ever runs at a time (they all share the single 'ps-output' channel),
+// so a single global button/handler covers every screen without needing a
+// Stop button wired into each individual view.
+// ---------------------------------------------------------------------------
+async function runStreamingScript(scriptName, args) {
+  const stopBtn = document.getElementById('globalStopBtn');
+  if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '■ Stop Script'; stopBtn.style.display = 'inline-flex'; }
+  try {
+    return await window.electronAPI.streamPowerShell(scriptName, args);
+  } finally {
+    if (stopBtn) stopBtn.style.display = 'none';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const stopBtn = document.getElementById('globalStopBtn');
+  if (!stopBtn) return;
+  stopBtn.addEventListener('click', async () => {
+    stopBtn.disabled = true;
+    stopBtn.textContent = 'Stopping…';
+    try {
+      const result = await window.electronAPI.stopPowerShell();
+      if (!result.success) console.error('Stop script failed:', result.error);
+    } catch (err) {
+      console.error('Stop script error:', err);
+    }
+  });
+});
+
 console.log('=== RENDERER.JS LOADING ===');
 console.log('Document ready state:', document.readyState);
 
@@ -361,7 +394,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (skipPP) args.push('-SkipPowerPlatform');
           if (hybrid) args.push('-Hybrid');
           if (members) args.push('-IncludeMembers');
-          lastResult = await window.electronAPI.streamPowerShell('search-domain.ps1', args);
+          lastResult = await runStreamingScript('search-domain.ps1', args);
           if (!lastResult.success && !continueOnError) break;
         }
         logOutput.textContent += lastResult?.success ? '\n✓ Discovery complete\n' : `\n✗ Failed (exit ${lastResult?.code})\n`;
@@ -405,7 +438,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           args.push('-ProcessAll');
         }
 
-        const result = await window.electronAPI.streamPowerShell('Check-DomainMigrationReadiness.ps1', args);
+        const result = await runStreamingScript('Check-DomainMigrationReadiness.ps1', args);
         logOutput.textContent += result?.success ? '\n✓ Domain Readiness Check complete\n' : `\n✗ Failed (exit ${result?.code})\n`;
       } catch (err) {
         logOutput.textContent += `\n✗ Error: ${err.message}\n`;
@@ -1871,7 +1904,8 @@ async function loadTargetDomain() {
       'removeNewDomain',      // Rename Domain Objects
       'onpremTargetDomain',   // Update On-Prem UPNs
       'cloudNewDomain',       // Update Cloud UPNs
-      'sipNewDomain'          // SIP/IM Addresses
+      'sipNewDomain',         // SIP/IM Addresses
+      'retireDomain'          // Retire Devices
     ];
 
     fields.forEach(fieldId => {
@@ -1996,7 +2030,7 @@ async function settingsAosSignIn() {
   statusSpan.style.color = 'var(--color-text-muted)';
   statusSpan.textContent = 'Waiting for sign-in...';
   try {
-    await window.electronAPI.streamPowerShell('Login-AOS.ps1', []);
+    await runStreamingScript('Login-AOS.ps1', []);
     statusSpan.style.color = 'var(--color-success, #4caf50)';
     statusSpan.textContent = 'Session saved';
   } catch (err) {
@@ -2031,7 +2065,7 @@ async function manualCheckUpdates() {
   window.electronAPI.onPsOutput(onOutput);
 
   try {
-    const result = await window.electronAPI.streamPowerShell('Check-Updates.ps1', ['-Force']);
+    const result = await runStreamingScript('Check-Updates.ps1', ['-Force']);
 
     if (result.success || result.code === 0) {
       if (accumulated.includes('UPDATE_AVAILABLE')) {
@@ -2420,7 +2454,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const item of connWorkloadDefs) {
           const projectName = `${prefix} - ${item.workload}`;
           appendConnLog(`\n--- ${projectName} ---\n`);
-          const result = await window.electronAPI.streamPowerShell('New-FlyProject.ps1', [
+          const result = await runStreamingScript('New-FlyProject.ps1', [
             '-ProjectName',      projectName,
             '-Workload',         item.workload,
             '-SourceConnection', sourceConnMap[item.workload],
@@ -2458,7 +2492,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const projectName = `${prefix} - ${item.workload}`;
           appendConnLog(`\n--- ${item.workload} ---\n`);
           psImportMappingsBtn.textContent = `Importing ${item.workload}…`;
-          const result = await window.electronAPI.streamPowerShell('Import-FlyMappings.ps1', [
+          const result = await runStreamingScript('Import-FlyMappings.ps1', [
             '-ProjectName', projectName,
             '-Workload',    item.workload,
             '-MappingFile', item.file
@@ -2504,7 +2538,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendConnLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('New-SharePointSites.ps1', [
+        const result = await runStreamingScript('New-SharePointSites.ps1', [
           '-MappingFile', spFile,
           '-SiteOwner',   ownerEmail
         ]);
@@ -2539,7 +2573,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (selected.length > 0 && selected.length < connWorkloadDefs.length) {
         args.push('-Workloads', selected.join(','));
       }
-      const result = await window.electronAPI.streamPowerShell('Start-FlyMigrationStage.ps1', args);
+      const result = await runStreamingScript('Start-FlyMigrationStage.ps1', args);
       appendConnLog(result.success ? `\n✓ Done\n` : `\n✗ Failed (exit ${result.code})\n`);
       appendConnLog('\n=== Finished ===\n');
     } catch (err) {
@@ -2589,7 +2623,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selected.length > 0 && selected.length < connWorkloadDefs.length) {
           args.push('-Workloads', selected.join(','));
         }
-        const result = await window.electronAPI.streamPowerShell('Stop-FlyMigrationStage.ps1', args);
+        const result = await runStreamingScript('Stop-FlyMigrationStage.ps1', args);
         appendConnLog(result.success ? `\n✓ Done\n` : `\n✗ Failed (exit ${result.code})\n`);
         appendConnLog('\n=== Finished ===\n');
       } catch (err) {
@@ -2631,7 +2665,7 @@ document.addEventListener('DOMContentLoaded', () => {
             '-MappingFile',    item.file
           ];
           if (wfDomain) { wfArgs.push('-CustomerDomain', wfDomain); }
-          const result = await window.electronAPI.streamPowerShell('Start-FlyMigrationWorkflow.ps1', wfArgs);
+          const result = await runStreamingScript('Start-FlyMigrationWorkflow.ps1', wfArgs);
           appendConnLog(result.success ? `\n✓ Done\n` : `\n✗ Failed (exit ${result.code})\n`);
         }
         appendConnLog('\n=== Finished ===\n');
@@ -2736,7 +2770,7 @@ document.addEventListener('DOMContentLoaded', () => {
       window.electronAPI.onPsOutput((data) => appendAppRegLog(data));
 
       try {
-        const result = await window.electronAPI.streamPowerShell('New-AzureAppRegistration.ps1', [
+        const result = await runStreamingScript('New-AzureAppRegistration.ps1', [
           '-TenantId', tenantId,
           '-AppName', appName,
           '-SkipSavePrompt'
@@ -2806,7 +2840,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Add-ExchangeAdmin.ps1', ['-UPN', upn]);
+        const result = await runStreamingScript('Add-ExchangeAdmin.ps1', ['-UPN', upn]);
         if (logPre) logPre.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         if (logPre) logPre.textContent += `\nError: ${err.message || err}\n`;
@@ -2860,7 +2894,7 @@ document.addEventListener('DOMContentLoaded', () => {
       window.electronAPI.onPsOutput((data) => appendAosLog(data));
       try {
         await window.electronAPI.saveSharedConfig({ TenantName: displayName, TenantSearch: searchCode, AppProfileName: profileName });
-        const result = await window.electronAPI.streamPowerShell('Aos-SignIn.ps1');
+        const result = await runStreamingScript('Aos-SignIn.ps1');
         if (result.success) {
           appendAosLog('\n✓ Sign-in complete.\n');
           showAosStatus('✓ Signed in. Session saved.', 'info');
@@ -2896,7 +2930,7 @@ document.addEventListener('DOMContentLoaded', () => {
       window.electronAPI.onPsOutput((data) => appendAosLog(data));
       try {
         await window.electronAPI.saveSharedConfig({ TenantName: displayName, TenantSearch: searchCode, AppProfileName: profileName });
-        const result = await window.electronAPI.streamPowerShell('Aos-Setup.ps1');
+        const result = await runStreamingScript('Aos-Setup.ps1');
         if (result.success) {
           appendAosLog('\n✓ Setup complete.\n');
           showAosStatus('✓ App profile created and consent granted.', 'info');
@@ -2989,7 +3023,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendProvLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Provision-OneDrives.ps1', args);
+        const result = await runStreamingScript('Provision-OneDrives.ps1', args);
         appendProvLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
       } catch (err) {
         appendProvLog(`\nError: ${err.message || err}\n`);
@@ -3038,7 +3072,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendProvLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Check-OneDriveStatus.ps1', args);
+        const result = await runStreamingScript('Check-OneDriveStatus.ps1', args);
         appendProvLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
       } catch (err) {
         appendProvLog(`\nError: ${err.message || err}\n`);
@@ -3077,7 +3111,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendBaselineLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Invoke-TenantBaseline.ps1', args);
+        const result = await runStreamingScript('Invoke-TenantBaseline.ps1', args);
         appendBaselineLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
       } catch (err) {
         appendBaselineLog(`\nError: ${err.message || err}\n`);
@@ -3113,7 +3147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendDeduplicateLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Deduplicate-Inventory.ps1', args);
+        const result = await runStreamingScript('Deduplicate-Inventory.ps1', args);
         appendDeduplicateLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
       } catch (err) {
         appendDeduplicateLog(`\nError: ${err.message || err}\n`);
@@ -3147,7 +3181,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Remove-DeletedSharePointSites.ps1', [
+        const result = await runStreamingScript('Remove-DeletedSharePointSites.ps1', [
           '-MappingFile', mappingFile
         ]);
         appendLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
@@ -3195,7 +3229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Restore-ProxyAddresses.ps1', args);
+        const result = await runStreamingScript('Restore-ProxyAddresses.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3235,7 +3269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Set-DistributionGroupExternalSenders.ps1', args);
+        const result = await runStreamingScript('Set-DistributionGroupExternalSenders.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3278,7 +3312,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendTeamsLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Set-TeamsOwners-Run.ps1', args);
+        const result = await runStreamingScript('Set-TeamsOwners-Run.ps1', args);
         appendTeamsLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
       } catch (err) {
         appendTeamsLog(`\nError: ${err.message || err}\n`);
@@ -3334,7 +3368,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendTenantLicensesLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Get-TenantLicenseReport.ps1', args);
+        const result = await runStreamingScript('Get-TenantLicenseReport.ps1', args);
         appendTenantLicensesLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
       } catch (err) {
         appendTenantLicensesLog(`\nError: ${err.message || err}\n`);
@@ -3373,7 +3407,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendBaselineStatusLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Check-TenantBaselineStatus.ps1', args);
+        const result = await runStreamingScript('Check-TenantBaselineStatus.ps1', args);
         appendBaselineStatusLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
       } catch (err) {
         appendBaselineStatusLog(`\nError: ${err.message || err}\n`);
@@ -3411,7 +3445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendClearEmployeeIdLog);
       try {
-        const result = await window.electronAPI.streamPowerShell('Clear-EmployeeId.ps1', args);
+        const result = await runStreamingScript('Clear-EmployeeId.ps1', args);
         appendClearEmployeeIdLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
       } catch (err) {
         appendClearEmployeeIdLog(`\nError: ${err.message || err}\n`);
@@ -3473,7 +3507,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Rename-DomainObjects.ps1', args);
+        const result = await runStreamingScript('Rename-DomainObjects.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3523,7 +3557,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Update-OnPremUPN.ps1', args);
+        const result = await runStreamingScript('Update-OnPremUPN.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3561,7 +3595,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Update-UPN.ps1', args);
+        const result = await runStreamingScript('Update-UPN.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3608,7 +3642,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Hide-AddressBook.ps1', args);
+        const result = await runStreamingScript('Hide-AddressBook.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3664,7 +3698,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Remove-AliasAddresses.ps1', args);
+        const result = await runStreamingScript('Remove-AliasAddresses.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3718,7 +3752,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Update-SIPDomain.ps1', args);
+        const result = await runStreamingScript('Update-SIPDomain.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3786,7 +3820,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Remove-devices.ps1', args);
+        const result = await runStreamingScript('Remove-devices.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3831,7 +3865,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const whatIf  = document.getElementById('retireWhatIf').checked;
 
       if (!folder && !csvFile) { alert('Please select a Discovery folder or CSV file.'); return; }
-      if (!domain) { alert("Please enter the customer's tenant domain or tenant ID.\n\nWithout it, sign-in lands in your own home tenant, not the customer's, and every update fails with Request_ResourceNotFound."); return; }
+      if (!domain) { alert('Tenant Domain is not set.\n\nSet it in Settings (⚙) > Discovery tab — without it, sign-in lands in your own home tenant, not the customer\'s, and every update fails with Request_ResourceNotFound.'); return; }
 
       const logSection = document.getElementById('retireLog');
       const logOutput  = document.getElementById('retireLogOutput');
@@ -3852,7 +3886,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Retire-Devices.ps1', args);
+        const result = await runStreamingScript('Retire-Devices.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3893,7 +3927,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Remove-DomainDependants.ps1', args);
+        const result = await runStreamingScript('Remove-DomainDependants.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3936,7 +3970,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Check-ADDomainReferences.ps1', args);
+        const result = await runStreamingScript('Check-ADDomainReferences.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Done\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;
@@ -3985,7 +4019,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
       try {
-        const result = await window.electronAPI.streamPowerShell('Remove-EntraUsers.ps1', args);
+        const result = await runStreamingScript('Remove-EntraUsers.ps1', args);
         logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
       } catch (err) {
         logOutput.textContent += `\nError: ${err.message || err}\n`;

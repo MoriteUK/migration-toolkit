@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Stream PowerShell script output
   streamPowerShell: (scriptName, args) => ipcRenderer.invoke('stream-powershell', scriptName, args),
 
+  // Stop the currently running streamed PowerShell script, if any
+  stopPowerShell: () => ipcRenderer.invoke('stop-powershell'),
+
   // Listen for PowerShell output events
   onPsOutput: (callback) => ipcRenderer.on('ps-output', (event, text) => callback(text)),
   offPsOutput: () => ipcRenderer.removeAllListeners('ps-output'),

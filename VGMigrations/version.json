@@ -1,5 +1,5 @@
 {
-  "version": "2.9.91",
+  "version": "2.9.92",
   "releaseDate": "2026-08-20",
   "changelog": [
     {
@@ -9,7 +9,16 @@
         "Remove-devices.ps1 and Retire-Devices.ps1: fixed every device failing with '[Request_ResourceNotFound] Resource '<guid>' does not exist' (100% failure rate observed on a 94-device Remove Devices run) — neither script's Connect-MgGraph call passed -TenantId, so sign-in landed in the operator's own home tenant instead of the customer's, and none of the device object IDs from the discovery CSV exist there. Get-DomainDevices.ps1 (which generates the CSV) already connects with -TenantId $domain; the two device-action scripts just never matched it",
         "Both scripts now take a required -Domain parameter (customer tenant domain or tenant ID), passed straight through to Connect-MgGraph -TenantId; a missing -Domain now prints a clear warning up front instead of silently deleting/updating nothing across the whole tenant",
         "Remove-devices.ps1's standalone WinForms GUI gained a Tenant Domain field (required before Connect and Delete is enabled)",
-        "MigrationToolkit-Web: Remove Entra Devices and Retire Devices panels both gained a required Customer Tenant Domain / Tenant ID field, passed as -Domain"
+        "MigrationToolkit-Web: Remove Entra Devices panel gained a required Customer Tenant Domain / Tenant ID field, passed as -Domain (Retire Devices later switched to the Settings-driven Target Domain field — see 2.9.92)"
+      ]
+    },
+    {
+      "version": "2.9.92",
+      "date": "2026-08-20",
+      "changes": [
+        "Retire Devices: the -Domain field is now the same readonly, Settings > Discovery > Target Domain field already used by Rename Domain Objects/Update UPNs/SIP-IM Addresses (defaults to ourvolaris.onmicrosoft.com) instead of a manually-typed box — that's the tenant this step always targets, so there's nothing to type",
+        "MigrationToolkit-Web: Added a global Stop Script button (fixed bottom-right, appears on every screen while any streamed script is running) so a run started with the wrong details — e.g. missing/incorrect tenant domain — can be cancelled immediately instead of running to completion. Backed by a new stop-powershell IPC handler in main.js that tree-kills the running pwsh.exe via taskkill /T",
+        "All ~30 existing streaming script panels (Discovery, Domain Readiness, Fly migration stages, AOS setup, OneDrive provisioning, every Domain Removal step, etc.) now route through this Stop button automatically — they were unified onto one runStreamingScript() helper instead of calling streamPowerShell directly, so no per-panel changes were needed"
       ]
     },
     {

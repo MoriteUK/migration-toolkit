@@ -1380,9 +1380,9 @@
           </div>
 
           <div class="form-group" style="margin-top:8px;">
-            <label class="form-label">Customer Tenant Domain / Tenant ID</label>
-            <input type="text" class="form-input form-input-compact" id="retireDomain" placeholder="e.g. indicater.co.uk or the tenant GUID">
-            <p class="form-help" style="margin-top:4px;">Required — without it, sign-in lands in your own home tenant, not the customer's, and every update fails with Request_ResourceNotFound.</p>
+            <label class="form-label">Tenant Domain</label>
+            <input type="text" class="form-input form-input-compact" id="retireDomain" placeholder="Set in Settings > Discovery" readonly style="background:#f9fafb; cursor:not-allowed;">
+            <small class="form-help" style="margin-top:4px; display:block;">Change this in Settings (⚙) > Discovery tab. Passed to Connect-MgGraph -TenantId so sign-in lands in the right tenant instead of failing every device with Request_ResourceNotFound.</small>
           </div>
 
           <div class="form-group" style="margin-top:8px;">
@@ -2008,7 +2008,7 @@
     </div>
   </div>
 
-  <script src="renderer.js?v=2.9.34"></script>
+  <script src="renderer.js?v=2.9.92"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">
@@ -2033,5 +2033,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Global Stop button — shown on every screen whenever a streamed script is running, so a
+       run started with the wrong details can be cancelled from wherever you are in the app. -->
+  <button type="button" id="globalStopBtn" class="btn btn-danger" style="display:none; position:fixed; bottom:20px; right:20px; z-index:1500; padding:10px 20px; box-shadow:0 2px 10px rgba(0,0,0,0.35);">■ Stop Script</button>
 </body>
 </html>
