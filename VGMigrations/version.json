@@ -1,7 +1,17 @@
 {
-  "version": "2.9.90",
-  "releaseDate": "2026-08-18",
+  "version": "2.9.91",
+  "releaseDate": "2026-08-20",
   "changelog": [
+    {
+      "version": "2.9.91",
+      "date": "2026-08-20",
+      "changes": [
+        "Remove-devices.ps1 and Retire-Devices.ps1: fixed every device failing with '[Request_ResourceNotFound] Resource '<guid>' does not exist' (100% failure rate observed on a 94-device Remove Devices run) — neither script's Connect-MgGraph call passed -TenantId, so sign-in landed in the operator's own home tenant instead of the customer's, and none of the device object IDs from the discovery CSV exist there. Get-DomainDevices.ps1 (which generates the CSV) already connects with -TenantId $domain; the two device-action scripts just never matched it",
+        "Both scripts now take a required -Domain parameter (customer tenant domain or tenant ID), passed straight through to Connect-MgGraph -TenantId; a missing -Domain now prints a clear warning up front instead of silently deleting/updating nothing across the whole tenant",
+        "Remove-devices.ps1's standalone WinForms GUI gained a Tenant Domain field (required before Connect and Delete is enabled)",
+        "MigrationToolkit-Web: Remove Entra Devices and Retire Devices panels both gained a required Customer Tenant Domain / Tenant ID field, passed as -Domain"
+      ]
+    },
     {
       "version": "2.9.90",
       "date": "2026-08-18",

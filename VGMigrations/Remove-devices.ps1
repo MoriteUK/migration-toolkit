@@ -17,6 +17,11 @@
 
     Change log
     ----------
+    2026-08-20  Added -Domain (Connect-MgGraph -TenantId). Neither the headless nor GUI
+                connect passed a TenantId, so sign-in landed in the operator's own home
+                tenant, not the customer's — every device object ID from the discovery CSV
+                then failed with Request_ResourceNotFound (100% failure rate observed on a
+                94-device run). GUI now requires a Tenant Domain field before running.
     2026-05-27  Added settings.ps1 load + gear icon so the settings dialog is
                 reachable from within this screen.
                 Startup logging now captures lib/settings load results to file
@@ -27,6 +32,7 @@
 param(
     [string]$DiscoveryFolder = '',  # reads 12_Devices.csv from this folder (headless mode)
     [string]$CsvFile         = '',  # OR provide a direct CSV path (headless mode)
+    [string]$Domain          = '',  # customer tenant domain or tenant ID (Connect-MgGraph -TenantId) — without it, sign-in lands in the signed-in account's home tenant and every delete fails with Request_ResourceNotFound
     [switch]$WhatIf
 )
 
@@ -131,7 +137,7 @@ function Show-RemoveDevicesUI {
     # ── Input card ────────────────────────────────────────────────────────────
     $card = New-Object System.Windows.Forms.Panel
     $card.Location  = [System.Drawing.Point]::new(12, 66)
-    $card.Size      = [System.Drawing.Size]::new(596, 138)
+    $card.Size      = [System.Drawing.Size]::new(596, 170)
     $card.BackColor = $clrPanel
     $form.Controls.Add($card)
 
@@ -162,6 +168,23 @@ function Show-RemoveDevicesUI {
     $lbHint.ForeColor = $clrMuted; $lbHint.Font = New-Object System.Drawing.Font('Segoe UI', 8)
     $lbHint.Location = [System.Drawing.Point]::new($lx, $y); $lbHint.AutoSize = $true
     $card.Controls.Add($lbHint)
+    $y += 24
+
+    # Domain / tenant row
+    $lbDomain = New-Object System.Windows.Forms.Label
+    $lbDomain.Text = 'Tenant Domain:'; $lbDomain.Font = $FontBold; $lbDomain.ForeColor = $clrText
+    $lbDomain.Location = [System.Drawing.Point]::new($lx, $y + 5); $lbDomain.AutoSize = $true
+    $card.Controls.Add($lbDomain)
+    $txtDomain = New-Object System.Windows.Forms.TextBox
+    $txtDomain.Location = [System.Drawing.Point]::new($ex, $y); $txtDomain.Size = [System.Drawing.Size]::new(320, 24)
+    $txtDomain.Font = $FontBody; $txtDomain.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    $card.Controls.Add($txtDomain)
+    $y += 24
+    $lbDomainHint = New-Object System.Windows.Forms.Label
+    $lbDomainHint.Text = 'Customer tenant domain or tenant ID — required, or sign-in lands in the wrong tenant and every delete fails'
+    $lbDomainHint.ForeColor = $clrMuted; $lbDomainHint.Font = New-Object System.Drawing.Font('Segoe UI', 8)
+    $lbDomainHint.Location = [System.Drawing.Point]::new($lx, $y); $lbDomainHint.AutoSize = $true
+    $card.Controls.Add($lbDomainHint)
     $y += 24
 
     # WhatIf + Run
@@ -225,10 +248,17 @@ function Show-RemoveDevicesUI {
 
     # ── Run ───────────────────────────────────────────────────────────────────
     $btnRun.Add_Click({
-        Write-Log "Run clicked — CSV='$($txtFile.Text)'  WhatIf=$($chkWhatIf.Checked)"
+        Write-Log "Run clicked — CSV='$($txtFile.Text)'  Domain='$($txtDomain.Text)'  WhatIf=$($chkWhatIf.Checked)"
         if (-not $txtFile.Text) {
             Write-Log 'Validation failed: no CSV selected' 'WARN'
             [System.Windows.Forms.MessageBox]::Show('Please select a CSV file.', 'Missing Input', 'OK', 'Warning') | Out-Null; return
+        }
+        if (-not $txtDomain.Text.Trim()) {
+            Write-Log 'Validation failed: no tenant domain entered' 'WARN'
+            [System.Windows.Forms.MessageBox]::Show(
+                'Please enter the customer tenant domain or tenant ID.' + [Environment]::NewLine +
+                'Without it, sign-in lands in your own home tenant, not the customer''s, and every delete fails with Request_ResourceNotFound.',
+                'Missing Input', 'OK', 'Warning') | Out-Null; return
         }
 
         # Load CSV on UI thread
@@ -280,6 +310,7 @@ function Show-RemoveDevicesUI {
 
         $whatIf      = $chkWhatIf.Checked
         $logFilePath = $script:LogFile
+        $domain      = $txtDomain.Text.Trim()
 
         $rs = [hashtable]::Synchronized(@{
             Done       = $false
@@ -300,7 +331,7 @@ function Show-RemoveDevicesUI {
         $script:devPS.Runspace = $script:devRunspace
 
         [void]$script:devPS.AddScript({
-            param($devices, $whatIf, $rs, $logFilePath, $deviceIdColumn)
+            param($devices, $whatIf, $rs, $logFilePath, $deviceIdColumn, $domain)
 
             function QLog {
                 param([string]$Msg, [string]$Level = 'INFO')
@@ -317,10 +348,10 @@ function Show-RemoveDevicesUI {
                     Import-Module -Name $m -RequiredVersion '2.33.0' -Force -DisableNameChecking -ErrorAction Stop
                 }
 
-                QLog 'Connecting to Microsoft Graph - sign in when the browser opens...'
-                Connect-MgGraph -Scopes 'Device.ReadWrite.All', 'Directory.ReadWrite.All' -NoWelcome -ErrorAction Stop
+                QLog "Connecting to Microsoft Graph (tenant: $domain) - sign in when the browser opens..."
+                Connect-MgGraph -Scopes 'Device.ReadWrite.All', 'Directory.ReadWrite.All' -TenantId $domain -NoWelcome -ErrorAction Stop
                 $ctx = Get-MgContext
-                QLog "Connected as $($ctx.Account)" 'OK'
+                QLog "Connected as $($ctx.Account)  tenant=$($ctx.TenantId)" 'OK'
 
                 $i = 0
                 foreach ($device in $devices) {
@@ -353,7 +384,7 @@ function Show-RemoveDevicesUI {
                 $rs.Done = $true
             }
         })
-        [void]$script:devPS.AddParameters(@{ devices = $devices; whatIf = $whatIf; rs = $rs; logFilePath = $logFilePath; deviceIdColumn = $deviceIdColumn })
+        [void]$script:devPS.AddParameters(@{ devices = $devices; whatIf = $whatIf; rs = $rs; logFilePath = $logFilePath; deviceIdColumn = $deviceIdColumn; domain = $domain })
         $script:devHandle = $script:devPS.BeginInvoke()
         $lblStatus.Text = 'Connecting to Microsoft Graph - sign in when prompted...'
 
@@ -444,10 +475,22 @@ function Invoke-RemoveDevicesHeadless {
     # Load Graph modules
     . (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Identity.DirectoryManagement')
 
-    Write-Host 'Connecting to Microsoft Graph...'
+    if ($Domain) {
+        Write-Host "Connecting to Microsoft Graph (tenant: $Domain)..."
+    } else {
+        Write-Host 'WARNING: No -Domain specified — signing in without -TenantId will connect to the' -ForegroundColor Yellow
+        Write-Host 'signed-in account''s home tenant, not necessarily the customer tenant the devices' -ForegroundColor Yellow
+        Write-Host 'live in. If every device then fails with Request_ResourceNotFound, re-run with -Domain <customer tenant domain or ID>.' -ForegroundColor Yellow
+        Write-Host 'Connecting to Microsoft Graph...'
+    }
     try {
-        Connect-MgGraph -Scopes 'Device.ReadWrite.All','Directory.ReadWrite.All' `
-            -NoWelcome -ErrorAction Stop
+        $connectParams = @{
+            Scopes      = 'Device.ReadWrite.All','Directory.ReadWrite.All'
+            NoWelcome   = $true
+            ErrorAction = 'Stop'
+        }
+        if ($Domain) { $connectParams['TenantId'] = $Domain }
+        Connect-MgGraph @connectParams
         Write-Host 'Connected.'
     } catch {
         Write-Host "ERROR: Could not connect to Microsoft Graph: $($_.Exception.Message.Split([Environment]::NewLine)[0])"

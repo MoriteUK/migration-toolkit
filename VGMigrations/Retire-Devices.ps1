@@ -21,11 +21,18 @@
 
 .PARAMETER WhatIf
     List devices that would be retired without making any changes.
+
+.PARAMETER Domain
+    Customer tenant domain or tenant ID to sign in to (passed to Connect-MgGraph -TenantId).
+    Without this, sign-in lands in the signed-in account's home tenant, which will not contain
+    the device object IDs from the discovery CSV if that account isn't native to the customer
+    tenant — every Update-MgDevice call then fails with Request_ResourceNotFound.
 #>
 
 param(
     [string]$DiscoveryFolder = '',
     [string]$CsvFile         = '',
+    [string]$Domain          = '',
     [switch]$WhatIf
 )
 
@@ -63,10 +70,22 @@ Write-Host ''
 
 . (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Identity.DirectoryManagement')
 
-Write-Host 'Connecting to Microsoft Graph...'
+if ($Domain) {
+    Write-Host "Connecting to Microsoft Graph (tenant: $Domain)..."
+} else {
+    Write-Host 'WARNING: No -Domain specified — signing in without -TenantId will connect to the' -ForegroundColor Yellow
+    Write-Host 'signed-in account''s home tenant, not necessarily the customer tenant the devices' -ForegroundColor Yellow
+    Write-Host 'live in. If every device then fails with Request_ResourceNotFound, re-run with -Domain <customer tenant domain or ID>.' -ForegroundColor Yellow
+    Write-Host 'Connecting to Microsoft Graph...'
+}
 try {
-    Connect-MgGraph -Scopes 'Device.ReadWrite.All','Directory.ReadWrite.All' `
-        -NoWelcome -ErrorAction Stop
+    $connectParams = @{
+        Scopes      = 'Device.ReadWrite.All','Directory.ReadWrite.All'
+        NoWelcome   = $true
+        ErrorAction = 'Stop'
+    }
+    if ($Domain) { $connectParams['TenantId'] = $Domain }
+    Connect-MgGraph @connectParams
     Write-Host 'Connected.'
 } catch {
     Write-Host "ERROR: Could not connect to Microsoft Graph: $($_.Exception.Message.Split([Environment]::NewLine)[0])"

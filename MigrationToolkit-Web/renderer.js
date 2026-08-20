@@ -3761,9 +3761,11 @@ document.addEventListener('DOMContentLoaded', () => {
     devicesRunBtn.addEventListener('click', async () => {
       const folder  = document.getElementById('devicesDiscoveryFolder').value.trim();
       const csvFile = document.getElementById('devicesCsvFile').value.trim();
+      const domain  = document.getElementById('devicesDomain').value.trim();
       const whatIf  = document.getElementById('devicesWhatIf').checked;
 
       if (!folder && !csvFile) { alert('Please select a discovery folder or a specific CSV file.'); return; }
+      if (!domain) { alert("Please enter the customer's tenant domain or tenant ID.\n\nWithout it, sign-in lands in your own home tenant, not the customer's, and every delete fails with Request_ResourceNotFound."); return; }
 
       const logSection = document.getElementById('devicesLog');
       const logOutput  = document.getElementById('devicesLogOutput');
@@ -3776,6 +3778,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const args = [];
       if (csvFile)  args.push('-CsvFile', csvFile);
       else          args.push('-DiscoveryFolder', folder);
+      args.push('-Domain', domain);
       if (whatIf)   args.push('-WhatIf');
 
       window.electronAPI.onPsOutput((text) => {
@@ -3824,9 +3827,11 @@ document.addEventListener('DOMContentLoaded', () => {
     retireRunBtn.addEventListener('click', async () => {
       const folder  = document.getElementById('retireDiscoveryFolder').value.trim();
       const csvFile = document.getElementById('retireCsvFile').value.trim();
+      const domain  = document.getElementById('retireDomain').value.trim();
       const whatIf  = document.getElementById('retireWhatIf').checked;
 
       if (!folder && !csvFile) { alert('Please select a Discovery folder or CSV file.'); return; }
+      if (!domain) { alert("Please enter the customer's tenant domain or tenant ID.\n\nWithout it, sign-in lands in your own home tenant, not the customer's, and every update fails with Request_ResourceNotFound."); return; }
 
       const logSection = document.getElementById('retireLog');
       const logOutput  = document.getElementById('retireLogOutput');
@@ -3839,6 +3844,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const args = [];
       if (csvFile)  args.push('-CsvFile', csvFile);
       else          args.push('-DiscoveryFolder', folder);
+      args.push('-Domain', domain);
       if (whatIf)   args.push('-WhatIf');
 
       window.electronAPI.onPsOutput((text) => {
