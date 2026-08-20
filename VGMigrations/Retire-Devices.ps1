@@ -106,7 +106,7 @@ foreach ($d in $devices) {
         $ok++
     } else {
         try {
-            Update-MgDevice -DeviceId $id -AccountEnabled $false -ErrorAction Stop
+            Update-MgDevice -DeviceId $id -AccountEnabled:$false -ErrorAction Stop
             Write-Host "  [$i/$($devices.Count)] Retired : $name  [$id]$(if ($owner) { "  (owner: $owner)" })"
             $ok++
         } catch {
