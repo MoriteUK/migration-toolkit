@@ -85,13 +85,25 @@ if (-not (Test-Path $discFolder)) {
 
 $csvPath = Join-Path $discFolder '13_ProxyAddresses.csv'
 if (-not (Test-Path $csvPath)) {
-    Log "ERROR: 13_ProxyAddresses.csv not found in: $discFolder"
+    # Discovery folders written before search-domain.ps1 v2.10.0 numbered this file
+    # off-by-one (e.g. 12_ProxyAddresses.csv) — fall back to a wildcard match so older
+    # archives still work. See search-domain.ps1 changelog entry 2.10.0.
+    $fallback = Get-ChildItem -Path $discFolder -Filter '*_ProxyAddresses.csv' -File -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+    if ($fallback) {
+        $csvPath = $fallback.FullName
+        Log "13_ProxyAddresses.csv not found — using older-numbered file instead: $($fallback.Name)"
+    }
+}
+if (-not (Test-Path $csvPath)) {
+    Log "ERROR: No *_ProxyAddresses.csv file found in: $discFolder"
     exit 1
 }
+$csvName = Split-Path $csvPath -Leaf
 
 $rows = @(Import-Csv -Path $csvPath -Encoding UTF8)
 if ($rows.Count -eq 0 -or -not ($rows[0].PSObject.Properties.Name -contains 'ProxyAddress')) {
-    Log "No proxy address data in 13_ProxyAddresses.csv — nothing to restore."
+    Log "No proxy address data in $csvName — nothing to restore."
     exit 0
 }
 
@@ -107,7 +119,7 @@ if ($IncludeX500)   { $typeList += 'X500 addresses' }
 
 Log "=== Restore Proxy Addresses$(if ($WhatIf) { ' [WhatIf]' }) ==="
 Log "Discovery folder : $discFolder"
-Log "Source CSV       : 13_ProxyAddresses.csv ($($rows.Count) row(s))"
+Log "Source CSV       : $csvName ($($rows.Count) row(s))"
 Log "Restoring        : $($typeList -join ', ')"
 
 # ── Group rows into one entry per recipient ─────────────────────────────────────

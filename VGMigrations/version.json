@@ -1,7 +1,14 @@
 {
-  "version": "2.9.93",
-  "releaseDate": "2026-08-20",
+  "version": "2.9.94",
+  "releaseDate": "2026-08-24",
   "changelog": [
+    {
+      "version": "2.9.94",
+      "date": "2026-08-24",
+      "changes": [
+        "Restore-ProxyAddresses.ps1: fixed 'not found' error on discovery folders written before search-domain.ps1 v2.10.0, where an off-by-one numbering bug named this file 12_ProxyAddresses.csv instead of 13_ (and left two files starting with 10_ in the same folder). Now falls back to a wildcard *_ProxyAddresses.csv match when the exact 13_ name isn't present"
+      ]
+    },
     {
       "version": "2.9.93",
       "date": "2026-08-20",
