@@ -73,8 +73,14 @@ if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Fo
 $logFile = Join-Path $_logDir "domain-team-memberships-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 function Log { param([string]$m) $ts = Get-Date -Format 'HH:mm:ss'; "$ts $m" | Tee-Object -FilePath $logFile -Append | Write-Host }
 
+$_csvName = "DomainTeamMemberships-$Domain-$(Get-Date -Format 'yyyyMMdd-HHmmss').csv"
 if (-not $OutputCsv) {
-    $OutputCsv = Join-Path (Get-Location) "DomainTeamMemberships-$Domain-$(Get-Date -Format 'yyyyMMdd-HHmmss').csv"
+    # Default alongside the rest of the toolkit's output, not the (possibly read-only) script folder.
+    $OutputCsv = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Reports'
+}
+# Accept either a folder (UI "Browse" picks one) or a full file path.
+if ((Test-Path $OutputCsv -PathType Container) -or ($OutputCsv -notmatch '\.csv$')) {
+    $OutputCsv = Join-Path $OutputCsv $_csvName
 }
 $outDir = Split-Path -Parent $OutputCsv
 if ($outDir -and -not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }

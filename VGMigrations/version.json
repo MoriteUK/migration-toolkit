@@ -1,7 +1,14 @@
 {
-  "version": "2.9.95",
+  "version": "2.9.96",
   "releaseDate": "2026-08-28",
   "changelog": [
+    {
+      "version": "2.9.96",
+      "date": "2026-08-28",
+      "changes": [
+        "Domain Team Memberships is now a screen in the app under Misc Scripts (Domain, optional User filter, optional Tenant ID, 'also list standard channels' toggle, optional CSV output folder) — wraps Get-DomainTeamMemberships.ps1 with streamed output. CSV now defaults to the shared Contracts\\Jolera\\Migrations\\Reports folder and the -OutputCsv parameter accepts either a folder or a full file path"
+      ]
+    },
     {
       "version": "2.9.95",
       "date": "2026-08-28",

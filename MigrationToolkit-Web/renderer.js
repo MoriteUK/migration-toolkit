@@ -1836,6 +1836,7 @@ function switchView(viewName) {
     'misc-domain-devices': 'miscDomainDevicesView',
     'misc-restore-proxy': 'miscRestoreProxyView',
     'misc-dl-external-senders': 'miscDLExternalSendersView',
+    'misc-team-memberships': 'miscTeamMembershipsView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -3237,6 +3238,49 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         restoreProxyRunBtn.disabled = false;
         restoreProxyRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Misc Scripts - Domain Team Memberships ────────────────────────────────
+  const teamMembershipsRunBtn = document.getElementById('teamMembershipsRunBtn');
+  if (teamMembershipsRunBtn) {
+    teamMembershipsRunBtn.addEventListener('click', async () => {
+      const domain     = document.getElementById('teamMembershipsDomain').value.trim();
+      const user       = document.getElementById('teamMembershipsUser').value.trim();
+      const tenantId   = document.getElementById('teamMembershipsTenantId').value.trim();
+      const stdChans   = document.getElementById('teamMembershipsStdChannels').checked;
+      const csvPath    = document.getElementById('teamMembershipsCsvPath').value.trim();
+
+      if (!domain) { alert('Please enter a domain.'); return; }
+
+      const logSection = document.getElementById('teamMembershipsLog');
+      const logOutput  = document.getElementById('teamMembershipsLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      teamMembershipsRunBtn.disabled = true;
+      teamMembershipsRunBtn.textContent = 'Running…';
+
+      const args = ['-Domain', domain];
+      if (user)     args.push('-User', user);
+      if (tenantId) args.push('-TenantId', tenantId);
+      if (stdChans) args.push('-IncludeStandardChannels');
+      if (csvPath)  args.push('-OutputCsv', csvPath);
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('Get-DomainTeamMemberships.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        teamMembershipsRunBtn.disabled = false;
+        teamMembershipsRunBtn.textContent = '▶ Run';
       }
     });
   }
