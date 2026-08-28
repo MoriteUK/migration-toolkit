@@ -1,7 +1,14 @@
 {
-  "version": "2.9.94",
-  "releaseDate": "2026-08-24",
+  "version": "2.9.95",
+  "releaseDate": "2026-08-28",
   "changelog": [
+    {
+      "version": "2.9.95",
+      "date": "2026-08-28",
+      "changes": [
+        "Added Get-DomainTeamMemberships.ps1: reports every Team (plus private/shared channels) that users from a given email domain belong to, with their role, to a CSV. Run it against the source tenant before splitting a domain out so those users can be re-added to any Teams that aren't migrating with them. Standard channels are omitted by default (their membership follows the parent team); -IncludeStandardChannels lists them anyway. Optional -User filter narrows the report to one person"
+      ]
+    },
     {
       "version": "2.9.94",
       "date": "2026-08-24",
