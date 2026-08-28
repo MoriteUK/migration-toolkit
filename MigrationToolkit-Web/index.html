@@ -1144,7 +1144,14 @@
 
           <div class="form-group-tight">
             <label class="form-label">Domain</label>
-            <input type="text" class="form-input form-input-compact" id="teamMembershipsDomain" placeholder="e.g. contoso.com">
+            <select class="form-input form-input-compact" id="teamMembershipsDomain">
+              <option value="">Select domain...</option>
+            </select>
+          </div>
+
+          <div class="form-group-tight" style="margin-top:8px;">
+            <label class="form-label">One-off Domain <small style="font-weight:normal; color:#6B7280;">(overrides selection above — use for a domain not in Settings)</small></label>
+            <input type="text" class="form-input form-input-compact" id="teamMembershipsDomainOverride" placeholder="e.g. contoso.com">
           </div>
 
           <div class="form-group-tight" style="margin-top:8px;">

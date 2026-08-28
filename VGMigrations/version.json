@@ -1,7 +1,14 @@
 {
-  "version": "2.9.96",
+  "version": "2.9.97",
   "releaseDate": "2026-08-28",
   "changelog": [
+    {
+      "version": "2.9.97",
+      "date": "2026-08-28",
+      "changes": [
+        "Domain Team Memberships screen: the Domain field is now a dropdown populated from the customer domains in Settings (same source as the DL External Senders tenant list), with a separate 'One-off Domain' text box that overrides it for a domain not yet in Settings"
+      ]
+    },
     {
       "version": "2.9.96",
       "date": "2026-08-28",

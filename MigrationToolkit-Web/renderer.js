@@ -1622,6 +1622,31 @@ async function loadDLExternalSendersTenants() {
   }
 }
 
+// Populate domain dropdown for Domain Team Memberships from customer settings
+async function loadTeamMembershipsDomains() {
+  try {
+    const domainSelect = document.getElementById('teamMembershipsDomain');
+    if (!domainSelect) return;
+
+    const config = await window.electronAPI.getConfig();
+    if (config.success && config.config && config.config.Customers) {
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
+      domainSelect.innerHTML = '<option value="">Select domain...</option>';
+
+      customers.forEach(customer => {
+        if (customer.Domain) {
+          const option = document.createElement('option');
+          option.value = customer.Domain;
+          option.textContent = `${customer.Prefix} (${customer.Domain})`;
+          domainSelect.appendChild(option);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error loading Domain Team Memberships domains:', error);
+  }
+}
+
 // Populate Monitor project dropdown from customer settings
 async function loadMonitorProjects() {
   try {
@@ -1868,6 +1893,8 @@ function switchView(viewName) {
         loadOneDriveTenants();
       } else if (viewName === 'misc-dl-external-senders') {
         loadDLExternalSendersTenants();
+      } else if (viewName === 'misc-team-memberships') {
+        loadTeamMembershipsDomains();
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
@@ -3246,7 +3273,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const teamMembershipsRunBtn = document.getElementById('teamMembershipsRunBtn');
   if (teamMembershipsRunBtn) {
     teamMembershipsRunBtn.addEventListener('click', async () => {
-      const domain     = document.getElementById('teamMembershipsDomain').value.trim();
+      const domain     = (document.getElementById('teamMembershipsDomainOverride').value.trim()
+                          || document.getElementById('teamMembershipsDomain').value.trim());
       const user       = document.getElementById('teamMembershipsUser').value.trim();
       const tenantId   = document.getElementById('teamMembershipsTenantId').value.trim();
       const stdChans   = document.getElementById('teamMembershipsStdChannels').checked;
