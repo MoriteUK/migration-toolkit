@@ -39,7 +39,6 @@ param(
     [string]$Address,
     [switch]$IncludeSoftDeleted = $true
 )
-
 $ErrorActionPreference = 'Stop'
 $results = New-Object System.Collections.Generic.List[object]
 
