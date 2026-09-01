@@ -1659,6 +1659,31 @@ async function loadRestoreTeamMembershipsCustomers() {
   }
 }
 
+// Shared: populate a customer-prefix <select> from Settings > Customers
+async function loadCustomerDropdownInto(selectId, placeholderText) {
+  try {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    const config = await window.electronAPI.getConfig();
+    if (config.success && config.config && config.config.Customers) {
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
+      select.innerHTML = `<option value="">${placeholderText}</option>`;
+
+      customers.forEach(customer => {
+        if (customer.Prefix) {
+          const option = document.createElement('option');
+          option.value = customer.Prefix;
+          option.textContent = customer.Prefix;
+          select.appendChild(option);
+        }
+      });
+    }
+  } catch (error) {
+    console.error(`Error loading customers into #${selectId}:`, error);
+  }
+}
+
 async function loadDLExternalSendersTenants() {
   try {
     const tenantSelect = document.getElementById('dlExternalSendersTenant');
@@ -1896,6 +1921,8 @@ function switchView(viewName) {
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-restore-proxy': 'miscRestoreProxyView',
     'post-migration-team-memberships': 'postMigrationTeamMembershipsView',
+    'migration-new-dgs': 'migrationNewDgsView',
+    'migration-update-dg-domain': 'migrationUpdateDgDomainView',
     'misc-dl-external-senders': 'miscDLExternalSendersView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
@@ -1931,6 +1958,10 @@ function switchView(viewName) {
         loadRestoreProxyCustomers();
       } else if (viewName === 'post-migration-team-memberships') {
         loadRestoreTeamMembershipsCustomers();
+      } else if (viewName === 'migration-new-dgs') {
+        loadCustomerDropdownInto('newDgsCustomerPrefix', 'Select customer...');
+      } else if (viewName === 'migration-update-dg-domain') {
+        loadCustomerDropdownInto('updateDgDomainCustomerPrefix', 'Select customer...');
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
@@ -3350,6 +3381,86 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         restoreTeamMembershipsRunBtn.disabled = false;
         restoreTeamMembershipsRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Migration - New Distribution Groups ─────────────────────────────────────
+  const newDgsRunBtn = document.getElementById('newDgsRunBtn');
+  if (newDgsRunBtn) {
+    newDgsRunBtn.addEventListener('click', async () => {
+      const folder         = document.getElementById('newDgsDiscoveryFolder').value.trim();
+      const customerPrefix = document.getElementById('newDgsCustomerPrefix').value.trim();
+      const mappingCsv     = document.getElementById('newDgsMappingCsv').value.trim();
+      const whatIf          = document.getElementById('newDgsWhatIf').checked;
+
+      if (!folder)         { alert('Please select the discovery folder.'); return; }
+      if (!customerPrefix) { alert('Please select a customer.'); return; }
+
+      const logSection = document.getElementById('newDgsLog');
+      const logOutput  = document.getElementById('newDgsLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      newDgsRunBtn.disabled = true;
+      newDgsRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder, '-CustomerPrefix', customerPrefix];
+      if (mappingCsv) args.push('-MappingCsv', mappingCsv);
+      if (whatIf)     args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('New-DistributionGroups.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        newDgsRunBtn.disabled = false;
+        newDgsRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Migration - Update Distribution Group Domain ────────────────────────────
+  const updateDgDomainRunBtn = document.getElementById('updateDgDomainRunBtn');
+  if (updateDgDomainRunBtn) {
+    updateDgDomainRunBtn.addEventListener('click', async () => {
+      const folder         = document.getElementById('updateDgDomainDiscoveryFolder').value.trim();
+      const customerPrefix = document.getElementById('updateDgDomainCustomerPrefix').value.trim();
+      const whatIf          = document.getElementById('updateDgDomainWhatIf').checked;
+
+      if (!folder)         { alert('Please select the discovery folder.'); return; }
+      if (!customerPrefix) { alert('Please select a customer.'); return; }
+
+      const logSection = document.getElementById('updateDgDomainLog');
+      const logOutput  = document.getElementById('updateDgDomainLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      updateDgDomainRunBtn.disabled = true;
+      updateDgDomainRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder, '-CustomerPrefix', customerPrefix];
+      if (whatIf) args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('Update-DistributionGroupDomain.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        updateDgDomainRunBtn.disabled = false;
+        updateDgDomainRunBtn.textContent = '▶ Run';
       }
     });
   }

@@ -1,7 +1,18 @@
 {
-  "version": "2.9.109",
+  "version": "2.9.110",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.110",
+      "date": "2026-09-01",
+      "changes": [
+        "Discovery: distribution group collection now captures actual member addresses, not just a count (Get-DistributionGroupMember was already being called for the count - members come along for free). New Members column flows through to 03_DistributionGroups.csv and the assessment workbook automatically",
+        "Added New-DistributionGroups.ps1: reads 03_DistributionGroups.csv and creates any DG/mail-enabled security group missing from the destination tenant, using the tenant's own onmicrosoft.com address as a temporary primary (the real domain isn't verified there yet), then adds members - resolving each one's new address via -MappingCsv (Fly exchange mapping file) or -CustomerPrefix, same pattern as Restore-ProxyAddresses.ps1. Idempotent - safe to re-run, only fills in what's missing",
+        "Added Update-DistributionGroupDomain.ps1: run once the domain has cut over - flips each group's primary address from the temporary tenant address to the real one captured by Discovery, keeping the temporary address as a secondary alias",
+        "MigrationToolkit-Web: added a new 'Migration' sidebar section (Discovery -> AvePoint Fly -> Migration -> Domain Removal -> Post Migration -> Misc Scripts) containing Provision OneDrives (moved from Discovery) plus panels for both new scripts",
+        "Neither new script has been run against a live tenant yet - WhatIf first"
+      ]
+    },
     {
       "version": "2.9.109",
       "date": "2026-09-01",

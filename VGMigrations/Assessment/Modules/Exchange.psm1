@@ -145,7 +145,7 @@ function Get-MailContactData {
 
 <#
 .SYNOPSIS
-    Retrieves VBU-scoped distribution groups with member counts, split into DGs and mail-enabled security groups.
+    Retrieves VBU-scoped distribution groups with full membership, split into DGs and mail-enabled security groups.
 #>
 function Get-DistributionGroupData {
     param([PSCustomObject]$Context)
@@ -156,10 +156,17 @@ function Get-DistributionGroupData {
     $mesg = [System.Collections.Generic.List[PSCustomObject]]::new()
 
     foreach ($dg in $raw) {
+        # Members captured here (not just counted) so New-DistributionGroups.ps1 can recreate
+        # membership in the destination tenant straight from this collector's output - no
+        # separate live re-query needed.
+        $memberAddresses = @()
         try {
-            $memberCount = (Get-DistributionGroupMember -Identity $dg.Guid.ToString() -ResultSize Unlimited -ErrorAction Stop).Count
+            $members = @(Get-DistributionGroupMember -Identity $dg.Guid.ToString() -ResultSize Unlimited -ErrorAction Stop)
+            $memberAddresses = @($members | ForEach-Object {
+                if ($_.PrimarySmtpAddress) { $_.PrimarySmtpAddress.ToString() } else { $_.Name }
+            } | Where-Object { $_ })
         }
-        catch { $memberCount = $null }
+        catch { $memberAddresses = @() }
 
         $record = [PSCustomObject]@{
             DisplayName                  = $dg.DisplayName
@@ -167,7 +174,8 @@ function Get-DistributionGroupData {
             EmailAddresses               = if ($dg.EmailAddresses) { ($dg.EmailAddresses | Sort-Object) -join '|' } else { '' }
             Alias                        = $dg.Alias
             GroupType                    = $dg.RecipientTypeDetails.ToString()
-            MemberCount                  = $memberCount
+            MemberCount                  = $memberAddresses.Count
+            Members                      = $memberAddresses -join '|'
             ManagedBy                    = if ($dg.ManagedBy) { ($dg.ManagedBy | ForEach-Object { $_.ToString() }) -join '|' } else { '' }
             HiddenFromAddressListsEnabled = $dg.HiddenFromAddressListsEnabled
             WhenCreated                  = $dg.WhenCreated

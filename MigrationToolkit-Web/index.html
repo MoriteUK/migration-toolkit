@@ -72,9 +72,6 @@
             <button type="button" class="sidebar-subitem" data-view="discovery">
               <span class="sidebar-sublabel">M365 Discovery</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-view="misc-onedrive">
-              <span class="sidebar-sublabel">Provision OneDrives</span>
-            </button>
             <button type="button" class="sidebar-subitem" data-view="misc-deduplicate">
               <span class="sidebar-sublabel">Deduplicate Inventory</span>
             </button>
@@ -98,6 +95,24 @@
             </button>
             <button type="button" class="sidebar-subitem" data-view="avepoint-connections">
               <span class="sidebar-sublabel">Project</span>
+            </button>
+          </div>
+
+          <!-- Migration - Expandable -->
+          <button type="button" class="sidebar-item sidebar-item-expandable" data-menu="migration">
+            <span class="sidebar-icon">📦</span>
+            <span class="sidebar-label">Migration</span>
+            <span class="sidebar-arrow">›</span>
+          </button>
+          <div class="sidebar-submenu" id="submenu-migration">
+            <button type="button" class="sidebar-subitem" data-view="misc-onedrive">
+              <span class="sidebar-sublabel">Provision OneDrives</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="migration-new-dgs">
+              <span class="sidebar-sublabel">New Distribution Groups</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="migration-update-dg-domain">
+              <span class="sidebar-sublabel">Update DG Domain</span>
             </button>
           </div>
 
@@ -918,6 +933,96 @@
           <div id="provisionOneDriveLog" style="margin-top:12px;">
             <pre id="provisionOneDriveLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
+        </div>
+      </div>
+
+      <!-- Migration - New Distribution Groups -->
+      <div id="migrationNewDgsView" class="view-container hidden">
+        <h2 class="view-title">New Distribution Groups</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Create Missing Distribution Groups in the New Tenant</h3>
+          <p class="form-help">Reads 03_DistributionGroups.csv from Discovery. For each group not already present in the destination tenant, creates it using the tenant's own onmicrosoft.com address as a temporary primary (the real domain isn't verified there yet), then adds its members — resolving each one's new address the same way Restore Proxy Addresses does. Safe to re-run: existing groups and members are left alone, only what's missing gets added. Sign in with the DESTINATION tenant admin account when prompted.</p>
+
+          <div class="form-group">
+            <label class="form-label">Discovery Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="newDgsDiscoveryFolder" placeholder="Folder containing 03_DistributionGroups.csv...">
+              <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Customer <span style="font-weight:400;color:#6B7280">(from Settings > Customers — determines the temporary tenant.onmicrosoft.com address)</span></label>
+            <select class="form-input form-input-compact" id="newDgsCustomerPrefix">
+              <option value="">Select customer...</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Mapping File <span style="font-weight:400;color:#6B7280">(optional — Fly exchange mapping file; the authoritative source for each member's new address)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="newDgsMappingCsv" placeholder="e.g. mapping exchange.xlsx">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx,csv">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="newDgsWhatIf" checked>
+              <span>WhatIf — preview which groups/members would be created without making changes</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="newDgsRunBtn">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="newDgsLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="newDgsLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Migration - Update Distribution Group Domain -->
+      <div id="migrationUpdateDgDomainView" class="view-container hidden">
+        <h2 class="view-title">Update DG Domain</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Flip Distribution Groups to Their Real Domain After Cutover</h3>
+          <p class="form-help">Run once the domain has been added and verified on the destination tenant. Reads the same 03_DistributionGroups.csv used by New Distribution Groups and updates each group's primary address from its temporary tenant.onmicrosoft.com address to the real one captured by Discovery — kept as a secondary alias, not removed. Sign in with the DESTINATION tenant admin account when prompted.</p>
+
+          <div class="form-group">
+            <label class="form-label">Discovery Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="updateDgDomainDiscoveryFolder" placeholder="Folder containing 03_DistributionGroups.csv...">
+              <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Customer <span style="font-weight:400;color:#6B7280">(from Settings > Customers — identifies the temporary tenant.onmicrosoft.com address being replaced)</span></label>
+            <select class="form-input form-input-compact" id="updateDgDomainCustomerPrefix">
+              <option value="">Select customer...</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="updateDgDomainWhatIf" checked>
+              <span>WhatIf — preview which groups would be updated without making changes</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="updateDgDomainRunBtn">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="updateDgDomainLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="updateDgDomainLogOutput"></div>
         </div>
       </div>
 
