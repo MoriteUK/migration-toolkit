@@ -1634,6 +1634,31 @@ async function loadRestoreProxyCustomers() {
   }
 }
 
+// Populate customer dropdown for Restore Team Memberships from Settings > Customers
+async function loadRestoreTeamMembershipsCustomers() {
+  try {
+    const select = document.getElementById('restoreTeamMembershipsCustomerPrefix');
+    if (!select) return;
+
+    const config = await window.electronAPI.getConfig();
+    if (config.success && config.config && config.config.Customers) {
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
+      select.innerHTML = '<option value="">None — mapping file only</option>';
+
+      customers.forEach(customer => {
+        if (customer.Prefix) {
+          const option = document.createElement('option');
+          option.value = customer.Prefix;
+          option.textContent = customer.Prefix;
+          select.appendChild(option);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error loading Restore Team Memberships customers:', error);
+  }
+}
+
 async function loadDLExternalSendersTenants() {
   try {
     const tenantSelect = document.getElementById('dlExternalSendersTenant');
@@ -1871,6 +1896,7 @@ function switchView(viewName) {
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-domain-devices': 'miscDomainDevicesView',
     'misc-restore-proxy': 'miscRestoreProxyView',
+    'post-migration-team-memberships': 'postMigrationTeamMembershipsView',
     'misc-dl-external-senders': 'miscDLExternalSendersView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
@@ -1897,7 +1923,7 @@ function switchView(viewName) {
       // Load dropdowns when specific views are shown
       if (viewName === 'discovery') {
         loadDiscoveryDomains();
-      } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip', 'domain-check-cloud', 'domain-check-ad'].includes(viewName)) {
+      } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip', 'domain-check-cloud', 'domain-check-ad', 'domain-retire-devices'].includes(viewName)) {
         loadTargetDomain();
       } else if (viewName === 'misc-onedrive') {
         loadOneDriveTenants();
@@ -1905,6 +1931,8 @@ function switchView(viewName) {
         loadDLExternalSendersTenants();
       } else if (viewName === 'misc-restore-proxy') {
         loadRestoreProxyCustomers();
+      } else if (viewName === 'post-migration-team-memberships') {
+        loadRestoreTeamMembershipsCustomers();
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
@@ -3277,6 +3305,53 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         restoreProxyRunBtn.disabled = false;
         restoreProxyRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Post Migration - Restore Team Memberships ───────────────────────────────
+  const restoreTeamMembershipsRunBtn = document.getElementById('restoreTeamMembershipsRunBtn');
+  if (restoreTeamMembershipsRunBtn) {
+    restoreTeamMembershipsRunBtn.addEventListener('click', async () => {
+      const membershipCsv = document.getElementById('restoreTeamMembershipsCsv').value.trim();
+      const domain         = document.getElementById('restoreTeamMembershipsDomain').value.trim();
+      const mappingCsv      = document.getElementById('restoreTeamMembershipsMappingCsv').value.trim();
+      const customerPrefix  = document.getElementById('restoreTeamMembershipsCustomerPrefix').value.trim();
+      const tenantId        = document.getElementById('restoreTeamMembershipsTenantId').value.trim();
+      const sendInvite       = document.getElementById('restoreTeamMembershipsSendInvite').checked;
+      const whatIf           = document.getElementById('restoreTeamMembershipsWhatIf').checked;
+
+      if (!membershipCsv) { alert('Please select the membership CSV.'); return; }
+      if (!domain)         { alert('Please enter the domain that migrated away.'); return; }
+
+      const logSection = document.getElementById('restoreTeamMembershipsLog');
+      const logOutput  = document.getElementById('restoreTeamMembershipsLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      restoreTeamMembershipsRunBtn.disabled = true;
+      restoreTeamMembershipsRunBtn.textContent = 'Running…';
+
+      const args = ['-MembershipCsv', membershipCsv, '-Domain', domain];
+      if (mappingCsv)     args.push('-MappingCsv', mappingCsv);
+      if (customerPrefix) args.push('-CustomerPrefix', customerPrefix);
+      if (tenantId)       args.push('-TenantId', tenantId);
+      if (sendInvite)     args.push('-SendInvitationEmail');
+      if (whatIf)         args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('Restore-DomainTeamMemberships.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        restoreTeamMembershipsRunBtn.disabled = false;
+        restoreTeamMembershipsRunBtn.textContent = '▶ Run';
       }
     });
   }

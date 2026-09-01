@@ -1,7 +1,16 @@
 {
-  "version": "2.9.104",
+  "version": "2.9.105",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.105",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: added a new sidebar section 'Post Migration' containing Restore Proxy Addresses (moved from Misc Scripts), Retire Devices (moved from Domain Removal), and a new Restore Team Memberships panel wired to Restore-DomainTeamMemberships.ps1 (Membership CSV, Domain, optional Fly mapping file, Customer fallback, Tenant ID, send-invitation toggle, WhatIf)",
+        "Retire Devices' sidebar numbering (was '7. Retire Devices' in the Domain Removal list) is dropped since it's no longer part of that numbered sequence - the guided Domain Removal Workflow's own step list is unaffected and still links to the same panel",
+        "Fixed a pre-existing bug found while relocating Retire Devices: its read-only Tenant Domain field never auto-populated from Settings on navigation (missing from the view's trigger list) - now it does, same as every other Domain Removal panel"
+      ]
+    },
     {
       "version": "2.9.104",
       "date": "2026-09-01",

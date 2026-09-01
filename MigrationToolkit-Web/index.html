@@ -126,9 +126,6 @@
             <button type="button" class="sidebar-subitem" data-view="misc-domain-devices">
               <span class="sidebar-sublabel">Get Domain Devices</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-view="misc-restore-proxy">
-              <span class="sidebar-sublabel">Restore Proxy Addresses</span>
-            </button>
             <button type="button" class="sidebar-subitem" data-view="misc-dl-external-senders">
               <span class="sidebar-sublabel">DL External Senders</span>
             </button>
@@ -165,9 +162,6 @@
             <button type="button" class="sidebar-subitem" data-view="domain-sip">
               <span class="sidebar-sublabel">6. SIP / IM Addresses</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-view="domain-retire-devices">
-              <span class="sidebar-sublabel">7. Retire Devices</span>
-            </button>
             <button type="button" class="sidebar-subitem" data-view="domain-remove">
               <span class="sidebar-sublabel">8. Rename Domain</span>
             </button>
@@ -179,6 +173,24 @@
             </button>
             <button type="button" class="sidebar-subitem" data-view="domain-entra-remove">
               <span class="sidebar-sublabel">Remove Entra Users ⚠</span>
+            </button>
+          </div>
+
+          <!-- Post Migration - Expandable -->
+          <button type="button" class="sidebar-item sidebar-item-expandable" data-menu="postmigration">
+            <span class="sidebar-icon">🧹</span>
+            <span class="sidebar-label">Post Migration</span>
+            <span class="sidebar-arrow">›</span>
+          </button>
+          <div class="sidebar-submenu" id="submenu-postmigration">
+            <button type="button" class="sidebar-subitem" data-view="misc-restore-proxy">
+              <span class="sidebar-sublabel">Restore Proxy Addresses</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="domain-retire-devices">
+              <span class="sidebar-sublabel">Retire Devices</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="post-migration-team-memberships">
+              <span class="sidebar-sublabel">Restore Team Memberships</span>
             </button>
           </div>
         </nav>
@@ -1088,6 +1100,72 @@
         <div class="log-section hidden" id="restoreProxyLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="restoreProxyLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Post Migration - Restore Domain Team Memberships -->
+      <div id="postMigrationTeamMembershipsView" class="view-container hidden">
+        <h2 class="view-title">Restore Team Memberships</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Re-add Migrated Users to Teams Staying in the Source Tenant</h3>
+          <p class="form-help">Reads the DomainTeamMemberships CSV (written automatically by M365 Discovery, or by the standalone Get-DomainTeamMemberships.ps1) and re-adds those users — as guests, since their account has moved — to whichever Teams/channels are <strong>not</strong> migrating with the domain. Sign in with a SOURCE tenant admin account when prompted.</p>
+
+          <div class="form-group">
+            <label class="form-label">Membership CSV</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="restoreTeamMembershipsCsv" placeholder="DomainTeamMemberships-<domain>-<timestamp>.csv">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Domain <span style="font-weight:400;color:#6B7280">(the domain that migrated away — Teams whose own mail is on this domain are skipped as presumed migrating too)</span></label>
+            <input type="text" class="form-input form-input-compact" id="restoreTeamMembershipsDomain" placeholder="e.g. olddomain.com">
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Mapping File <span style="font-weight:400;color:#6B7280">(optional — Fly exchange mapping file; the authoritative source for each user's new address)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="restoreTeamMembershipsMappingCsv" placeholder="e.g. mapping exchange.xlsx">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx,csv">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Customer <span style="font-weight:400;color:#6B7280">(fallback when a user isn't in the mapping file — derives &lt;local-part&gt;@&lt;tenant domain&gt; from Settings > Customers)</span></label>
+            <select class="form-input form-input-compact" id="restoreTeamMembershipsCustomerPrefix">
+              <option value="">None — mapping file only</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Tenant ID <span style="font-weight:400;color:#6B7280">(optional — only if your admin account can see more than one tenant)</span></label>
+            <input type="text" class="form-input form-input-compact" id="restoreTeamMembershipsTenantId" placeholder="e.g. contoso.onmicrosoft.com or a GUID">
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="restoreTeamMembershipsSendInvite">
+              <span>Email newly-invited guests Microsoft's invitation notice <span style="font-weight:400;color:#6B7280">(off by default — usually just noise for a batch of colleagues who already know)</span></span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="restoreTeamMembershipsWhatIf" checked>
+              <span>WhatIf — preview every guest invite / membership add without making changes</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="restoreTeamMembershipsRunBtn">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="restoreTeamMembershipsLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="restoreTeamMembershipsLogOutput"></div>
         </div>
       </div>
 
