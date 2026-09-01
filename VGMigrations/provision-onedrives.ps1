@@ -110,11 +110,16 @@ catch {
 Write-Host "Module loaded." -ForegroundColor Green
 
 Write-Host "`nConnecting to SharePoint Online ($AdminUrl)..." -ForegroundColor Cyan
+Write-Host ">>> Your default browser will open — sign in as SharePoint Administrator <<<" -ForegroundColor Yellow
 # Disconnect first — a stale session left over from an earlier script run (a different tenant)
-# can otherwise be silently reused instead of prompting fresh sign-in.
+# can otherwise be silently reused instead of prompting fresh sign-in. -UseSystemBrowser is
+# required when spawned headlessly from Electron (as this always is) - a plain Connect-SPOService
+# popup has no window to open against and fails with "No valid OAuth 2.0 authentication session
+# exists" (confirmed live 2026-09-01); -UseSystemBrowser opens the OS default browser instead,
+# which needs no window handle on this process - same fix already proven in Deduplicate-Inventory.ps1.
 try { Disconnect-SPOService -ErrorAction SilentlyContinue } catch {}
 try {
-    Connect-SPOService -Url $AdminUrl -ErrorAction Stop
+    Connect-SPOService -Url $AdminUrl -UseSystemBrowser:$true -ErrorAction Stop
     Write-Host "Connected to SharePoint Online." -ForegroundColor Green
 }
 catch {

@@ -1,7 +1,15 @@
 {
-  "version": "2.9.118",
+  "version": "2.9.119",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.119",
+      "date": "2026-09-01",
+      "changes": [
+        "Fixed 'SPO connection failed: No valid OAuth 2.0 authentication session exists' on the v2.9.118 Provision-OneDrives.ps1 rewrite (confirmed live) - this toolkit already hit and fixed this exact error before (Deduplicate-Inventory.ps1, an earlier version): a plain Connect-SPOService popup has no window to open against when spawned headlessly from Electron, and the parameter that used to work around it (-UseWebLogin) was removed from the SPO module. Added -UseSystemBrowser:$true (the current replacement, already proven working in Deduplicate-Inventory.ps1) to Provision-OneDrives.ps1 and to the new Update-SharePointSitesCache.ps1, which had the same unfixed connect pattern and would have hit the identical error on its first live run",
+        "Known related risk, not yet reported broken or touched: New-SharePointSites.ps1 and Remove-DeletedSharePointSites.ps1 still call plain Connect-SPOService with no -UseSystemBrowser and likely carry the same bug if run headlessly from the app"
+      ]
+    },
     {
       "version": "2.9.118",
       "date": "2026-09-01",

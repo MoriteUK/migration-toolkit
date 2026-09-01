@@ -62,8 +62,13 @@ catch {
 
 try { Disconnect-SPOService -ErrorAction SilentlyContinue } catch {}
 Write-Host ($PREFIX_INFO + "Connecting to $SharePointAdminUrl...") -ForegroundColor DarkGray
+Write-Host ($PREFIX_WARN + 'Your default browser will open - sign in as SharePoint Administrator') -ForegroundColor Yellow
 try {
-    Connect-SPOService -Url $SharePointAdminUrl -ErrorAction Stop
+    # -UseSystemBrowser is required when spawned headlessly from Electron (as this always is) -
+    # a plain Connect-SPOService popup has no window to open against and fails with "No valid
+    # OAuth 2.0 authentication session exists" (confirmed live against Provision-OneDrives.ps1,
+    # 2026-09-01, which shared this same connect pattern before this fix).
+    Connect-SPOService -Url $SharePointAdminUrl -UseSystemBrowser:$true -ErrorAction Stop
     Write-Host ($PREFIX_OK + 'Connected') -ForegroundColor Green
 }
 catch {
