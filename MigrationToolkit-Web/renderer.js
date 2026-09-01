@@ -352,9 +352,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     startDiscoveryBtn.addEventListener('click', async () => {
       const domainMode = document.querySelector('input[name="domainMode"]:checked')?.value || 'single';
       const vbuId = document.getElementById('discoveryVbuId').value.trim();
+      const searchTerm = document.getElementById('discoverySearchTerm').value.trim();
       const skipPP = document.getElementById('skipPowerPlatform').checked;
-      const hybrid = document.getElementById('hybrid').checked;
-      const members = document.getElementById('includeMembers').checked;
       const continueOnError = document.getElementById('continueOnError').checked;
       const outputFolder = document.getElementById('outputFolder').value.trim() || 'E:\\Work\\Jolera\\Volaris\\Discovery';
 
@@ -375,7 +374,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       logSection.classList.remove('hidden');
       logOutput.textContent = `Starting discovery for: ${domainsToRun.join(', ')}\n`;
       if (vbuId) logOutput.textContent += `VBU ID: ${vbuId}\n`;
-      logOutput.textContent += `Options: SkipPP=${skipPP}  Hybrid=${hybrid}  Members=${members}\n`;
+      if (searchTerm) logOutput.textContent += `VBU Search Term: ${searchTerm}\n`;
+      logOutput.textContent += `Options: SkipPP=${skipPP}\n`;
       logOutput.textContent += `Output: ${outputFolder}\n\n`;
 
       startDiscoveryBtn.disabled = true;
@@ -390,11 +390,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         for (const domain of domainsToRun) {
           if (domainsToRun.length > 1) logOutput.textContent += `\n=== ${domain} ===\n`;
           const args = ['-Domain', domain, '-OutputPath', outputFolder];
-          if (vbuId) args.push('-BusinessUnitId', vbuId);
+          // VBUSearchTerm defaults to the domain's first label inside Run-Assessment.ps1 when
+          // omitted - only pass an explicit override when the field isn't blank, so a
+          // multi-domain batch doesn't reuse one domain's search term for every other domain.
+          if (searchTerm) args.push('-VBUSearchTerm', searchTerm);
+          if (vbuId) args.push('-VBUId', vbuId);
           if (skipPP) args.push('-SkipPowerPlatform');
-          if (hybrid) args.push('-Hybrid');
-          if (members) args.push('-IncludeMembers');
-          lastResult = await runStreamingScript('search-domain.ps1', args);
+          lastResult = await runStreamingScript('Assessment/Run-Assessment.ps1', args);
           if (!lastResult.success && !continueOnError) break;
         }
         logOutput.textContent += lastResult?.success ? '\n✓ Discovery complete\n' : `\n✗ Failed (exit ${lastResult?.code})\n`;

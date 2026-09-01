@@ -1,5 +1,5 @@
 #Requires -Version 7.0
-# M365 Discovery Launcher — standalone GUI wrapper for search-domain.ps1
+# M365 Discovery Launcher — standalone GUI wrapper for Assessment\Run-Assessment.ps1
 
 $libPath    = Join-Path $PSScriptRoot 'lib.ps1'
 $_libLoaded = $false
@@ -63,8 +63,8 @@ if (-not $_libLoaded) {
 }
 
 $OutputDir    = 'C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\2. InProgress Migrations'
-$SingleScript = Join-Path $PSScriptRoot 'search-domain.ps1'
-$MultiScript  = Join-Path $PSScriptRoot 'run-multiple-domains.ps1'
+$SingleScript = Join-Path $PSScriptRoot 'Assessment\Run-Assessment.ps1'
+$MultiScript  = Join-Path $PSScriptRoot 'Assessment\Run-MultiAssessment.ps1'
 
 # ── File logging (shadows lib.ps1 Write-Log which requires $script:rtbLog) ───
 $_logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
@@ -287,8 +287,8 @@ function Show-DiscoveryMenu {
     $null = MkSectionHeader 'Domain Selection' $y
     $y += 32
 
-    # ── Single domain panel (Card with dropdown and VBU ID side-by-side) ──────
-    $pnlSingle = MkCard $lx $y $rw 90
+    # ── Single domain panel (Card with dropdown, VBU ID, and VBU Search Term) ──
+    $pnlSingle = MkCard $lx $y $rw 130
     $lbDom = New-Object System.Windows.Forms.Label
     $lbDom.Text = 'Domain'; $lbDom.Location = [System.Drawing.Point]::new(24,16); $lbDom.AutoSize = $true
     $lbDom.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 10); $lbDom.ForeColor = $clrText
@@ -320,6 +320,20 @@ function Show-DiscoveryMenu {
     try { $txtBuid.PlaceholderText = 'Filters by ExtensionAttribute7' } catch {}
     $pnlSingle.Controls.Add($txtBuid)
 
+    # VBU Search Term - second row, required by the Assessment engine to scope AD/Graph/SharePoint matches
+    $lbSearchTerm = New-Object System.Windows.Forms.Label
+    $lbSearchTerm.Text = 'VBU Search Term'; $lbSearchTerm.Location = [System.Drawing.Point]::new(24,80); $lbSearchTerm.AutoSize = $true
+    $lbSearchTerm.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 10); $lbSearchTerm.ForeColor = $clrText
+    $pnlSingle.Controls.Add($lbSearchTerm)
+
+    $txtSearchTerm = New-Object System.Windows.Forms.TextBox
+    $txtSearchTerm.Location = [System.Drawing.Point]::new(24,108); $txtSearchTerm.Size = [System.Drawing.Size]::new(360,28)
+    $txtSearchTerm.BackColor = [System.Drawing.Color]::White; $txtSearchTerm.ForeColor = $clrText
+    $txtSearchTerm.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    $txtSearchTerm.Font = $FontBody
+    try { $txtSearchTerm.PlaceholderText = 'Company name fragment, e.g. Contoso' } catch {}
+    $pnlSingle.Controls.Add($txtSearchTerm)
+
     # ── Multiple domains panel (Card with multiline textbox) ──────────────────
     $pnlMulti = MkCard $lx $y $rw 180
     $pnlMulti.Visible = $false
@@ -341,19 +355,26 @@ function Show-DiscoveryMenu {
     $txtDomains.Font = New-Object System.Drawing.Font('Consolas', 9)
     $pnlMulti.Controls.Add($txtDomains)
 
-    $y += 110    # single-panel height + gap
+    $y += 150    # single-panel height (130) + gap
 
-    # Auto-fill VBU ID when a domain is chosen — registered here so $txtBuid is in scope
+    # Auto-fill VBU ID and default the VBU Search Term when a domain is chosen — registered
+    # here so $txtBuid/$txtSearchTerm are in scope
     $cmbDomain.Add_SelectedIndexChanged({
         $sel = [string]$cmbDomain.SelectedItem
         if ($sel -and $domainVbuMap.ContainsKey($sel.ToLower())) {
             $txtBuid.Text = $domainVbuMap[$sel.ToLower()]
+        }
+        if ($sel -and -not $txtSearchTerm.Text.Trim()) {
+            $txtSearchTerm.Text = ($sel -split '\.')[0]
         }
     }.GetNewClosure())
     $cmbDomain.Add_Leave({
         $typed = $cmbDomain.Text.Trim().ToLower()
         if ($typed -and $domainVbuMap.ContainsKey($typed)) {
             $txtBuid.Text = $domainVbuMap[$typed]
+        }
+        if ($typed -and -not $txtSearchTerm.Text.Trim()) {
+            $txtSearchTerm.Text = ($typed -split '\.')[0]
         }
     }.GetNewClosure())
 
@@ -362,8 +383,6 @@ function Show-DiscoveryMenu {
     $lblOptions = MkLabel 'Options' $lx $y $true; $y += 26
 
     $chkSkipPP   = MkCheck 'Skip Power Platform  (recommended for unattended / batch runs)' ($lx+8) $y $true;  $y += 26
-    $chkHybrid   = MkCheck 'Hybrid  (includes on-prem Active Directory scanning)'           ($lx+8) $y;        $y += 26
-    $chkMembers  = MkCheck 'Include Members  (distribution groups, M365 Groups)'            ($lx+8) $y;        $y += 26
     $chkContinue = MkCheck 'Continue on error  (skip failed domains in multi-domain run)'   ($lx+8) $y
     $chkContinue.Visible = $false; $y += 26
 
@@ -475,8 +494,9 @@ function Show-DiscoveryMenu {
     }.GetNewClosure())
 
     # ── Radio toggle ──────────────────────────────────────────────────────────
-    # Shift amount = difference between multi-panel height (100px) and
-    # single-panel height (28px), matching the $y += 36 / $y += 108 delta above.
+    # Shift amount = difference between multi-panel height (180px) and
+    # single-panel height (130px), scaled down from the original 72px offset
+    # (tuned for a 90px-tall single panel) by the 40px the VBU Search Term row added.
     $script:discModeOffset = 0
     $toggleMode = {
         $mode = if ($radSingle.Checked) { 'Single' } else { 'Multi' }
@@ -485,12 +505,12 @@ function Show-DiscoveryMenu {
         $pnlMulti.Visible    = $radMulti.Checked
         $chkContinue.Visible = $radMulti.Checked
 
-        $newOffset = if ($radMulti.Checked) { 72 } else { 0 }
+        $newOffset = if ($radMulti.Checked) { 32 } else { 0 }
         $delta = $newOffset - $script:discModeOffset
         if ($delta -ne 0) {
             $script:discModeOffset = $newOffset
             foreach ($ctrl in @($sep1Ctrl, $lblOptions,
-                                $chkSkipPP, $chkHybrid, $chkMembers, $chkContinue,
+                                $chkSkipPP, $chkContinue,
                                 $sep2Ctrl, $lbOutDir, $txtOutDir, $btnBrowseOut,
                                 $txtSpoUrl,
                                 $btnRun, $btnStop, $btnClearLog, $rtbLog)) {
@@ -566,15 +586,17 @@ function Show-DiscoveryMenu {
             # instead of finding this form's HWND. WindowStyle must stay Normal (not Minimized) —
             # a minimized window has no visible HWND for the WAM broker to parent its sign-in
             # dialog to.
-            # NOTE: as of search-domain.ps1 v2.12.0, WAM is disabled outright before Graph/EXO
-            # connect (Set-MgGraphOption -DisableLoginByWAM / Connect-ExchangeOnline -DisableWAM)
-            # rather than relying on this window being parentable, because the device-code
-            # fallback that WAM failures used to trigger can now be blocked tenant-wide by a
-            # Conditional Access "Authentication flows" policy. This window is still kept
-            # Normal/visible since the plain browser popup Connect-MgGraph falls back to also
-            # needs somewhere to parent from, and it's harmless either way.
-            # Output is captured by tailing the _Search-M365Domain_*.log file that
-            # search-domain.ps1 writes to the output folder.
+            # NOTE: Run-Assessment.ps1 disables WAM outright before Graph/EXO connect
+            # (pinned Microsoft.Graph.Authentication via Ensure-GraphModules.ps1 /
+            # Connect-ExchangeOnline -DisableWAM) rather than relying on this window being
+            # parentable, because the device-code fallback that WAM failures used to trigger
+            # can now be blocked tenant-wide by a Conditional Access "Authentication flows"
+            # policy. This window is still kept Normal/visible since the plain browser popup
+            # Connect-MgGraph falls back to also needs somewhere to parent from, and it's
+            # harmless either way.
+            # Run-Assessment.ps1 has no equivalent log file to tail (it writes JSON collectors,
+            # not a single verbose log) - output is only visible in this console window itself,
+            # not mirrored into the panel below.
             # UseShellExecute=$true resolves through the OS's default handler for .exe files,
             # which on Windows 11 is Windows Terminal — its GPU-accelerated rendering can fail to
             # initialize over an RDP session, silently killing the hosted process. UseShellExecute
@@ -681,8 +703,9 @@ function Show-DiscoveryMenu {
 
     # ── Run handler ───────────────────────────────────────────────────────────
     $btnRun.Add_Click({
-        $buid   = $txtBuid.Text.Trim()
-        $escOut = $txtOutDir.Text.Trim() -replace "'","''"
+        $buid       = $txtBuid.Text.Trim()
+        $searchTerm = $txtSearchTerm.Text.Trim()
+        $escOut     = $txtOutDir.Text.Trim() -replace "'","''"
 
         $spoUrl = $txtSpoUrl.Text.Trim()
 
@@ -691,19 +714,19 @@ function Show-DiscoveryMenu {
             if ([string]::IsNullOrWhiteSpace($domain)) {
                 [System.Windows.Forms.MessageBox]::Show('Enter a domain name.','Missing Input','OK','Warning') | Out-Null; return
             }
+            if ([string]::IsNullOrWhiteSpace($searchTerm)) {
+                [System.Windows.Forms.MessageBox]::Show('Enter a VBU Search Term (company name fragment).','Missing Input','OK','Warning') | Out-Null; return
+            }
             if (-not (Test-Path $SingleScript)) {
                 [System.Windows.Forms.MessageBox]::Show("Script not found:`n$SingleScript",'Not Found','OK','Error') | Out-Null; return
             }
-            Write-Log "Run (single): domain=$domain  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  BUID='$buid'  SPOAdmin='$spoUrl'"
+            Write-Log "Run (single): domain=$domain  SearchTerm='$searchTerm'  SkipPP=$($chkSkipPP.Checked)  VBUId='$buid'  SPOAdmin='$spoUrl'"
             $escS = $SingleScript -replace "'","''"
-            $cmd  = "Set-Location '$escOut'; & '$escS' -Domain '$domain'"
-            if ($chkHybrid.Checked)  { $cmd += ' -Hybrid' }
-            if ($chkMembers.Checked) { $cmd += ' -IncludeMembers' }
+            $cmd  = "& '$escS' -Domain '$domain' -VBUSearchTerm '$($searchTerm -replace "'","''")' -OutputPath '$escOut'"
             if ($chkSkipPP.Checked)  { $cmd += ' -SkipPowerPlatform' }
-            if ($buid)               { $cmd += " -BusinessUnitId '$buid'" }
+            if ($buid)               { $cmd += " -VBUId '$buid'" }
             if ($spoUrl)             { $cmd += " -SharePointAdminUrl '$($spoUrl -replace "'","''")'" }
-            $watchDir = Join-Path $txtOutDir.Text.Trim() ($domain -replace '[\\/:*?"<>|]', '_')
-            & $buildAndLaunch $cmd "Single: $domain" $watchDir
+            & $buildAndLaunch $cmd "Single: $domain" ''
 
         } else {
             # Parse the multiline textbox — skip blank lines and # comments
@@ -718,16 +741,15 @@ function Show-DiscoveryMenu {
             if (-not (Test-Path $MultiScript)) {
                 [System.Windows.Forms.MessageBox]::Show("Script not found:`n$MultiScript",'Not Found','OK','Error') | Out-Null; return
             }
-            # Build @('d1','d2',...) literal for the encoded command
-            Write-Log "Run (multi): $($domains.Count) domains=[$($domains -join ',')]  SkipPP=$($chkSkipPP.Checked)  Hybrid=$($chkHybrid.Checked)  Members=$($chkMembers.Checked)  Continue=$($chkContinue.Checked)  BUID='$buid'  SPOAdmin='$spoUrl'"
+            # Build @('d1','d2',...) literal for the encoded command. VBU Search Term and VBU ID
+            # are derived per-domain by Run-MultiAssessment.ps1 (domain prefix / domains.json
+            # lookup) - the single VBU ID field above doesn't apply across a mixed domain list.
+            Write-Log "Run (multi): $($domains.Count) domains=[$($domains -join ',')]  SkipPP=$($chkSkipPP.Checked)  Continue=$($chkContinue.Checked)  SPOAdmin='$spoUrl'"
             $arrayLiteral = "@('" + ($domains -join "','") + "')"
             $escM = $MultiScript -replace "'","''"
-            $cmd  = "Set-Location '$escOut'; & '$escM' -Domains $arrayLiteral"
-            if ($chkHybrid.Checked)   { $cmd += ' -Hybrid' }
-            if ($chkMembers.Checked)  { $cmd += ' -IncludeMembers' }
+            $cmd  = "& '$escM' -Domains $arrayLiteral -OutputPath '$escOut'"
             if ($chkSkipPP.Checked)   { $cmd += ' -SkipPowerPlatform' }
             if ($chkContinue.Checked) { $cmd += ' -ContinueOnError' }
-            if ($buid)                { $cmd += " -BusinessUnitId '$buid'" }
             if ($spoUrl)              { $cmd += " -SharePointAdminUrl '$($spoUrl -replace "'","''")'" }
             & $buildAndLaunch $cmd "Multi: $($domains.Count) domain(s) - $($domains -join ', ')" ''
         }

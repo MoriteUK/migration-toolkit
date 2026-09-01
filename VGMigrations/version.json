@@ -1,7 +1,21 @@
 {
-  "version": "2.9.97",
-  "releaseDate": "2026-08-28",
+  "version": "2.9.98",
+  "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.98",
+      "date": "2026-09-01",
+      "changes": [
+        "Replaced search-domain.ps1 with a new modular Assessment engine (VGMigrations\\Assessment\\Run-Assessment.ps1 + Modules\\) - writes one JSON file per collector (AD, Exchange, Graph, SharePoint, Power Platform) plus an assessment workbook built directly via ImportExcel, and adds a 'Generate Mapping Files' mode that turns a finished workbook into the six AvePoint Fly import files",
+        "AD collection is now soft-fail: a machine without RSAT, or with no line of sight to on-prem AD, still completes an assessment (AD-sourced sections just come back empty) instead of the old -Hybrid on/off switch",
+        "Power Platform (Power Apps + Power Automate) collection ported over as its own child-process scan (separate sign-in window, same reason as before - its SDK conflicts with Graph's) - Skip Power Platform still available for unattended runs",
+        "Interactive sign-in reliability carried over from search-domain.ps1's own hard-won fixes: Microsoft.Graph.* pinned to 2.33.0 via the existing Ensure-GraphModules.ps1 (last version before the SDK made WAM mandatory), and Connect-ExchangeOnline -DisableWAM",
+        "Every Domain Removal script (Rename-DomainObjects.ps1, Hide-AddressBook.ps1, Remove-AliasAddresses.ps1, remove-domain.ps1, Retire-Devices.ps1, Remove-devices.ps1, Restore-ProxyAddresses.ps1) keeps working unchanged - every assessment run now also writes a Discovery\\ folder with the same NN_<Area>.csv files search-domain.ps1 used to produce, generated from the new JSON by Modules\\LegacyExport.psm1",
+        "discovery-menu.ps1 and the Electron app's Discovery panel (MigrationToolkit-Web) now launch the new Assessment engine; both gained a required 'VBU Search Term' field (defaults to the domain's first label when left blank) and dropped the Hybrid/Include Members options that no longer apply",
+        "search-domain.ps1 and run-multiple-domains.ps1 moved to VGMigrations\\_Legacy\\ - not deleted, recoverable if the new engine regresses something in the field, but no longer referenced by any menu or panel",
+        "Not yet field-tested against a live tenant in this change - validate a real assessment run (including the Power Platform child-process sign-in and the Discovery CSV compatibility output) before the next live customer Domain Removal"
+      ]
+    },
     {
       "version": "2.9.97",
       "date": "2026-08-28",
