@@ -1,7 +1,15 @@
 {
-  "version": "2.9.107",
+  "version": "2.9.108",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.108",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: removed the 'Remove Entra Devices' panel (permanent delete via Remove-devices.ps1) from the sidebar entirely - Retire Devices (disable, not delete) is now the only device-removal option in the app. Remove-devices.ps1 itself is untouched on disk, just no longer surfaced in the UI",
+        "Get Domain Devices (a non-destructive export/report) is unaffected and unrelated - stays in Misc Scripts"
+      ]
+    },
     {
       "version": "2.9.107",
       "date": "2026-09-01",
