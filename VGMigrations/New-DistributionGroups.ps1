@@ -179,6 +179,7 @@ try {
 $results = [System.Collections.Generic.List[object]]::new()
 $created = 0; $existing = 0; $failed = 0
 $membersAdded = 0; $membersSkipped = 0; $membersFailed = 0
+$rowsWithNoMembersColumn = 0
 
 foreach ($row in $rows) {
     $alias       = $row.Alias
@@ -234,8 +235,16 @@ foreach ($row in $rows) {
 
     # ── Members ──────────────────────────────────────────────────────────────────
     if (-not $dg -and -not $WhatIf) { continue }
+    if (-not $row.PSObject.Properties['Members']) {
+        Log "    No 'Members' column in this CSV - it was generated before Discovery captured DL membership. Re-run Discovery, then re-run this script (it's safe to re-run - existing groups/members are left alone)."
+        $rowsWithNoMembersColumn++
+        continue
+    }
     $members = @($row.Members -split '\|' | Where-Object { $_ })
-    if ($members.Count -eq 0) { continue }
+    if ($members.Count -eq 0) {
+        Log "    No members captured for this group in Discovery."
+        continue
+    }
 
     $currentMemberAddrs = @()
     if ($dg -and -not $WhatIf) {
@@ -287,5 +296,8 @@ $results | Export-Csv -Path $resultsCsv -NoTypeInformation -Encoding UTF8
 Log ''
 Log "=== Complete: groups created $created  |  already existed $existing  |  failed $failed ==="
 Log "=== Members: added $membersAdded  |  skipped (already present / unresolvable) $membersSkipped  |  failed $membersFailed ==="
+if ($rowsWithNoMembersColumn -gt 0) {
+    Log "=== WARNING: $rowsWithNoMembersColumn group(s) had no 'Members' column at all - this Discovery folder predates member capture. Re-run Discovery, then re-run this script. ==="
+}
 Log "Results CSV : $resultsCsv"
 Log "Log         : $logFile"

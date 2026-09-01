@@ -1,7 +1,14 @@
 {
-  "version": "2.9.114",
+  "version": "2.9.115",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.115",
+      "date": "2026-09-01",
+      "changes": [
+        "New-DistributionGroups.ps1: fixed a silent no-op when the source CSV has no 'Members' column at all - most likely to happen right now, since Discovery only started capturing DL membership in v2.9.110; a Discovery folder generated before that has no Members data, so groups got created successfully but nothing was ever added, with zero indication why. Now logs a clear message per affected group plus a summary warning line, and tells you to re-run Discovery"
+      ]
+    },
     {
       "version": "2.9.114",
       "date": "2026-09-01",
