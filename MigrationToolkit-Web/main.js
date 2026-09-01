@@ -80,7 +80,11 @@ function openScriptLog(scriptName) {
   const logsDir = LOGS_DIR;
   if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const base = scriptName.replace(/\.ps1$/i, '');
+  // scriptName can include a subfolder (e.g. "Assessment/Run-Assessment.ps1") - flatten any
+  // path separators into the filename itself so the log always lands directly in logsDir.
+  // Without this, path.join below treated the subfolder as a literal directory segment that
+  // was never created, and fs.createWriteStream threw ENOENT.
+  const base = scriptName.replace(/\.ps1$/i, '').replace(/[\\/]+/g, '_');
   const logFile = fs.createWriteStream(path.join(logsDir, `${base}_${ts}.log`), { flags: 'a' });
   logFile.write(`=== ${scriptName}  ${new Date().toISOString()} ===\n`);
   return logFile;

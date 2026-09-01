@@ -1,7 +1,14 @@
 {
-  "version": "2.9.100",
+  "version": "2.9.101",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.101",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: fixed Start Discovery throwing a JavaScript error immediately on click - main.js's shared script-log opener built the log filename directly from the script name ('Assessment/Run-Assessment.ps1'), so it tried to create the log inside a Logs\\Assessment\\ subfolder that never gets created (only the top-level Logs folder does), and fs.createWriteStream threw ENOENT. Any path separators in the script name are now flattened into the filename itself, so the log always lands directly in the Logs folder regardless of which subfolder the script lives in"
+      ]
+    },
     {
       "version": "2.9.100",
       "date": "2026-09-01",
