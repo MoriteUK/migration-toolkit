@@ -112,9 +112,15 @@ if (-not $mod) {
 }
 Import-Module 'ExchangeOnlineManagement' -ErrorAction Stop
 
-Log 'Connecting to Exchange Online — sign in with the DESTINATION tenant admin account when the browser opens...'
+# Disconnect any existing session first - a session left over from an earlier script run
+# (e.g. Discovery, moments earlier, against the SOURCE tenant) is otherwise silently reused
+# instead of prompting fresh, and -Organization below would be the only thing standing
+# between this run and updating everything against the wrong tenant.
+try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue | Out-Null } catch {}
+
+Log "Connecting to Exchange Online ($tenantDomain) — sign in with the DESTINATION tenant admin account when the browser opens..."
 try {
-    Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -ErrorAction Stop
+    Connect-ExchangeOnline -Organization $tenantDomain -ShowBanner:$false -DisableWAM -ErrorAction Stop
     Log 'Connected to Exchange Online.'
 } catch {
     Log "ERROR: Failed to connect to Exchange Online: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
@@ -166,7 +172,6 @@ foreach ($row in $rows) {
         # (Restore-ProxyAddresses.ps1) of never silently dropping an existing address.
         $current = @($dg.EmailAddresses | ForEach-Object { "$_" })
         $updated = [System.Collections.Generic.List[string]]::new()
-        $addedTarget = $false
         foreach ($addr in $current) {
             if ($addr -match '^smtp:(.+)$' -and $Matches[1].ToLowerInvariant() -eq $currentPrimary.ToLowerInvariant()) {
                 # skip - the old primary is re-added below as a lowercase secondary

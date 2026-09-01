@@ -181,14 +181,22 @@ if (-not $mod) {
 }
 Import-Module 'ExchangeOnlineManagement' -ErrorAction Stop
 
-Log 'Connecting to Exchange Online — sign in with the DESTINATION tenant admin account when the browser opens...'
+# Disconnect any existing session first - a session left over from an earlier script run
+# (e.g. Discovery, or another Post Migration script, against a different tenant) is otherwise
+# silently reused instead of prompting fresh. Confirmed live: without this, a stale source-
+# tenant session got reused here and every match/update silently ran against the wrong tenant.
+try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue | Out-Null } catch {}
+
+Log "Connecting to Exchange Online$(if ($tenantDomain) { " ($tenantDomain)" }) — sign in with the DESTINATION tenant admin account when the browser opens..."
 try {
     $cmds = @('Get-Recipient','Get-Mailbox','Set-Mailbox',
               'Get-MailUser','Set-MailUser',
               'Get-DistributionGroup','Set-DistributionGroup',
               'Get-UnifiedGroup','Set-UnifiedGroup',
               'Get-MailContact','Set-MailContact')
-    Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
+    $connectParams = @{ ShowBanner = $false; CommandName = $cmds; DisableWAM = $true; ErrorAction = 'Stop' }
+    if ($tenantDomain) { $connectParams.Organization = $tenantDomain }
+    Connect-ExchangeOnline @connectParams
     Log 'Connected to Exchange Online.'
 } catch {
     Log "ERROR: Failed to connect to Exchange Online: $($_.Exception.Message.Split([Environment]::NewLine)[0])"

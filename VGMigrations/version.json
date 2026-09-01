@@ -1,7 +1,16 @@
 {
-  "version": "2.9.113",
+  "version": "2.9.114",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.114",
+      "date": "2026-09-01",
+      "changes": [
+        "Fixed New-DistributionGroups.ps1, Update-DistributionGroupDomain.ps1, and Restore-ProxyAddresses.ps1 silently connecting to the wrong tenant - confirmed live: a session left over from an earlier script run (e.g. Discovery, moments earlier, against the SOURCE tenant) was silently reused by Connect-ExchangeOnline instead of prompting fresh, so every group/address 'already existed' on the source domain even though the destination tenant had never seen them",
+        "Both DL scripts now disconnect any existing session first and pass -Organization <tenant domain> explicitly, so the connection can no longer land anywhere but the intended destination tenant. Restore-ProxyAddresses.ps1 gets the same disconnect-first fix and passes -Organization whenever -CustomerPrefix was supplied",
+        "Known follow-up: Restore-DomainTeamMemberships.ps1 has partial protection already (won't reuse a session that doesn't match an explicitly-supplied -TenantId) but can still reuse a stale session of unknown origin when -TenantId is omitted - not changed yet since that reuse behaviour may be intentional there and wasn't reported broken"
+      ]
+    },
     {
       "version": "2.9.113",
       "date": "2026-09-01",
