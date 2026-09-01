@@ -1,7 +1,17 @@
 {
-  "version": "2.9.102",
+  "version": "2.9.103",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.103",
+      "date": "2026-09-01",
+      "changes": [
+        "Added Restore-DomainTeamMemberships.ps1: companion to Get-DomainTeamMemberships.ps1 - reads its output CSV and re-adds those users, as B2B guests, to the Teams/channels that will still live in the SOURCE tenant after cutover (inferred by excluding rows whose Team's own mail is on the migrated domain - those Teams are presumed to be migrating too). Archived Teams and Standard-channel rows are always skipped (Standard channel membership auto-follows the parent Team)",
+        "Resolves each user's new destination-tenant address via -MappingCsv (the Fly exchange mapping file this toolkit already produces - Source/Destination columns, xlsx or csv) or falls back to -CustomerPrefix (same Settings > Customers AccountName lookup Restore-ProxyAddresses.ps1 uses)",
+        "Teams doesn't allow guest owners - a row with Role=Owner is added as a regular Member instead, logged clearly. Guest invitations and existing memberships are both idempotent-safe (an existing guest is reused, an existing membership is treated as success, not a failure). Writes a per-row results CSV alongside the run log",
+        "Not yet exercised against a live tenant/Graph connection - run with -WhatIf first"
+      ]
+    },
     {
       "version": "2.9.102",
       "date": "2026-09-01",
