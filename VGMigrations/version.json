@@ -1,7 +1,14 @@
 {
-  "version": "2.9.111",
+  "version": "2.9.112",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.112",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: moved Migration above the AvePoint section in the sidebar (new order: Discovery, Migration, Avepoint Steps, Domain Removal, Post Migration, Misc Scripts) and renamed 'AvePoint Fly' to 'Avepoint Steps'. Other on-screen references to AvePoint Fly (the actual third-party product name - App Registration help text, project titles) were left as-is since they name the real product, not this sidebar label"
+      ]
+    },
     {
       "version": "2.9.111",
       "date": "2026-09-01",
