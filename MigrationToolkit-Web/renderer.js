@@ -1086,7 +1086,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Populate domain dropdown from customer settings
+  // Populate domain dropdown from customer settings. Deliberately does NOT auto-select or
+  // auto-fetch a customer on load — it used to default to whichever customer sorted first
+  // alphabetically and immediately fire Get-MigrationData.ps1 for it, which had nothing to do
+  // with what the operator actually opened the app to work on and just left a misleading log
+  // entry for an arbitrary customer. Data now only loads once a customer is explicitly chosen
+  // (see the dashboardDomainSelect change handler below).
   async function loadCustomerDomains() {
     try {
       const config = await window.electronAPI.getConfig();
@@ -1102,14 +1107,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             dashboardDomainSelect.appendChild(option);
           }
         });
-
-        // Select first domain if available
-        if (customers.length > 0 && customers[0].Prefix) {
-          dashboardDomainSelect.value = customers[0].Prefix;
-          refreshDashboard();
-          // Start auto-refresh timer
-          startDashboardAutoRefresh();
-        }
       }
     } catch (error) {
       console.error('Error loading customer domains:', error);

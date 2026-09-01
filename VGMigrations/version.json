@@ -1,7 +1,14 @@
 {
-  "version": "2.9.99",
+  "version": "2.9.100",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.100",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: Dashboard no longer auto-selects and fetches data for whichever customer happens to sort first alphabetically on app startup - it previously fired Get-MigrationData.ps1 for an arbitrary customer (e.g. 'AEP') every launch regardless of what the operator was actually working on, leaving a misleading log entry that looked related to whatever else they did next (reported: looked like it came from an unrelated M365 Discovery run). Dashboard now stays blank until a customer is explicitly chosen from the dropdown"
+      ]
+    },
     {
       "version": "2.9.99",
       "date": "2026-09-01",
