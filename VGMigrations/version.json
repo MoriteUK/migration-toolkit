@@ -1,7 +1,17 @@
 {
-  "version": "2.9.117",
+  "version": "2.9.118",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.118",
+      "date": "2026-09-01",
+      "changes": [
+        "Provision-OneDrives.ps1: Fixed 0/61 provisioned on a live run (all failed with '[ResourceNotFound]: User's mysite not found') - the script called Microsoft Graph's Get-MgUserDrive (a plain GET) on the mistaken assumption that reading a user's drive would provision it if missing. That assumption dates back to this script's very first commit and was never true - Graph's GET does not provision anything, which is why every user failed uniformly rather than some working and some not",
+        "Rewritten to use SharePoint Online's Request-SPOPersonalSite (batched up to 200 emails per call, -NoWait) - the Microsoft-documented way to bulk-queue OneDrive provisioning. -AdminUrl is now actually used (previously accepted but ignored) and is required. Provisioning is asynchronous, so this only confirms the batch was accepted, not that each site now exists - re-run Check-OneDriveStatus.ps1 (unaffected by this fix - its Get-MgUserDrive usage is a correct read for status checking, unlike the provisioning script's) a few minutes later to confirm",
+        "MigrationToolkit-Web: Added 'Refresh Discovery Cache' to Misc Scripts as well as Discovery (both point at the same screen)",
+        "MigrationToolkit-Web: Moved 'Update Target DL Domain' from Migration to Post Migration"
+      ]
+    },
     {
       "version": "2.9.117",
       "date": "2026-09-01",
