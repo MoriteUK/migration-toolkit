@@ -3385,7 +3385,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── Migration - New Distribution Groups ─────────────────────────────────────
+  // ── Migration - Create Target DLs ────────────────────────────────────────────
   const newDgsRunBtn = document.getElementById('newDgsRunBtn');
   if (newDgsRunBtn) {
     newDgsRunBtn.addEventListener('click', async () => {
@@ -3426,7 +3426,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── Migration - Update Distribution Group Domain ────────────────────────────
+  // ── Migration - Update Target DL Domain ──────────────────────────────────────
   const updateDgDomainRunBtn = document.getElementById('updateDgDomainRunBtn');
   if (updateDgDomainRunBtn) {
     updateDgDomainRunBtn.addEventListener('click', async () => {

@@ -1,7 +1,14 @@
 {
-  "version": "2.9.110",
+  "version": "2.9.111",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.111",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: renamed 'New Distribution Groups' to 'Create Target DLs' and 'Update DG Domain' to 'Update Target DL Domain' in the Migration sidebar section. Cosmetic only - still wired to New-DistributionGroups.ps1 / Update-DistributionGroupDomain.ps1"
+      ]
+    },
     {
       "version": "2.9.110",
       "date": "2026-09-01",

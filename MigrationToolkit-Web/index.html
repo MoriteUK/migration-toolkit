@@ -109,10 +109,10 @@
               <span class="sidebar-sublabel">Provision OneDrives</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="migration-new-dgs">
-              <span class="sidebar-sublabel">New Distribution Groups</span>
+              <span class="sidebar-sublabel">Create Target DLs</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="migration-update-dg-domain">
-              <span class="sidebar-sublabel">Update DG Domain</span>
+              <span class="sidebar-sublabel">Update Target DL Domain</span>
             </button>
           </div>
 
@@ -936,9 +936,9 @@
         </div>
       </div>
 
-      <!-- Migration - New Distribution Groups -->
+      <!-- Migration - Create Target DLs -->
       <div id="migrationNewDgsView" class="view-container hidden">
-        <h2 class="view-title">New Distribution Groups</h2>
+        <h2 class="view-title">Create Target DLs</h2>
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Create Missing Distribution Groups in the New Tenant</h3>
@@ -985,13 +985,13 @@
         </div>
       </div>
 
-      <!-- Migration - Update Distribution Group Domain -->
+      <!-- Migration - Update Target DL Domain -->
       <div id="migrationUpdateDgDomainView" class="view-container hidden">
-        <h2 class="view-title">Update DG Domain</h2>
+        <h2 class="view-title">Update Target DL Domain</h2>
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Flip Distribution Groups to Their Real Domain After Cutover</h3>
-          <p class="form-help">Run once the domain has been added and verified on the destination tenant. Reads the same 03_DistributionGroups.csv used by New Distribution Groups and updates each group's primary address from its temporary tenant.onmicrosoft.com address to the real one captured by Discovery — kept as a secondary alias, not removed. Sign in with the DESTINATION tenant admin account when prompted.</p>
+          <p class="form-help">Run once the domain has been added and verified on the destination tenant. Reads the same 03_DistributionGroups.csv used by Create Target DLs and updates each group's primary address from its temporary tenant.onmicrosoft.com address to the real one captured by Discovery — kept as a secondary alias, not removed. Sign in with the DESTINATION tenant admin account when prompted.</p>
 
           <div class="form-group">
             <label class="form-label">Discovery Folder</label>
