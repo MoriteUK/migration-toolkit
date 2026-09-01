@@ -1,7 +1,14 @@
 {
-  "version": "2.9.106",
+  "version": "2.9.107",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.107",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: moved the three 'Check' scripts out of Discovery into Misc Scripts - Check Baseline Status, Check Licenses, Check Domain Readiness. Pure sidebar reorder, no functional change"
+      ]
+    },
     {
       "version": "2.9.106",
       "date": "2026-09-01",
