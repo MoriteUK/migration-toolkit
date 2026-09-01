@@ -1,7 +1,15 @@
 {
-  "version": "2.9.112",
+  "version": "2.9.113",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.113",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: added a divider line in the sidebar between Post Migration and Misc Scripts, visually separating the workflow sections (Discovery through Post Migration) from the Misc Scripts grab-bag. Also bumped main.css's stale cache-busting query string (was v=2.9.34) so the new rule actually loads for anyone with a cached copy",
+        "Moved DL External Senders from Misc Scripts to Post Migration"
+      ]
+    },
     {
       "version": "2.9.112",
       "date": "2026-09-01",
