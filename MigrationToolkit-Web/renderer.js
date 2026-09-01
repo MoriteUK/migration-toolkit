@@ -1600,6 +1600,31 @@ async function loadOneDriveTenants() {
 }
 
 // Populate tenant dropdown for DL External Senders from customer settings
+// Populate customer dropdown for Restore Proxy Addresses from Settings > Customers
+async function loadRestoreProxyCustomers() {
+  try {
+    const select = document.getElementById('restoreProxyCustomerPrefix');
+    if (!select) return;
+
+    const config = await window.electronAPI.getConfig();
+    if (config.success && config.config && config.config.Customers) {
+      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
+      select.innerHTML = '<option value="">None — match by old domain address only</option>';
+
+      customers.forEach(customer => {
+        if (customer.Prefix) {
+          const option = document.createElement('option');
+          option.value = customer.Prefix;
+          option.textContent = customer.Prefix;
+          select.appendChild(option);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error loading Restore Proxy Addresses customers:', error);
+  }
+}
+
 async function loadDLExternalSendersTenants() {
   try {
     const tenantSelect = document.getElementById('dlExternalSendersTenant');
@@ -1895,6 +1920,8 @@ function switchView(viewName) {
         loadOneDriveTenants();
       } else if (viewName === 'misc-dl-external-senders') {
         loadDLExternalSendersTenants();
+      } else if (viewName === 'misc-restore-proxy') {
+        loadRestoreProxyCustomers();
       } else if (viewName === 'misc-team-memberships') {
         loadTeamMembershipsDomains();
       } else if (viewName === 'avepoint-monitor') {
@@ -3229,12 +3256,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const restoreProxyRunBtn = document.getElementById('restoreProxyRunBtn');
   if (restoreProxyRunBtn) {
     restoreProxyRunBtn.addEventListener('click', async () => {
-      const folder   = document.getElementById('restoreProxyDiscoveryFolder').value.trim();
-      const domain   = document.getElementById('restoreProxyDomain').value.trim();
-      const doSMTP   = document.getElementById('restoreProxySMTP').checked;
-      const doSIP    = document.getElementById('restoreProxySIP').checked;
-      const doX500   = document.getElementById('restoreProxyX500').checked;
-      const whatIf   = document.getElementById('restoreProxyWhatIf').checked;
+      const folder         = document.getElementById('restoreProxyDiscoveryFolder').value.trim();
+      const domain         = document.getElementById('restoreProxyDomain').value.trim();
+      const customerPrefix = document.getElementById('restoreProxyCustomerPrefix').value.trim();
+      const doSMTP         = document.getElementById('restoreProxySMTP').checked;
+      const doSIP          = document.getElementById('restoreProxySIP').checked;
+      const doX500         = document.getElementById('restoreProxyX500').checked;
+      const whatIf         = document.getElementById('restoreProxyWhatIf').checked;
 
       if (!folder) { alert('Please select a discovery folder.'); return; }
       if (!doSMTP && !doSIP && !doX500) { alert('Select at least one address type to restore.'); return; }
@@ -3249,6 +3277,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const args = ['-DiscoveryFolder', folder];
       if (domain) args.push('-Domain', domain);
+      if (customerPrefix) args.push('-CustomerPrefix', customerPrefix);
       if (!doSMTP) args.push('-SkipSMTP');
       if (!doSIP)  args.push('-SkipSIP');
       if (doX500)  args.push('-IncludeX500');

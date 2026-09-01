@@ -10,14 +10,18 @@
     still missing back onto the corresponding recipient in whichever tenant the signed-in
     account belongs to — normally the NEW/destination tenant, once accounts have moved there.
 
-    Recipients are matched by PrimarySmtpAddress first, then UserPrincipalName, then by
-    local-part across any domain — the destination mailbox may already be sitting on the
-    tenant's default onmicrosoft.com address (e.g. user@mbubinarysystems.onmicrosoft.com)
-    rather than the final vanity domain the CSV was captured against, and that default domain
-    varies per tenant so it can't be assumed. Restored addresses are always added as SECONDARY
-    (lowercase prefix) — even if a row's IsPrimary was true in the old tenant — so nothing here
-    can override whatever primary address the destination mailbox already has. Addresses already
-    present (case-insensitive) are skipped.
+    Recipients are matched by PrimarySmtpAddress first, then UserPrincipalName, then — when
+    -CustomerPrefix is supplied — by local-part @ the destination tenant's onmicrosoft.com
+    domain (looked up from %APPDATA%\FlyMigration\config.json's Customers array, same one
+    Settings > Customers populates), then finally by local-part across any domain as a last
+    resort. This matters because the old vanity domain (e.g. aep-italia.it) usually isn't
+    verified on the destination tenant yet when this script runs — accounts are still sitting
+    on their default onmicrosoft.com address (e.g. user@mbuaepts.onmicrosoft.com) — so matching
+    on PrimarySmtpAddress/UserPrincipalName alone (both still on the OLD domain in the CSV)
+    finds nothing. Restored addresses are always added as SECONDARY (lowercase prefix) — even
+    if a row's IsPrimary was true in the old tenant — so nothing here can override whatever
+    primary address the destination mailbox already has. Addresses already present
+    (case-insensitive) are skipped.
 
     X500 addresses are internal Exchange routing addresses tied to the OLD mailbox's GUID and
     are skipped by default — pass -IncludeX500 to restore them too if you specifically need
@@ -30,6 +34,14 @@
     Optional: only restore rows whose ProxyAddress contains this domain. If omitted, every row
     in 13_ProxyAddresses.csv is considered (the file is already scoped to whatever domain was
     searched when discovery ran, so this is normally unnecessary).
+
+.PARAMETER CustomerPrefix
+    Optional: the customer's Prefix as set in Settings > Customers (e.g. "AEP"). Looked up in
+    %APPDATA%\FlyMigration\config.json to derive the destination tenant's onmicrosoft.com
+    domain from that customer's AccountName (e.g. itvolaris@mbuaepts.onmicrosoft.com ->
+    mbuaepts.onmicrosoft.com), used as an extra match strategy before accounts have been
+    renamed onto their final vanity domain in the destination tenant. Strongly recommended
+    when running this script before cutover/rename.
 
 .PARAMETER SkipSMTP
     Skip restoring SMTP alias addresses.
@@ -53,6 +65,7 @@ param(
     [string]$DiscoveryFolder,
 
     [string]$Domain = '',
+    [string]$CustomerPrefix = '',
 
     [switch]$SkipSMTP,
     [switch]$SkipSIP,
@@ -112,6 +125,39 @@ if ($Domain) {
     Log "Filtered to $($rows.Count) row(s) matching @$Domain"
 }
 
+# ── Resolve the destination tenant's onmicrosoft.com domain from Settings > Customers ─────
+# The old vanity domain usually isn't verified on the destination tenant yet at this point in
+# the migration, so PrimarySmtpAddress/UserPrincipalName from the CSV (both still on the OLD
+# domain) won't match anything there — accounts are still on their default onmicrosoft.com
+# address. Derived from AccountName rather than the Domain field: Domain is sometimes just a
+# short label (seen in the wild: "Bravura", "Caternet") that isn't a usable domain on its own,
+# while AccountName is the literal working sign-in address for that tenant.
+$tenantDomain = $null
+if ($CustomerPrefix) {
+    $cfgPath = Join-Path $env:APPDATA 'FlyMigration\config.json'
+    if (Test-Path $cfgPath) {
+        try {
+            $cfg      = Get-Content $cfgPath -Raw | ConvertFrom-Json
+            $customer = @($cfg.Customers) | Where-Object { $_.Prefix -and $_.Prefix -eq $CustomerPrefix } | Select-Object -First 1
+            if (-not $customer) {
+                $customer = @($cfg.Customers) | Where-Object { $_.Prefix -and $_.Prefix.ToLower() -eq $CustomerPrefix.ToLower() } | Select-Object -First 1
+            }
+            if ($customer -and $customer.AccountName -and $customer.AccountName -match '@(.+)$') {
+                $tenantDomain = $Matches[1]
+                Log "Customer '$CustomerPrefix' -> destination tenant domain: $tenantDomain (from AccountName)"
+            } elseif ($customer) {
+                Log "WARNING: Customer '$CustomerPrefix' found but has no usable AccountName in config.json — skipping tenant-domain match"
+            } else {
+                Log "WARNING: Customer '$CustomerPrefix' not found in config.json — skipping tenant-domain match"
+            }
+        } catch {
+            Log "Could not read config.json for -CustomerPrefix lookup: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+        }
+    } else {
+        Log "config.json not found at $cfgPath — skipping tenant-domain match"
+    }
+}
+
 $typeList = @()
 if (-not $SkipSMTP) { $typeList += 'SMTP aliases' }
 if (-not $SkipSIP)  { $typeList += 'SIP/EUM addresses' }
@@ -167,19 +213,27 @@ foreach ($group in $groups) {
         } catch { }
     }
 
-    # Fall back to matching by local-part across any domain — by the time this runs the mailbox
-    # may already be sitting on the destination tenant's default onmicrosoft.com address (e.g.
-    # user@mbubinarysystems.onmicrosoft.com) rather than the final vanity domain the CSV was
-    # captured against, and that default domain varies per tenant so it can't be guessed in
-    # advance. Matches search-domain.ps1's own EmailAddresses wildcard convention.
-    if (-not $r) {
-        $localPart = @($primarySmtp, $upn) | Where-Object { $_ -match '^([^@]+)@' } | ForEach-Object { ($_ -split '@')[0] } | Select-Object -First 1
-        if ($localPart) {
-            try {
-                $r = Get-Recipient -Filter "EmailAddresses -like '$localPart@*'" -ErrorAction Stop | Select-Object -First 1
-                if ($r) { Log "  $displayName  [$primarySmtp]  — matched by local-part: $($r.PrimarySmtpAddress)" }
-            } catch { }
-        }
+    $localPart = @($primarySmtp, $upn) | Where-Object { $_ -match '^([^@]+)@' } | ForEach-Object { ($_ -split '@')[0] } | Select-Object -First 1
+
+    # Try the destination tenant's onmicrosoft.com domain next (-CustomerPrefix) — a direct,
+    # exact lookup, and the address that's actually correct for an account not yet renamed onto
+    # its final vanity domain in the destination tenant.
+    if (-not $r -and $localPart -and $tenantDomain) {
+        try {
+            $r = Get-Recipient -Identity "$localPart@$tenantDomain" -ErrorAction Stop
+            if ($r) { Log "  $displayName  [$primarySmtp]  — matched via tenant domain: $($r.PrimarySmtpAddress)" }
+        } catch { }
+    }
+
+    # Last resort: local-part across any domain. NOTE the leading '*' — EmailAddresses entries
+    # are stored type-prefixed (e.g. "smtp:user@domain.com"), so a filter without it only ever
+    # matches a value that starts with "user@", which none of them do; that silently made this
+    # fallback match nothing, ever, prior to this fix.
+    if (-not $r -and $localPart) {
+        try {
+            $r = Get-Recipient -Filter "EmailAddresses -like '*$localPart@*'" -ErrorAction Stop | Select-Object -First 1
+            if ($r) { Log "  $displayName  [$primarySmtp]  — matched by local-part: $($r.PrimarySmtpAddress)" }
+        } catch { }
     }
 
     if (-not $r) {

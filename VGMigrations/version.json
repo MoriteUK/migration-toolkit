@@ -1,7 +1,16 @@
 {
-  "version": "2.9.98",
+  "version": "2.9.99",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.99",
+      "date": "2026-09-01",
+      "changes": [
+        "Restore-ProxyAddresses.ps1: fixed every recipient showing 'NOT FOUND in this tenant' when run before the old domain is renamed/verified on the destination tenant (confirmed live on a 709-recipient WhatIf run against AEP) — PrimarySmtpAddress/UserPrincipalName from the CSV are still on the OLD domain at that point, and the local-part wildcard fallback ('EmailAddresses -like $localPart@*') never matched anything because EmailAddresses entries are type-prefixed ('smtp:user@domain.com'), not bare addresses - missing leading '*' meant the filter could never match",
+        "Added optional -CustomerPrefix (matches Settings > Customers' Prefix, e.g. 'AEP') - looks up that customer's AccountName in %APPDATA%\\FlyMigration\\config.json and derives the destination tenant's onmicrosoft.com domain from it (e.g. itvolaris@mbuaepts.onmicrosoft.com -> mbuaepts.onmicrosoft.com), then tries <local-part>@<that domain> as a direct match before falling back to the (now-fixed) wildcard search",
+        "MigrationToolkit-Web: Restore Proxy Addresses panel gained a Customer dropdown (Settings > Customers), passed through as -CustomerPrefix"
+      ]
+    },
     {
       "version": "2.9.98",
       "date": "2026-09-01",

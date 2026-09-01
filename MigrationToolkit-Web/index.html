@@ -1042,6 +1042,13 @@
           </div>
 
           <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Customer <span style="font-weight:400;color:#6B7280">(from Settings > Customers — matches accounts still on their onmicrosoft.com address before rename/cutover)</span></label>
+            <select class="form-input form-input-compact" id="restoreProxyCustomerPrefix">
+              <option value="">None — match by old domain address only</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
             <label class="form-label">Domain Filter <span style="font-weight:400;color:#6B7280">(optional — leave blank to restore every row in the CSV)</span></label>
             <input type="text" class="form-input form-input-compact" id="restoreProxyDomain" placeholder="e.g. olddomain.com">
           </div>
