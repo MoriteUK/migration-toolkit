@@ -132,9 +132,6 @@
             <button type="button" class="sidebar-subitem" data-view="misc-dl-external-senders">
               <span class="sidebar-sublabel">DL External Senders</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-view="misc-team-memberships">
-              <span class="sidebar-sublabel">Domain Team Memberships</span>
-            </button>
             <button type="button" class="sidebar-subitem" data-view="domain-devices">
               <span class="sidebar-sublabel">Remove Entra Devices</span>
             </button>
@@ -365,6 +362,13 @@
               <label class="form-checkbox">
                 <input type="checkbox" id="skipPowerPlatform" checked>
                 <span>Skip Power Platform</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label class="form-checkbox">
+                <input type="checkbox" id="skipTeamMemberships" checked>
+                <span>Skip Domain Team Memberships <span style="font-weight:400;color:#6B7280">(walks every Team/channel in the tenant &mdash; slow; turn on before splitting a domain out)</span></span>
               </label>
             </div>
 
@@ -1130,62 +1134,6 @@
         <div class="log-section hidden" id="dlExternalSendersLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="dlExternalSendersLogOutput"></div>
-        </div>
-      </div>
-
-      <!-- Misc Scripts - Domain Team Memberships -->
-      <div id="miscTeamMembershipsView" class="view-container hidden">
-        <h2 class="view-title">Domain Team Memberships</h2>
-
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">List the Teams &amp; channels users from a domain belong to</h3>
-          <p class="form-help">Run against the <strong>source tenant before splitting a domain out</strong>. Scans every Team and writes a CSV row for each membership held by a user whose UPN or mail ends in the given domain — at the team level and in every private / shared channel — with their role (Owner / Member / Guest). Use it afterwards to re-add those users to any Teams that didn't migrate with them. Standard channels are omitted (their membership follows the parent team); tick the box below to list them too.</p>
-
-          <div class="form-group-tight">
-            <label class="form-label">Domain</label>
-            <select class="form-input form-input-compact" id="teamMembershipsDomain">
-              <option value="">Select domain...</option>
-            </select>
-          </div>
-
-          <div class="form-group-tight" style="margin-top:8px;">
-            <label class="form-label">One-off Domain <small style="font-weight:normal; color:#6B7280;">(overrides selection above — use for a domain not in Settings)</small></label>
-            <input type="text" class="form-input form-input-compact" id="teamMembershipsDomainOverride" placeholder="e.g. contoso.com">
-          </div>
-
-          <div class="form-group-tight" style="margin-top:8px;">
-            <label class="form-label">User Filter <span style="font-weight:400;color:#6B7280">(optional — one person's UPN or mail; still limited to the domain above)</span></label>
-            <input type="text" class="form-input form-input-compact" id="teamMembershipsUser" placeholder="e.g. jane.doe@contoso.com">
-          </div>
-
-          <div class="form-group-tight" style="margin-top:8px;">
-            <label class="form-label">Tenant ID <span style="font-weight:400;color:#6B7280">(optional — only if your admin account can see more than one tenant)</span></label>
-            <input type="text" class="form-input form-input-compact" id="teamMembershipsTenantId" placeholder="e.g. contoso.onmicrosoft.com or a GUID">
-          </div>
-
-          <div class="form-group" style="margin-top:8px;">
-            <label class="form-checkbox">
-              <input type="checkbox" id="teamMembershipsStdChannels">
-              <span>Also list standard channels <span style="font-weight:400;color:#6B7280">(normally redundant — standard-channel membership equals the team's)</span></span>
-            </label>
-          </div>
-
-          <div class="form-group" style="margin-top:8px;">
-            <label class="form-label">CSV Output Folder <span style="font-weight:400;color:#6B7280">(optional — leave blank for the default shared Reports folder)</span></label>
-            <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" id="teamMembershipsCsvPath" placeholder="Leave blank to use the default Reports folder">
-              <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
-            </div>
-          </div>
-
-          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
-            <button type="button" class="btn btn-primary btn-xs" id="teamMembershipsRunBtn">▶ Run</button>
-          </div>
-        </div>
-
-        <div class="log-section hidden" id="teamMembershipsLog">
-          <h3 class="form-card-title">Output</h3>
-          <div class="log-output" id="teamMembershipsLogOutput"></div>
         </div>
       </div>
 

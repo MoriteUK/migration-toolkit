@@ -383,6 +383,7 @@ function Show-DiscoveryMenu {
     $lblOptions = MkLabel 'Options' $lx $y $true; $y += 26
 
     $chkSkipPP   = MkCheck 'Skip Power Platform  (recommended for unattended / batch runs)' ($lx+8) $y $true;  $y += 26
+    $chkSkipTM   = MkCheck 'Skip Domain Team Memberships  (walks every Team/channel - slow; turn on before splitting a domain out)' ($lx+8) $y $true;  $y += 26
     $chkContinue = MkCheck 'Continue on error  (skip failed domains in multi-domain run)'   ($lx+8) $y
     $chkContinue.Visible = $false; $y += 26
 
@@ -510,7 +511,7 @@ function Show-DiscoveryMenu {
         if ($delta -ne 0) {
             $script:discModeOffset = $newOffset
             foreach ($ctrl in @($sep1Ctrl, $lblOptions,
-                                $chkSkipPP, $chkContinue,
+                                $chkSkipPP, $chkSkipTM, $chkContinue,
                                 $sep2Ctrl, $lbOutDir, $txtOutDir, $btnBrowseOut,
                                 $txtSpoUrl,
                                 $btnRun, $btnStop, $btnClearLog, $rtbLog)) {
@@ -720,10 +721,11 @@ function Show-DiscoveryMenu {
             if (-not (Test-Path $SingleScript)) {
                 [System.Windows.Forms.MessageBox]::Show("Script not found:`n$SingleScript",'Not Found','OK','Error') | Out-Null; return
             }
-            Write-Log "Run (single): domain=$domain  SearchTerm='$searchTerm'  SkipPP=$($chkSkipPP.Checked)  VBUId='$buid'  SPOAdmin='$spoUrl'"
+            Write-Log "Run (single): domain=$domain  SearchTerm='$searchTerm'  SkipPP=$($chkSkipPP.Checked)  SkipTM=$($chkSkipTM.Checked)  VBUId='$buid'  SPOAdmin='$spoUrl'"
             $escS = $SingleScript -replace "'","''"
             $cmd  = "& '$escS' -Domain '$domain' -VBUSearchTerm '$($searchTerm -replace "'","''")' -OutputPath '$escOut'"
             if ($chkSkipPP.Checked)  { $cmd += ' -SkipPowerPlatform' }
+            if ($chkSkipTM.Checked)  { $cmd += ' -SkipTeamMemberships' }
             if ($buid)               { $cmd += " -VBUId '$buid'" }
             if ($spoUrl)             { $cmd += " -SharePointAdminUrl '$($spoUrl -replace "'","''")'" }
             & $buildAndLaunch $cmd "Single: $domain" ''
@@ -744,11 +746,12 @@ function Show-DiscoveryMenu {
             # Build @('d1','d2',...) literal for the encoded command. VBU Search Term and VBU ID
             # are derived per-domain by Run-MultiAssessment.ps1 (domain prefix / domains.json
             # lookup) - the single VBU ID field above doesn't apply across a mixed domain list.
-            Write-Log "Run (multi): $($domains.Count) domains=[$($domains -join ',')]  SkipPP=$($chkSkipPP.Checked)  Continue=$($chkContinue.Checked)  SPOAdmin='$spoUrl'"
+            Write-Log "Run (multi): $($domains.Count) domains=[$($domains -join ',')]  SkipPP=$($chkSkipPP.Checked)  SkipTM=$($chkSkipTM.Checked)  Continue=$($chkContinue.Checked)  SPOAdmin='$spoUrl'"
             $arrayLiteral = "@('" + ($domains -join "','") + "')"
             $escM = $MultiScript -replace "'","''"
             $cmd  = "& '$escM' -Domains $arrayLiteral -OutputPath '$escOut'"
             if ($chkSkipPP.Checked)   { $cmd += ' -SkipPowerPlatform' }
+            if ($chkSkipTM.Checked)   { $cmd += ' -SkipTeamMemberships' }
             if ($chkContinue.Checked) { $cmd += ' -ContinueOnError' }
             if ($spoUrl)              { $cmd += " -SharePointAdminUrl '$($spoUrl -replace "'","''")'" }
             & $buildAndLaunch $cmd "Multi: $($domains.Count) domain(s) - $($domains -join ', ')" ''

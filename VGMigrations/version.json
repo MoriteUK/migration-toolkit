@@ -1,7 +1,17 @@
 {
-  "version": "2.9.103",
+  "version": "2.9.104",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.104",
+      "date": "2026-09-01",
+      "changes": [
+        "Domain Team Memberships moved out of Misc Scripts and folded into the Assessment engine: Run-Assessment.ps1 now runs it as a regular collector (new Modules\\TeamMemberships.psm1, ported from Get-DomainTeamMemberships.ps1) on the same Graph session as everything else, writing its own DomainTeamMemberships-<domain>-<timestamp>.csv at the top of the assessment folder - same schema Restore-DomainTeamMemberships.ps1 already expects, so no change needed there",
+        "New -SkipTeamMemberships switch (default ON in both UIs) - this is the slowest collector on a large tenant since it walks every Team and every private/shared channel tenant-wide, so it's opt-in rather than running on every routine assessment; turn it on specifically before splitting a domain out",
+        "Removed the standalone 'Domain Team Memberships' Misc Scripts panel (Electron app) - the standalone Get-DomainTeamMemberships.ps1 script itself is untouched and still runs fine from the command line for a quick one-off check outside a full assessment",
+        "Graph connection scopes gained Channel.ReadBasic.All and ChannelMember.Read.All, needed to enumerate private/shared channel membership"
+      ]
+    },
     {
       "version": "2.9.103",
       "date": "2026-09-01",

@@ -354,6 +354,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const vbuId = document.getElementById('discoveryVbuId').value.trim();
       const searchTerm = document.getElementById('discoverySearchTerm').value.trim();
       const skipPP = document.getElementById('skipPowerPlatform').checked;
+      const skipTM = document.getElementById('skipTeamMemberships').checked;
       const continueOnError = document.getElementById('continueOnError').checked;
       const outputFolder = document.getElementById('outputFolder').value.trim() || 'E:\\Work\\Jolera\\Volaris\\Discovery';
 
@@ -379,7 +380,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         logOutput.textContent += `VBU ID / Search Term: derived per-domain from Settings (domains.json) / domain prefix\n`;
       }
-      logOutput.textContent += `Options: SkipPP=${skipPP}\n`;
+      logOutput.textContent += `Options: SkipPP=${skipPP}  SkipTeamMemberships=${skipTM}\n`;
       logOutput.textContent += `Output: ${outputFolder}\n\n`;
 
       startDiscoveryBtn.disabled = true;
@@ -396,6 +397,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (searchTerm) args.push('-VBUSearchTerm', searchTerm);
           if (vbuId) args.push('-VBUId', vbuId);
           if (skipPP) args.push('-SkipPowerPlatform');
+          if (skipTM) args.push('-SkipTeamMemberships');
           result = await runStreamingScript('Assessment/Run-Assessment.ps1', args);
         } else {
           // A single Run-MultiAssessment.ps1 call, not one Run-Assessment.ps1 process per
@@ -405,6 +407,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           // across processes no matter what the underlying script does).
           const args = ['-Domains', ...domainsToRun, '-OutputPath', outputFolder];
           if (skipPP) args.push('-SkipPowerPlatform');
+          if (skipTM) args.push('-SkipTeamMemberships');
           if (continueOnError) args.push('-ContinueOnError');
           result = await runStreamingScript('Assessment/Run-MultiAssessment.ps1', args);
         }
@@ -1655,31 +1658,6 @@ async function loadDLExternalSendersTenants() {
   }
 }
 
-// Populate domain dropdown for Domain Team Memberships from customer settings
-async function loadTeamMembershipsDomains() {
-  try {
-    const domainSelect = document.getElementById('teamMembershipsDomain');
-    if (!domainSelect) return;
-
-    const config = await window.electronAPI.getConfig();
-    if (config.success && config.config && config.config.Customers) {
-      const customers = [...config.config.Customers].sort((a, b) => (a.Prefix || '').localeCompare(b.Prefix || ''));
-      domainSelect.innerHTML = '<option value="">Select domain...</option>';
-
-      customers.forEach(customer => {
-        if (customer.Domain) {
-          const option = document.createElement('option');
-          option.value = customer.Domain;
-          option.textContent = `${customer.Prefix} (${customer.Domain})`;
-          domainSelect.appendChild(option);
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Error loading Domain Team Memberships domains:', error);
-  }
-}
-
 // Populate Monitor project dropdown from customer settings
 async function loadMonitorProjects() {
   try {
@@ -1894,7 +1872,6 @@ function switchView(viewName) {
     'misc-domain-devices': 'miscDomainDevicesView',
     'misc-restore-proxy': 'miscRestoreProxyView',
     'misc-dl-external-senders': 'miscDLExternalSendersView',
-    'misc-team-memberships': 'miscTeamMembershipsView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -1928,8 +1905,6 @@ function switchView(viewName) {
         loadDLExternalSendersTenants();
       } else if (viewName === 'misc-restore-proxy') {
         loadRestoreProxyCustomers();
-      } else if (viewName === 'misc-team-memberships') {
-        loadTeamMembershipsDomains();
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
@@ -3302,50 +3277,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         restoreProxyRunBtn.disabled = false;
         restoreProxyRunBtn.textContent = '▶ Run';
-      }
-    });
-  }
-
-  // ── Misc Scripts - Domain Team Memberships ────────────────────────────────
-  const teamMembershipsRunBtn = document.getElementById('teamMembershipsRunBtn');
-  if (teamMembershipsRunBtn) {
-    teamMembershipsRunBtn.addEventListener('click', async () => {
-      const domain     = (document.getElementById('teamMembershipsDomainOverride').value.trim()
-                          || document.getElementById('teamMembershipsDomain').value.trim());
-      const user       = document.getElementById('teamMembershipsUser').value.trim();
-      const tenantId   = document.getElementById('teamMembershipsTenantId').value.trim();
-      const stdChans   = document.getElementById('teamMembershipsStdChannels').checked;
-      const csvPath    = document.getElementById('teamMembershipsCsvPath').value.trim();
-
-      if (!domain) { alert('Please enter a domain.'); return; }
-
-      const logSection = document.getElementById('teamMembershipsLog');
-      const logOutput  = document.getElementById('teamMembershipsLogOutput');
-      logSection.classList.remove('hidden');
-      logOutput.textContent = '';
-
-      teamMembershipsRunBtn.disabled = true;
-      teamMembershipsRunBtn.textContent = 'Running…';
-
-      const args = ['-Domain', domain];
-      if (user)     args.push('-User', user);
-      if (tenantId) args.push('-TenantId', tenantId);
-      if (stdChans) args.push('-IncludeStandardChannels');
-      if (csvPath)  args.push('-OutputCsv', csvPath);
-
-      window.electronAPI.onPsOutput((text) => {
-        logOutput.textContent += text;
-        logOutput.scrollTop = logOutput.scrollHeight;
-      });
-      try {
-        const result = await runStreamingScript('Get-DomainTeamMemberships.ps1', args);
-        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
-      } catch (err) {
-        logOutput.textContent += `\nError: ${err.message || err}\n`;
-      } finally {
-        window.electronAPI.offPsOutput();
-        teamMembershipsRunBtn.disabled = false;
-        teamMembershipsRunBtn.textContent = '▶ Run';
       }
     });
   }

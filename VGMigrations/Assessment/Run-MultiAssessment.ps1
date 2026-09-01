@@ -26,6 +26,7 @@ param(
     [Parameter(Mandatory)][string[]]$Domains,
     [string]$SharePointAdminUrl,
     [switch]$SkipPowerPlatform,
+    [switch]$SkipTeamMemberships,
     [switch]$ContinueOnError,
     [string]$OutputPath
 )
@@ -72,12 +73,13 @@ foreach ($domain in $Domains) {
     $vbuSearchTerm = ($domain -split '\.')[0]
 
     $params = @{
-        Domain            = $domain
-        VBUSearchTerm     = $vbuSearchTerm
-        VBUId             = $vbuId
-        SkipPowerPlatform = [bool]$SkipPowerPlatform
-        DeleteRawJson     = $false
-        KeepSession       = $true
+        Domain               = $domain
+        VBUSearchTerm        = $vbuSearchTerm
+        VBUId                = $vbuId
+        SkipPowerPlatform    = [bool]$SkipPowerPlatform
+        SkipTeamMemberships  = [bool]$SkipTeamMemberships
+        DeleteRawJson        = $false
+        KeepSession          = $true
     }
     if ($SharePointAdminUrl) { $params.SharePointAdminUrl = $SharePointAdminUrl }
     if ($OutputPath)         { $params.OutputPath         = $OutputPath }

@@ -2,15 +2,18 @@
 <#
 .SYNOPSIS
     Restore-DomainTeamMemberships.ps1 — Re-adds migrated users, as guests, to the Teams (and
-    private/shared channels) captured by Get-DomainTeamMemberships.ps1 that are NOT moving
-    with them — i.e. Teams that will still live in the SOURCE tenant after cutover.
+    private/shared channels) captured in the -MembershipCsv that are NOT moving with them —
+    i.e. Teams that will still live in the SOURCE tenant after cutover.
 
 .DESCRIPTION
-    Get-DomainTeamMemberships.ps1 captures, from the source tenant BEFORE migration, every
-    Team/channel a domain's users belonged to. Once that domain's accounts move to the
-    destination tenant, they silently lose membership in every Team that stays behind in the
-    source tenant. This script re-adds them — as B2B guests, since their account no longer
-    lives in the source tenant — to just those Teams.
+    -MembershipCsv captures, from the source tenant BEFORE migration, every Team/channel a
+    domain's users belonged to — either the Domain Team Memberships step that's now part of
+    every Run-Assessment.ps1 assessment (DomainTeamMemberships-<domain>-<timestamp>.csv at the
+    top of the assessment folder), or the older standalone Get-DomainTeamMemberships.ps1. Same
+    CSV schema either way. Once that domain's accounts move to the destination tenant, they
+    silently lose membership in every Team that stays behind in the source tenant. This script
+    re-adds them — as B2B guests, since their account no longer lives in the source tenant —
+    to just those Teams.
 
     "Still in the source tenant" is inferred from the CSV's TeamMail column: rows for a Team
     whose own mailbox address is on the domain being migrated are skipped (that Team is
@@ -43,7 +46,8 @@
     Administrator, or Global Administrator).
 
 .PARAMETER MembershipCsv
-    Path to the CSV written by Get-DomainTeamMemberships.ps1.
+    Path to the DomainTeamMemberships-<domain>-<timestamp>.csv written by Run-Assessment.ps1
+    (unless -SkipTeamMemberships was set) or by the standalone Get-DomainTeamMemberships.ps1.
 
 .PARAMETER Domain
     The domain that migrated away — same value passed to Get-DomainTeamMemberships.ps1. Used

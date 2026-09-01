@@ -28,6 +28,14 @@
     Skips Microsoft Graph collection (Teams, M365 Groups, Intune devices, app registrations).
 .PARAMETER SkipPowerPlatform
     Skips the Power Platform child-process scan (its own interactive sign-in).
+.PARAMETER SkipTeamMemberships
+    Skips the Domain Team Memberships scan - which Team/channel (private & shared) each VBU
+    domain user belongs to, written as its own DomainTeamMemberships-<domain>-<timestamp>.csv
+    at the top of the assessment folder, ready to feed into
+    Restore-DomainTeamMemberships.ps1 after the domain moves. Walks every Team in the tenant
+    (not just VBU-scoped ones) and every private/shared channel, so it's the slowest collector
+    on a large tenant - skip it for a quick unattended/batch run. Runs on the same Graph
+    session as everything else; automatically skipped if -SkipGraph is set.
 .PARAMETER OutputPath
     Base directory for the assessment output folder. Defaults to the script's own folder.
 .PARAMETER DeleteRawJson
@@ -49,6 +57,7 @@ param(
     [string]$SharePointAdminUrl,
     [switch]$SkipGraph,
     [switch]$SkipPowerPlatform,
+    [switch]$SkipTeamMemberships,
     [string]$OutputPath,
     [switch]$DeleteRawJson,
     [switch]$KeepSession
@@ -166,6 +175,7 @@ Import-Module (Join-Path $moduleRoot 'Exchange.psm1')        -Force -DisableName
 Import-Module (Join-Path $moduleRoot 'Graph.psm1')           -Force -DisableNameChecking -Global
 Import-Module (Join-Path $moduleRoot 'SharePoint.psm1')      -Force -DisableNameChecking -Global
 Import-Module (Join-Path $moduleRoot 'PowerPlatform.psm1')   -Force -DisableNameChecking -Global
+Import-Module (Join-Path $moduleRoot 'TeamMemberships.psm1') -Force -DisableNameChecking -Global
 Import-Module (Join-Path $moduleRoot 'Workbook.psm1')        -Force -DisableNameChecking -Global
 Import-Module (Join-Path $moduleRoot 'LegacyExport.psm1')    -Force -DisableNameChecking -Global
 
@@ -195,6 +205,7 @@ $assessFolder = Join-Path $baseFolder "$vbuName-$timestamp"
 $rawPath      = Join-Path $assessFolder 'Raw'
 $discoveryPath = Join-Path $assessFolder 'Discovery'
 $xlsxPath     = Join-Path $assessFolder "$vbuName-Assessment.xlsx"
+$teamMembershipsCsvPath = Join-Path $assessFolder "DomainTeamMemberships-$vbuName-$timestamp.csv"
 
 New-Item -ItemType Directory -Path $rawPath                                 -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $assessFolder 'MappingFiles') -Force | Out-Null
@@ -276,6 +287,7 @@ else {
         Connect-MgGraph -Scopes @(
             'Group.Read.All', 'Directory.Read.All', 'User.Read.All', 'Device.Read.All',
             'Sites.Read.All', 'Team.ReadBasic.All', 'TeamMember.Read.All',
+            'Channel.ReadBasic.All', 'ChannelMember.Read.All',
             'DeviceManagementManagedDevices.Read.All', 'Policy.Read.All', 'Application.Read.All'
         ) -NoWelcome -ErrorAction Stop
         Write-Host ($PREFIX_OK + 'Microsoft Graph connected') -ForegroundColor Green
@@ -295,6 +307,14 @@ if (-not $skipPowerPlatformSession -and -not $script:Unattended) {
 }
 $ctx.SkipPowerPlatform = $skipPowerPlatformSession
 
+# Team Memberships needs Graph - never runs when Graph itself was skipped or failed to connect
+$skipTeamMembershipsSession = [bool]$SkipTeamMemberships -or $skipGraphSession
+if (-not $skipTeamMembershipsSession -and -not $script:Unattended) {
+    Write-Host ''
+    $tmInput = (Read-Host 'Include Domain Team Memberships scan (walks every Team/channel in the tenant - slow on large tenants)? [Enter to proceed, S to skip]').Trim()
+    if ($tmInput.ToUpper() -eq 'S') { $skipTeamMembershipsSession = $true }
+}
+
 # -----------------------------------------------------------------------
 # Collection and workbook
 # -----------------------------------------------------------------------
@@ -303,6 +323,7 @@ $exResult  = $null
 $grResult  = $null
 $spoResult = $null
 $ppResult  = $null
+$tmResult  = $null
 
 try {
     # Active Directory - non-critical (soft-fail; see Prerequisites.psm1/AD.psm1)
@@ -357,6 +378,22 @@ try {
         $ppResult = New-CollectorResult -Success $false -ErrorMessage $_.Exception.Message
     }
 
+    # Domain Team Memberships - non-critical, needs Graph, skippable (slow on large tenants)
+    if ($skipTeamMembershipsSession) {
+        Update-CollectorStatus -CollectorName 'Team Memberships' -Status 'Skipped' `
+            -RawPath $ctx.RawPath -StartTime (Get-Date)
+        $tmResult = New-CollectorResult -Skipped $true
+    }
+    else {
+        try {
+            $tmResult = Invoke-TeamMembershipCollection -Context $ctx -OutputCsvPath $teamMembershipsCsvPath
+        }
+        catch {
+            Write-Host ($PREFIX_FAIL + 'Team Membership collection error: ' + $_.Exception.Message) -ForegroundColor Red
+            $tmResult = New-CollectorResult -Success $false -ErrorMessage $_.Exception.Message
+        }
+    }
+
     # Workbook - non-critical (always runs with whatever JSON was written)
     try {
         Invoke-WorkbookGeneration -Context $ctx -XlsxPath $xlsxPath
@@ -380,6 +417,7 @@ try {
     $grCounts  = if ($grResult)  { $grResult.Counts }  else { $null }
     $spoCounts = if ($spoResult) { $spoResult.Counts } else { $null }
     $ppCounts  = if ($ppResult)  { $ppResult.Counts }  else { $null }
+    $tmCounts  = if ($tmResult)  { $tmResult.Counts }  else { $null }
 
     Write-SectionHeader 'Run Complete'
     Write-ProgressLine -Label 'AD Users'                     -Count (Get-SafeCount -Counts $adCounts  -Key 'UserCount')
@@ -398,9 +436,13 @@ try {
     Write-ProgressLine -Label 'OneDrives'                    -Count (Get-SafeCount -Counts $spoCounts -Key 'OneDriveCount')
     Write-ProgressLine -Label 'Power Apps'                   -Count (Get-SafeCount -Counts $ppCounts  -Key 'PowerAppCount')
     Write-ProgressLine -Label 'Power Automate Flows'         -Count (Get-SafeCount -Counts $ppCounts  -Key 'FlowCount')
+    Write-ProgressLine -Label 'Team Membership Rows'         -Count (Get-SafeCount -Counts $tmCounts  -Key 'TeamMembershipRowCount')
     Write-Host ''
     Write-Host ($PREFIX_OK + 'Workbook: ' + $xlsxPath) -ForegroundColor Green
     Write-Host ($PREFIX_OK + 'Domain Removal CSVs: ' + $discoveryPath) -ForegroundColor Green
+    if (-not $skipTeamMembershipsSession -and (Get-SafeCount -Counts $tmCounts -Key 'TeamMembershipRowCount') -gt 0) {
+        Write-Host ($PREFIX_OK + 'Team Memberships CSV: ' + $teamMembershipsCsvPath) -ForegroundColor Green
+    }
 }
 catch {
     Write-Host ($PREFIX_FAIL + 'Assessment stopped: ' + $_.Exception.Message) -ForegroundColor Red
