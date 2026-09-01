@@ -1894,7 +1894,6 @@ function switchView(viewName) {
     'misc-teams': 'miscTeamsView',
     'misc-deduplicate': 'miscDeduplicateView',
     'misc-purge-spo':     'miscPurgeSpoView',
-    'misc-domain-devices': 'miscDomainDevicesView',
     'misc-restore-proxy': 'miscRestoreProxyView',
     'post-migration-team-memberships': 'postMigrationTeamMembershipsView',
     'misc-dl-external-senders': 'miscDLExternalSendersView',
@@ -3435,14 +3434,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setTeamsOwnersBtn.disabled = false;
         setTeamsOwnersBtn.textContent = '▶ Add Owner';
       }
-    });
-  }
-
-  // ── Get Domain Devices ────────────────────────────────────────────────────
-  const getDomainDevicesBtn = document.getElementById('getDomainDevicesBtn');
-  if (getDomainDevicesBtn) {
-    getDomainDevicesBtn.addEventListener('click', async () => {
-      await launchScript('Get-DomainDevices.ps1', getDomainDevicesBtn);
     });
   }
 

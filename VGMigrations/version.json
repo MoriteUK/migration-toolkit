@@ -1,7 +1,14 @@
 {
-  "version": "2.9.108",
+  "version": "2.9.109",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.109",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: removed 'Get Domain Devices' from Misc Scripts (sidebar entry, view, and click handler) - confirmed it covers two real gaps Discovery has (works without on-prem AD, and targets a tenant explicitly by domain), but removed anyway per explicit instruction. Get-DomainDevices.ps1 itself is untouched on disk"
+      ]
+    },
     {
       "version": "2.9.108",
       "date": "2026-09-01",

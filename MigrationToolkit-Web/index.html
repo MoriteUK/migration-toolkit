@@ -174,9 +174,6 @@
             <button type="button" class="sidebar-subitem" data-view="misc-purge-spo">
               <span class="sidebar-sublabel">Purge Deleted SPO Sites</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-view="misc-domain-devices">
-              <span class="sidebar-sublabel">Get Domain Devices</span>
-            </button>
             <button type="button" class="sidebar-subitem" data-view="misc-dl-external-senders">
               <span class="sidebar-sublabel">DL External Senders</span>
             </button>
@@ -1022,21 +1019,6 @@
         </div>
       </div>
 
-      <!-- Misc Scripts - Get Domain Devices -->
-      <div id="miscDomainDevicesView" class="view-container hidden">
-        <h2 class="view-title">Get Domain Devices</h2>
-
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Export Entra Registered Devices for a Domain</h3>
-          <p class="form-help">Connects to Microsoft Graph, retrieves all users whose UPN belongs to the specified domain, and exports their registered devices to a CSV. You will be prompted to sign in when the window opens.</p>
-
-          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
-            <button type="button" class="btn btn-success btn-xs" id="getDomainDevicesBtn">
-              ▶ Open Get Domain Devices
-            </button>
-          </div>
-        </div>
-      </div>
 
       <!-- Misc Scripts - Restore Proxy Addresses -->
       <div id="miscRestoreProxyView" class="view-container hidden">
