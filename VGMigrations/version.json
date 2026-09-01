@@ -1,7 +1,14 @@
 {
-  "version": "2.9.105",
+  "version": "2.9.106",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.106",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: moved Misc Scripts to the bottom of the sidebar - new order is Discovery, AvePoint Fly, Domain Removal, Post Migration, Misc Scripts. Pure reorder, no functional change (the expand/collapse and view-switching logic is generic and doesn't care about sidebar position)"
+      ]
+    },
     {
       "version": "2.9.105",
       "date": "2026-09-01",
