@@ -153,13 +153,18 @@ Import-Module Microsoft.Graph.Users            -DisableNameChecking -ErrorAction
 Import-Module Microsoft.Graph.DeviceManagement -DisableNameChecking -ErrorAction Stop
 Import-Module ImportExcel                      -DisableNameChecking -ErrorAction Stop
 
-# SharePoint - soft-fail (installable by Test-Prerequisites; missing sets SkipSharePoint)
+# SharePoint - soft-fail (installable by Test-Prerequisites; a failure here sets SkipSharePoint
+# below, regardless of whether the module is merely missing or installed-but-failing-to-import -
+# e.g. the -UseWindowsPowerShell compatibility bridge itself can fail even when the module is
+# present).
+$script:SpoModuleImported = $false
 try {
     $prev = $WarningPreference
     $WarningPreference = 'SilentlyContinue'
     Import-Module Microsoft.Online.SharePoint.PowerShell `
         -UseWindowsPowerShell -DisableNameChecking -ErrorAction Stop
     $WarningPreference = $prev
+    $script:SpoModuleImported = $true
 }
 catch {
     $WarningPreference = $prev
@@ -222,7 +227,7 @@ $ctx = New-AssessmentContext `
     -RawPath       $rawPath `
     -SPOAdminUrl   $spoAdminUrl
 
-if (-not (Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell')) {
+if (-not $script:SpoModuleImported) {
     $ctx.SkipSharePoint = $true
 }
 

@@ -22,6 +22,15 @@ Import-Module (Join-Path $PSScriptRoot 'Common.psm1') -DisableNameChecking -Forc
     ExternalEmailAddress and re-queries EXO/AD live for anything it mutates - the CSV only
     ever supplies the identity key plus the specific address rows RecipientProxyAddresses
     needs.
+
+    Beyond that load-bearing set of 8, this also reproduces the REST of search-domain.ps1's
+    ~25-file Discovery output for parity/manual review - nothing in this toolkit currently
+    reads these, so they're not held to the same exactness bar, but every one of them is
+    produced from data this engine already collects with no new Graph/Exchange/AD calls. Files
+    whose underlying data the new engine simply doesn't collect yet (Enterprise Apps, Planner
+    Plans, Conditional Access policies, Auth policies, On-Prem AD Contacts, User Licenses) are
+    written as header-only placeholders - present for file-count parity, not real data. A
+    genuine future ask, not something to paper over.
 #>
 
 # -----------------------------------------------------------------------
@@ -39,7 +48,11 @@ function Export-LegacyCsv {
         [AllowNull()][object[]]$Data,
         [Parameter(Mandatory)][string]$Label
     )
-    $rows = @($Data)
+    # Where-Object strips any stray $null elements (e.g. from @($null) when $Data itself was
+    # $null) - Export-Csv throws "Cannot bind argument to parameter 'InputObject'" on a null
+    # pipeline item, so this is cheap insurance against that regardless of what upstream caller
+    # handed in.
+    $rows = @($Data | Where-Object { $null -ne $_ })
     if ($rows.Count -gt 0) {
         $rows | Export-Csv -Path $Path -NoTypeInformation -Encoding UTF8 -Force
     }
@@ -288,6 +301,104 @@ function Export-LegacyDiscoveryCsvs {
             -EmailAddresses $g.ProxyAddresses -DomainFilter $domainFilter))
     }
     Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '13_ProxyAddresses.csv') -Data $proxyRows.ToArray() -Label 'Proxy Addresses to Remove'
+
+    # =====================================================================
+    # The rest of search-domain.ps1's file list - informational/parity only,
+    # nothing in this toolkit currently reads these.
+    # =====================================================================
+
+    # --- 03b_DistributionGroup_Members.csv: one row per group+member, from the Members field ---
+    $dgMemberRows = [System.Collections.Generic.List[object]]::new()
+    foreach ($dg in $rows03) {
+        foreach ($member in @("$($dg.Members)" -split '\|' | Where-Object { $_ })) {
+            $dgMemberRows.Add([PSCustomObject]@{
+                GroupDisplayName   = $dg.DisplayName
+                GroupPrimarySmtpAddress = $dg.PrimarySmtpAddress
+                GroupAlias         = $dg.Alias
+                GroupType          = $dg.GroupType
+                MemberAddress      = $member
+            })
+        }
+    }
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '03b_DistributionGroup_Members.csv') -Data $dgMemberRows.ToArray() -Label 'DL Members'
+
+    # --- 06b_M365Group_Members.csv: one row per group+owner/member, from Owners/Members fields ---
+    $m365MemberRows = [System.Collections.Generic.List[object]]::new()
+    foreach ($g in $m365Groups) {
+        foreach ($owner in @("$($g.Owners)" -split '\|' | Where-Object { $_ })) {
+            $m365MemberRows.Add([PSCustomObject]@{ GroupDisplayName = $g.DisplayName; GroupPrimarySmtpAddress = $g.PrimarySmtpAddress; MemberAddress = $owner; Role = 'Owner' })
+        }
+        foreach ($member in @("$($g.Members)" -split '\|' | Where-Object { $_ })) {
+            $m365MemberRows.Add([PSCustomObject]@{ GroupDisplayName = $g.DisplayName; GroupPrimarySmtpAddress = $g.PrimarySmtpAddress; MemberAddress = $member; Role = 'Member' })
+        }
+    }
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '06b_M365Group_Members.csv') -Data $m365MemberRows.ToArray() -Label 'M365 Group Members'
+
+    # --- 07_AppRegistrations.csv ---
+    $appRegs = Import-AssessmentJson -FileName 'AppRegistrations.json' -RawPath $rawPath
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '07_AppRegistrations.csv') -Data $appRegs -Label 'App Registrations'
+
+    # --- 08_EnterpriseApps.csv: PLACEHOLDER - no Enterprise Apps / service principal collector exists yet ---
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '08_EnterpriseApps.csv') -Data @() -Label 'Enterprise Applications (not collected)'
+
+    # --- 09_SharePointSites.csv ---
+    $spoSites = Import-AssessmentJson -FileName 'SharePointSites.json' -RawPath $rawPath
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '09_SharePointSites.csv') -Data $spoSites -Label 'SharePoint Sites'
+
+    # --- 10_OneDrives.csv ---
+    $oneDrives = Import-AssessmentJson -FileName 'OneDrives.json' -RawPath $rawPath
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '10_OneDrives.csv') -Data $oneDrives -Label 'OneDrives'
+
+    # --- 11_Teams.csv: Teams.json with PrimarySmtpAddress backfilled via the same GroupId join as 06 ---
+    $rows11 = @($teamsJson | ForEach-Object {
+        $email = if ($_.GroupId -and $groupIdToEmail.ContainsKey($_.GroupId)) { $groupIdToEmail[$_.GroupId] } else { $null }
+        [PSCustomObject]@{
+            TeamId             = $_.TeamId
+            GroupId            = $_.GroupId
+            DisplayName        = $_.DisplayName
+            PrimarySmtpAddress = $email
+            Visibility         = $_.Visibility
+            CreatedDateTime    = $_.CreatedDateTime
+            Owners             = $_.Owners
+            Members            = $_.Members
+            OwnerCount         = $_.OwnerCount
+            MemberCount        = $_.MemberCount
+            ChannelCount       = $_.ChannelCount
+            PrivateChannelCount = $_.PrivateChannelCount
+            SharedChannelCount = $_.SharedChannelCount
+            SharePointSiteUrl  = $_.SharePointSiteUrl
+        }
+    })
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '11_Teams.csv') -Data $rows11 -Label 'Microsoft Teams'
+
+    # --- 14_TransportRules.csv ---
+    $transportRules = Import-AssessmentJson -FileName 'TransportRules.json' -RawPath $rawPath
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '14_TransportRules.csv') -Data $transportRules -Label 'Transport Rules'
+
+    # --- 15_PlannerPlans.csv: PLACEHOLDER - no Planner Plans collector exists yet ---
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '15_PlannerPlans.csv') -Data @() -Label 'Planner Plans (not collected)'
+
+    # --- 16_PowerPlatform.csv ---
+    $powerPlatform = Import-AssessmentJson -FileName 'PowerPlatform.json' -RawPath $rawPath
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '16_PowerPlatform.csv') -Data $powerPlatform -Label 'Power Platform'
+
+    # --- 17_EntraCA_Policies.csv / 18_EntraAuthPolicies.csv: PLACEHOLDERS - no policy collector exists yet ---
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '17_EntraCA_Policies.csv')   -Data @() -Label 'Entra CA Policies (not collected)'
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '18_EntraAuthPolicies.csv') -Data @() -Label 'Entra Auth Policies (not collected)'
+
+    # --- 19_OnPrem_ADUsers.csv / 20_OnPrem_ADGroups.csv: direct pass-through of the AD collectors ---
+    # Empty when AD collection was skipped (no RSAT / no on-prem AD reachable) - same as legacy's
+    # own Hybrid-only behaviour for these two files.
+    $adGroups = Import-AssessmentJson -FileName 'ADGroups.json' -RawPath $rawPath
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '19_OnPrem_ADUsers.csv')  -Data $adUsers  -Label 'On-Prem AD Users'
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '20_OnPrem_ADGroups.csv') -Data $adGroups -Label 'On-Prem AD Groups'
+
+    # --- 21_OnPrem_ADContacts.csv: PLACEHOLDER - AD.psm1 collects Users/Groups/Memberships/Devices only ---
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '21_OnPrem_ADContacts.csv') -Data @() -Label 'On-Prem AD Contacts (not collected)'
+
+    # --- 22_UserLicenses.csv / 22a_LicenseCounts.csv: PLACEHOLDERS - no license-assignment collector exists yet ---
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '22_UserLicenses.csv')   -Data @() -Label 'User Licenses (not collected)'
+    Export-LegacyCsv -Path (Join-Path $DiscoveryFolder '22a_LicenseCounts.csv') -Data @() -Label 'License Counts (not collected)'
 
     Write-Host ''
     Write-Host ($PREFIX_OK + "Domain Removal compatibility CSVs written: $DiscoveryFolder") -ForegroundColor Green

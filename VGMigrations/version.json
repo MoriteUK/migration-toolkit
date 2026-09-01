@@ -1,7 +1,17 @@
 {
-  "version": "2.9.115",
+  "version": "2.9.116",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.116",
+      "date": "2026-09-01",
+      "changes": [
+        "Fixed '[FAIL] SharePoint collection error: The term ''Invoke-SharePointCollection'' is not recognized' — SharePoint.psm1's top-level Import-Module Microsoft.Online.SharePoint.PowerShell had no try/catch, so any failure aborted the rest of the file before the function was even defined, even though Run-Assessment.ps1 already made its own protected attempt at the identical import moments earlier. Import wrapped in try/catch (best-effort, matching the one in Run-Assessment.ps1); Run-Assessment.ps1's SkipSharePoint detection also tightened to track an actual import-succeeded flag instead of just checking whether the module is listed as available, which was missing the 'installed but import still failed' case",
+        "Discovery now writes ~25 legacy-named CSVs to the Discovery folder (up from 8) - closer to parity with the old search-domain.ps1 output, even though only a handful feed the Excel workbook. New real-data files: 03b_DistributionGroup_Members, 06b_M365Group_Members, 07_AppRegistrations, 09_SharePointSites, 10_OneDrives, 11_Teams, 14_TransportRules, 16_PowerPlatform, 19_OnPrem_ADUsers, 20_OnPrem_ADGroups. Placeholder files (single 'No data' row, clearly labeled in the console output) for data the new engine doesn't collect at all: 08_EnterpriseApps, 15_PlannerPlans, 17_EntraCA_Policies, 18_EntraAuthPolicies, 21_OnPrem_ADContacts, 22_UserLicenses, 22a_LicenseCounts",
+        "Found and fixed a latent bug while building the above: Common.psm1's Import-AssessmentJson returned a bare '@()' on a missing/empty JSON file, which PowerShell's pipeline unrolling collapses to $null (not an empty array) across a function return boundary - any direct/unwrapped caller then crashed on Export-Csv with 'Cannot bind argument to parameter InputObject because it is null' the moment a collector genuinely found zero of something. Fixed with the leading-comma operator (return ,@()) so an empty array survives the return intact; this affects every caller of Import-AssessmentJson (Workbook.psm1 too), not just the new CSV export code - it just hadn't been hit yet because Workbook.psm1 happens to re-wrap with @() at its own call sites. Added a defense-in-depth null-filter in Export-LegacyCsv as well",
+        "Verified against 17 fixture JSON files covering both populated and genuinely-empty collector output - all 25 files now export with zero errors"
+      ]
+    },
     {
       "version": "2.9.115",
       "date": "2026-09-01",

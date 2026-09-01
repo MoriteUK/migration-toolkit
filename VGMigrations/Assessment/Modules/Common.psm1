@@ -116,13 +116,21 @@ function Import-AssessmentJson {
         [Parameter(Mandatory)][string]$FileName,
         [Parameter(Mandatory)][string]$RawPath
     )
+    # The leading comma on every return below is deliberate, not decorative: PowerShell
+    # unrolls an array written to the pipeline into its individual elements, so a bare
+    # "return @()" (zero elements) hands the caller literally nothing - and `$x = Import-...`
+    # then assigns $null, not an empty array. `,@()` wraps the array as a single pipeline
+    # object, which is what actually survives the return boundary as an empty array. Confirmed
+    # live: without this, every direct (unwrapped) caller of this function crashed on
+    # Export-Csv with "Cannot bind argument to parameter 'InputObject' because it is null"
+    # whenever the underlying collector genuinely found zero of something.
     $path = Join-Path $RawPath $FileName
-    if (-not (Test-Path $path)) { return @() }
+    if (-not (Test-Path $path)) { return ,@() }
     $content = Get-Content $path -Raw -ErrorAction SilentlyContinue
-    if ([string]::IsNullOrWhiteSpace($content)) { return @() }
+    if ([string]::IsNullOrWhiteSpace($content)) { return ,@() }
     $parsed = $content | ConvertFrom-Json
-    if ($null -eq $parsed) { return @() }
-    return @($parsed)
+    if ($null -eq $parsed) { return ,@() }
+    return ,@($parsed)
 }
 
 <#

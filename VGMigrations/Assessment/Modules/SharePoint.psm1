@@ -1,12 +1,22 @@
 #Requires -Version 7.0
 
 Import-Module (Join-Path $PSScriptRoot 'Common.psm1') -DisableNameChecking -Force -Global
-#Import-Module Microsoft.Online.SharePoint.PowerShell -DisableNameChecking -ErrorAction Stop
-$prev = $WarningPreference
-$WarningPreference = 'SilentlyContinue'
-Import-Module Microsoft.Online.SharePoint.PowerShell `
-    -UseWindowsPowerShell -DisableNameChecking -ErrorAction Stop
-$WarningPreference = $prev
+
+# Best-effort only - Run-Assessment.ps1 already attempts this exact import earlier (with its
+# own try/catch, setting Context.SkipSharePoint on failure). A failure here must NOT be
+# terminating: without try/catch, this would abort the rest of the .psm1 file before
+# Invoke-SharePointCollection is even defined, so a later call to it fails with "not
+# recognized" instead of the intended graceful Context.SkipSharePoint skip.
+try {
+    $prev = $WarningPreference
+    $WarningPreference = 'SilentlyContinue'
+    Import-Module Microsoft.Online.SharePoint.PowerShell `
+        -UseWindowsPowerShell -DisableNameChecking -ErrorAction Stop
+    $WarningPreference = $prev
+}
+catch {
+    $WarningPreference = $prev
+}
 
 # -----------------------------------------------------------------------
 # Private functions
