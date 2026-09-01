@@ -72,6 +72,9 @@
             <button type="button" class="sidebar-subitem" data-view="discovery">
               <span class="sidebar-sublabel">M365 Discovery</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="discovery-cache">
+              <span class="sidebar-sublabel">Refresh Discovery Cache</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="misc-deduplicate">
               <span class="sidebar-sublabel">Deduplicate Inventory</span>
             </button>
@@ -425,6 +428,53 @@
         <div class="log-section hidden" id="discoveryLog">
           <h3 class="form-card-title">Discovery Log</h3>
           <div class="log-output" id="discoveryLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Refresh Discovery Cache View -->
+      <div id="discoveryCacheView" class="view-container hidden">
+        <h2 class="view-title">Refresh Discovery Cache</h2>
+        <p class="form-help" style="margin-bottom:16px;">
+          M365 Discovery reads SharePoint sites and Teams/channels/members from these caches
+          instead of walking the whole tenant on every run - it refuses to start if either is
+          missing or more than 7 days old. Refresh them here first, or whenever the source
+          tenant's sites/Teams may have changed materially.
+        </p>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Source Tenant</h3>
+          <div class="form-group-tight">
+            <label class="form-label">SPO Admin URL</label>
+            <input type="text" class="form-input form-input-compact" id="cacheSharePointAdminUrl"
+                   placeholder="https://ourvolaris-admin.sharepoint.com">
+            <small class="form-help">Same value (or default) M365 Discovery uses - keys both caches to this source tenant.</small>
+          </div>
+        </div>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">SharePoint Sites (+ OneDrive)</h3>
+          <p class="form-help">Walks every site in the tenant via Get-SPOSite -Limit All. Requires Microsoft.Online.SharePoint.PowerShell.</p>
+          <div class="form-actions">
+            <button type="button" class="btn btn-success btn-xs" id="refreshSpoSitesCacheBtn">
+              ▶ Refresh SharePoint Sites Cache
+            </button>
+          </div>
+          <div id="refreshSpoSitesCacheLog" class="hidden" style="margin-top:12px;">
+            <pre id="refreshSpoSitesCacheLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
+        </div>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Teams Channels &amp; Members</h3>
+          <p class="form-help">Walks every Team, every channel (incl. private/shared membership), tenant-wide via Microsoft Graph. Its own sign-in window.</p>
+          <div class="form-actions">
+            <button type="button" class="btn btn-success btn-xs" id="refreshTeamsChannelsCacheBtn">
+              ▶ Refresh Teams Channels Cache
+            </button>
+          </div>
+          <div id="refreshTeamsChannelsCacheLog" class="hidden" style="margin-top:12px;">
+            <pre id="refreshTeamsChannelsCacheLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
         </div>
       </div>
 

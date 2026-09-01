@@ -2,21 +2,20 @@
 
 Import-Module (Join-Path $PSScriptRoot 'Common.psm1') -DisableNameChecking -Force -Global
 
-# Best-effort only - Run-Assessment.ps1 already attempts this exact import earlier (with its
-# own try/catch, setting Context.SkipSharePoint on failure). A failure here must NOT be
-# terminating: without try/catch, this would abort the rest of the .psm1 file before
-# Invoke-SharePointCollection is even defined, so a later call to it fails with "not
-# recognized" instead of the intended graceful Context.SkipSharePoint skip.
-try {
-    $prev = $WarningPreference
-    $WarningPreference = 'SilentlyContinue'
-    Import-Module Microsoft.Online.SharePoint.PowerShell `
-        -UseWindowsPowerShell -DisableNameChecking -ErrorAction Stop
-    $WarningPreference = $prev
-}
-catch {
-    $WarningPreference = $prev
-}
+<#
+.SYNOPSIS
+    Module for SharePoint/OneDrive collection during Discovery, plus the standalone cache
+    builder used by Update-SharePointSitesCache.ps1.
+.DESCRIPTION
+    Get-SPOSite -Limit All against the whole tenant (and again with -IncludePersonalSite for
+    OneDrive) is the slow part of SharePoint collection, even though the tenant's site list
+    barely changes day to day. That walk now lives only in Update-SharePointSitesCacheFile,
+    run standalone via Update-SharePointSitesCache.ps1 (or on demand from the app's Discovery
+    Cache screen) - Invoke-SharePointCollection (the Discovery-time path) only ever reads the
+    cached SharePointSites.json and filters it locally, so it no longer needs an active
+    SharePoint Online connection or even the SPO module installed. Run-Assessment.ps1 checks
+    the cache is present and fresh (Test-DiscoveryCachePrereqs) before this ever runs.
+#>
 
 # -----------------------------------------------------------------------
 # Private functions
@@ -41,6 +40,7 @@ function Build-SPOSiteRecord {
     $usedPct = if ($Site.StorageQuota -gt 0)   { [math]::Round($Site.StorageUsageCurrent / $Site.StorageQuota * 100, 1) } else { [double]0 }
     $owner   = if ($Site.Owner)                { $Site.Owner }                                                            else { '' }
     $lastMod = if ($Site.LastContentModifiedDate) { $Site.LastContentModifiedDate }                                       else { $null }
+    $status  = if ($Site.Status)               { "" + $Site.Status }                                                      else { '' }
 
     $isChannelSite = if ($Site.IsTeamsChannelConnected) { [bool]$Site.IsTeamsChannelConnected } else { $false }
 
@@ -64,6 +64,7 @@ function Build-SPOSiteRecord {
         StorageUsedPercent      = $usedPct
         SiteOwner               = $owner
         LastModified            = $lastMod
+        Status                  = $status
         IsTeamsConnected        = $null
         AssociatedObject        = $null
         MigrationObjectType     = $null
@@ -74,21 +75,21 @@ function Build-SPOSiteRecord {
 
 <#
 .SYNOPSIS
-    Retrieves all SPO sites via Get-SPOSite -Limit All and filters client-side to the VBU scope on URL and title.
+    Filters the cached tenant-wide site list to the VBU's non-personal sites.
 #>
 function Get-SPOSiteData {
-    param([PSCustomObject]$Context)
+    param([PSCustomObject]$Context, [Parameter(Mandatory)][string]$CacheFolder)
 
-    $sites      = [System.Collections.Generic.List[PSCustomObject]]::new()
     $searchTerm = $Context.VBUSearchTerm
     $domain     = $Context.VBUDomain
+    $allSites   = Import-AssessmentJson -FileName 'SharePointSites.json' -RawPath $CacheFolder
+    $sites      = [System.Collections.Generic.List[PSCustomObject]]::new()
 
-    $allSites = @(Get-SPOSite -Limit All -ErrorAction Stop)
-    foreach ($s in $allSites) {
+    foreach ($s in ($allSites | Where-Object { $_.Url -notlike '*/personal/*' })) {
         if (($s.Url   -like "*$searchTerm*") -or
             ($s.Url   -like "*$domain*")     -or
             ($s.Title -like "*$searchTerm*")) {
-            $sites.Add((Build-SPOSiteRecord -Site $s))
+            $sites.Add($s)
         }
     }
 
@@ -97,10 +98,10 @@ function Get-SPOSiteData {
 
 <#
 .SYNOPSIS
-    Retrieves personal sites and keeps those whose owner UPN (claims prefix stripped) matches a user in ADUsers.json.
+    Filters the cached tenant-wide site list to personal (OneDrive) sites owned by a VBU user.
 #>
 function Get-OneDriveData {
-    param([PSCustomObject]$Context)
+    param([PSCustomObject]$Context, [Parameter(Mandatory)][string]$CacheFolder)
 
     $adUsersPath = Join-Path $Context.RawPath 'ADUsers.json'
     if (-not (Test-Path $adUsersPath)) {
@@ -114,33 +115,28 @@ function Get-OneDriveData {
         if ($u.UserPrincipalName) { $upnToUser[$u.UserPrincipalName.ToLower()] = $u }
     }
 
-    $rawSites = @(Get-SPOSite -IncludePersonalSite $true -Limit All -ErrorAction Stop)
+    $allSites = Import-AssessmentJson -FileName 'SharePointSites.json' -RawPath $CacheFolder
     $records  = [System.Collections.Generic.List[PSCustomObject]]::new()
 
-    foreach ($od in ($rawSites | Where-Object { $_.Url -like '*/personal/*' })) {
+    foreach ($od in ($allSites | Where-Object { $_.Url -like '*/personal/*' })) {
         # Strip claims provider prefix: i:0#.f|membership|user@domain.com -> user@domain.com
-        $ownerLogin = $od.Owner
+        $ownerLogin = $od.SiteOwner
         if ($ownerLogin -like '*|*') { $ownerLogin = $ownerLogin.Split('|')[-1] }
 
-        if (-not $upnToUser.ContainsKey($ownerLogin.ToLower())) { continue }
+        if (-not $ownerLogin -or -not $upnToUser.ContainsKey($ownerLogin.ToLower())) { continue }
 
         $adUser   = $upnToUser[$ownerLogin.ToLower()]
-        $usedGB   = Convert-SizeToGB -Value $od.StorageUsageCurrent -FromMB
-        $quotaGB  = Convert-SizeToGB -Value $od.StorageQuota -FromMB
-        $remainGB = [math]::Round($quotaGB - $usedGB, 2)
-        $usedPct  = if ($od.StorageQuota -gt 0) {
-            [math]::Round($od.StorageUsageCurrent / $od.StorageQuota * 100, 1)
-        } else { [double]0 }
+        $remainGB = [math]::Round($od.StorageQuotaGB - $od.StorageUsedGB, 2)
 
         $records.Add([PSCustomObject]@{
             OwnerUPN           = $ownerLogin
             OwnerDisplayName   = $adUser.DisplayName
             OneDriveUrl        = $od.Url
-            StorageUsedGB      = $usedGB
-            StorageQuotaGB     = $quotaGB
+            StorageUsedGB      = $od.StorageUsedGB
+            StorageQuotaGB     = $od.StorageQuotaGB
             StorageRemainingGB = $remainGB
-            StorageUsedPercent = $usedPct
-            LastModified       = $od.LastContentModifiedDate
+            StorageUsedPercent = $od.StorageUsedPercent
+            LastModified       = $od.LastModified
             IsProvisioned      = ($od.Status -eq 'Active')
         })
     }
@@ -154,34 +150,55 @@ function Get-OneDriveData {
 
 <#
 .SYNOPSIS
-    Orchestrates SharePoint site and OneDrive collection.
+    Walks every site in the connected tenant (incl. OneDrive) and writes the cache file.
 .DESCRIPTION
-    Returns a skipped result immediately when Context.SkipSharePoint is set. Otherwise
-    collects sites and OneDrive accounts over the session connected by the orchestrator
-    and writes SharePointSites.json and OneDrives.json. Failures are non-critical and
-    are returned as a failed collector result.
+    Called by Update-SharePointSitesCache.ps1, which owns connecting to SharePoint Online first
+    (Invoke-SharePointCollection - the Discovery-time path - no longer connects to SPO at all).
+    A single -IncludePersonalSite $true -Limit All call covers both regular sites and OneDrives,
+    so both Get-SPOSiteData and Get-OneDriveData can be served from the one cache file.
+#>
+function Update-SharePointSitesCacheFile {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$CacheFolder)
+
+    Write-Host ($PREFIX_INFO + 'Enumerating all SharePoint sites (incl. OneDrive) tenant-wide...') -ForegroundColor DarkGray
+    $allSites = @(Get-SPOSite -IncludePersonalSite $true -Limit All -ErrorAction Stop)
+    $records  = @($allSites | ForEach-Object { Build-SPOSiteRecord -Site $_ })
+    Write-ProgressLine -Label 'SharePoint + OneDrive sites (tenant-wide)' -Count $records.Count
+
+    New-Item -ItemType Directory -Path $CacheFolder -Force | Out-Null
+    $cachePath = Join-Path $CacheFolder 'SharePointSites.json'
+    $records | ConvertTo-Json -Depth 10 | Set-Content -Path $cachePath -Encoding UTF8
+    Write-Host ($PREFIX_OK + "SharePointSites.json cache written: $cachePath") -ForegroundColor Green
+
+    return $records.Count
+}
+
+<#
+.SYNOPSIS
+    Orchestrates SharePoint site and OneDrive collection for a Discovery run, from cache only.
+.DESCRIPTION
+    Reads and locally filters the cached SharePointSites.json (see Update-SharePointSitesCacheFile)
+    - no SharePoint Online connection is made here. Failures are non-critical and are returned as
+    a failed collector result.
 #>
 function Invoke-SharePointCollection {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][PSCustomObject]$Context)
+    param(
+        [Parameter(Mandatory)][PSCustomObject]$Context,
+        [Parameter(Mandatory)][string]$CacheFolder
+    )
 
     $start = Get-Date
     Write-SectionHeader 'SharePoint Online'
 
-    if ($Context.SkipSharePoint) {
-        Write-Host ($PREFIX_SKIP + 'SharePoint collection skipped (SkipSharePoint = true)') -ForegroundColor Yellow
-        Update-CollectorStatus -CollectorName 'SharePoint Data' -Status 'Skipped' `
-            -RawPath $Context.RawPath -StartTime $start
-        return New-CollectorResult -Skipped $true
-    }
-
     try {
-        Write-Host ($PREFIX_INFO + 'Collecting SharePoint sites...') -ForegroundColor DarkGray
-        $sites = Get-SPOSiteData -Context $Context
+        Write-Host ($PREFIX_INFO + 'Reading SharePoint sites from cache...') -ForegroundColor DarkGray
+        $sites = Get-SPOSiteData -Context $Context -CacheFolder $CacheFolder
         Write-ProgressLine -Label 'SharePoint Sites' -Count $sites.Count
 
-        Write-Host ($PREFIX_INFO + 'Collecting OneDrive accounts...') -ForegroundColor DarkGray
-        $oneDrives = Get-OneDriveData -Context $Context
+        Write-Host ($PREFIX_INFO + 'Reading OneDrive accounts from cache...') -ForegroundColor DarkGray
+        $oneDrives = Get-OneDriveData -Context $Context -CacheFolder $CacheFolder
         Write-ProgressLine -Label 'OneDrive Accounts' -Count $oneDrives.Count
 
         Write-JsonOutput -FileName 'SharePointSites.json' -Data $sites     -RawPath $Context.RawPath
@@ -209,4 +226,4 @@ function Invoke-SharePointCollection {
 # Exports
 # -----------------------------------------------------------------------
 
-Export-ModuleMember -Function 'Invoke-SharePointCollection'
+Export-ModuleMember -Function 'Invoke-SharePointCollection', 'Update-SharePointSitesCacheFile'

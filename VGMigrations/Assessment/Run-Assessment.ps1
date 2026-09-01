@@ -32,12 +32,16 @@
     Skips the Domain Team Memberships scan - which Team/channel (private & shared) each VBU
     domain user belongs to, written as its own DomainTeamMemberships-<domain>-<timestamp>.csv
     at the top of the assessment folder, ready to feed into
-    Restore-DomainTeamMemberships.ps1 after the domain moves. Walks every Team in the tenant
-    (not just VBU-scoped ones) and every private/shared channel, so it's the slowest collector
-    on a large tenant - skip it for a quick unattended/batch run. Runs on the same Graph
-    session as everything else; automatically skipped if -SkipGraph is set.
+    Restore-DomainTeamMemberships.ps1 after the domain moves. Reads from the cached
+    TeamsChannelsMembers.json (see CacheRoot) rather than walking the tenant live, so it's fast
+    regardless - this switch remains as a plain opt-out. Automatically skipped if -SkipGraph is set.
 .PARAMETER OutputPath
     Base directory for the assessment output folder. Defaults to the script's own folder.
+.PARAMETER CacheRoot
+    Base folder for the SharePoint Sites and Teams/Channels/Members caches this run reads from
+    (see Update-SharePointSitesCache.ps1 / Update-TeamsChannelsCache.ps1). Defaults to
+    Assessment\Cache next to this script. The run refuses to start if either cache is missing or
+    older than 7 days for this SharePointAdminUrl.
 .PARAMETER DeleteRawJson
     Deletes the Raw\*.json files after the workbook and compatibility CSVs are written.
     Defaults to keeping them when running non-interactively.
@@ -59,6 +63,7 @@ param(
     [switch]$SkipPowerPlatform,
     [switch]$SkipTeamMemberships,
     [string]$OutputPath,
+    [string]$CacheRoot,
     [switch]$DeleteRawJson,
     [switch]$KeepSession
 )
@@ -153,23 +158,9 @@ Import-Module Microsoft.Graph.Users            -DisableNameChecking -ErrorAction
 Import-Module Microsoft.Graph.DeviceManagement -DisableNameChecking -ErrorAction Stop
 Import-Module ImportExcel                      -DisableNameChecking -ErrorAction Stop
 
-# SharePoint - soft-fail (installable by Test-Prerequisites; a failure here sets SkipSharePoint
-# below, regardless of whether the module is merely missing or installed-but-failing-to-import -
-# e.g. the -UseWindowsPowerShell compatibility bridge itself can fail even when the module is
-# present).
-$script:SpoModuleImported = $false
-try {
-    $prev = $WarningPreference
-    $WarningPreference = 'SilentlyContinue'
-    Import-Module Microsoft.Online.SharePoint.PowerShell `
-        -UseWindowsPowerShell -DisableNameChecking -ErrorAction Stop
-    $WarningPreference = $prev
-    $script:SpoModuleImported = $true
-}
-catch {
-    $WarningPreference = $prev
-    Write-Host ($PREFIX_WARN + 'SPO module not available - SharePoint collection will be skipped') -ForegroundColor Yellow
-}
+# Note: Microsoft.Online.SharePoint.PowerShell is NOT imported or connected here anymore -
+# SharePoint/OneDrive collection now reads entirely from the cached SharePointSites.json (see
+# Update-SharePointSitesCache.ps1), so a live SPO session is no longer needed for a Discovery run.
 
 # -----------------------------------------------------------------------
 # Remaining platform modules
@@ -200,6 +191,27 @@ $spoInput      = if ($PSBoundParameters.ContainsKey('SharePointAdminUrl')) { $Sh
 $spoAdminUrl   = if ($spoInput) { $spoInput } else { 'https://ourvolaris-admin.sharepoint.com' }
 
 # -----------------------------------------------------------------------
+# Cache pre-flight check - stop before touching any tenant if either cache is stale/missing
+# -----------------------------------------------------------------------
+# SharePoint Sites and Teams/Channels/Members are the two expensive tenant-wide walks - they're
+# now built once by the standalone Update-SharePointSitesCache.ps1 / Update-TeamsChannelsCache.ps1
+# scripts instead of being repeated on every VBU's Discovery run. Refusing to proceed on a
+# stale/missing cache (rather than silently reusing old data or re-walking live) is deliberate -
+# requested so an operator can never get a Discovery run built on out-of-date SharePoint/Teams data
+# without being told.
+$cacheRootPath = if ($CacheRoot) { $CacheRoot } else { Join-Path $PSScriptRoot 'Cache' }
+$cacheCheck    = Test-DiscoveryCachePrereqs -SharePointAdminUrl $spoAdminUrl -CacheRoot $cacheRootPath -MaxAgeDays 7
+if (-not $cacheCheck.IsFresh) {
+    Write-SectionHeader 'Cache Check'
+    Write-Host ($PREFIX_FAIL + 'Discovery stopped - refresh the cache below before running again:') -ForegroundColor Red
+    foreach ($problem in $cacheCheck.Problems) {
+        Write-Host ($PREFIX_FAIL + '  ' + $problem) -ForegroundColor Red
+    }
+    return
+}
+Write-Host ($PREFIX_OK + "Cache check passed (SharePoint Sites + Teams/Channels/Members, both < 7 days old): $($cacheCheck.CacheFolder)") -ForegroundColor Green
+
+# -----------------------------------------------------------------------
 # Folder structure
 # -----------------------------------------------------------------------
 # Temporary context call to derive VBUName via the shared TLD-strip logic in Common.psm1
@@ -227,10 +239,6 @@ $ctx = New-AssessmentContext `
     -RawPath       $rawPath `
     -SPOAdminUrl   $spoAdminUrl
 
-if (-not $script:SpoModuleImported) {
-    $ctx.SkipSharePoint = $true
-}
-
 # -----------------------------------------------------------------------
 # Prerequisites
 # -----------------------------------------------------------------------
@@ -241,28 +249,9 @@ Test-Prerequisites -Context $ctx
 # -----------------------------------------------------------------------
 Write-SectionHeader 'Authentication'
 
-# SPO must connect first - Exchange and Graph WAM tokens conflict with SPO auth if they connect before it
-# No native "am I connected" query exists for Connect-SPOService, so KeepSession batches track
-# it via a process-wide flag instead - reliable since the underlying session really does live at
-# the process level (Run-MultiAssessment.ps1 re-invokes this script with '&' in the same process).
-if (-not $ctx.SkipSharePoint) {
-    if ($KeepSession -and $global:AssessmentSpoConnected) {
-        Write-Host ($PREFIX_OK + 'SharePoint Online already connected (reusing session)') -ForegroundColor Green
-    }
-    else {
-        Write-Host ($PREFIX_INFO + 'Connecting to SharePoint Online...') -ForegroundColor DarkGray
-        try {
-            Connect-SPOService -Url $ctx.SPOAdminUrl -ErrorAction Stop
-            Write-Host ($PREFIX_OK + 'SharePoint Online connected') -ForegroundColor Green
-            $global:AssessmentSpoConnected = $true
-        }
-        catch {
-            Write-Host ($PREFIX_FAIL + 'SPO connection failed: ' + $_.Exception.Message) -ForegroundColor Red
-            Write-Host ($PREFIX_WARN + 'SharePoint collection will be skipped') -ForegroundColor Yellow
-            $ctx.SkipSharePoint = $true
-        }
-    }
-}
+# No SharePoint Online connection here - SharePoint/OneDrive collection reads entirely from the
+# cache checked above (see Update-SharePointSitesCache.ps1), so there's nothing SPO-specific to
+# sign into for a Discovery run any more.
 
 if ($KeepSession -and (Get-ConnectionInformation | Where-Object { $_.State -eq 'Connected' })) {
     Write-Host ($PREFIX_OK + 'Exchange Online already connected (reusing session)') -ForegroundColor Green
@@ -365,9 +354,9 @@ try {
         }
     }
 
-    # SharePoint Online - non-critical
+    # SharePoint Online - non-critical, reads from cache (see Cache Check above)
     try {
-        $spoResult = Invoke-SharePointCollection -Context $ctx
+        $spoResult = Invoke-SharePointCollection -Context $ctx -CacheFolder $cacheCheck.CacheFolder
     }
     catch {
         Write-Host ($PREFIX_FAIL + 'SharePoint collection error: ' + $_.Exception.Message) -ForegroundColor Red
@@ -383,7 +372,7 @@ try {
         $ppResult = New-CollectorResult -Success $false -ErrorMessage $_.Exception.Message
     }
 
-    # Domain Team Memberships - non-critical, needs Graph, skippable (slow on large tenants)
+    # Domain Team Memberships - non-critical, needs Graph, reads from cache (see Cache Check above)
     if ($skipTeamMembershipsSession) {
         Update-CollectorStatus -CollectorName 'Team Memberships' -Status 'Skipped' `
             -RawPath $ctx.RawPath -StartTime (Get-Date)
@@ -391,7 +380,7 @@ try {
     }
     else {
         try {
-            $tmResult = Invoke-TeamMembershipCollection -Context $ctx -OutputCsvPath $teamMembershipsCsvPath
+            $tmResult = Invoke-TeamMembershipCollection -Context $ctx -OutputCsvPath $teamMembershipsCsvPath -CacheFolder $cacheCheck.CacheFolder
         }
         catch {
             Write-Host ($PREFIX_FAIL + 'Team Membership collection error: ' + $_.Exception.Message) -ForegroundColor Red
@@ -456,8 +445,6 @@ finally {
     if (-not $KeepSession) {
         try { Disconnect-MgGraph              -ErrorAction SilentlyContinue } catch {}
         try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue } catch {}
-        try { Disconnect-SPOService            -ErrorAction SilentlyContinue } catch {}
-        $global:AssessmentSpoConnected = $false
     }
 }
 

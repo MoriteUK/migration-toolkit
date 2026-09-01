@@ -13,10 +13,14 @@ Import-Module (Join-Path $PSScriptRoot 'Common.psm1') -DisableNameChecking -Forc
     same CSV schema that script always has, so Restore-DomainTeamMemberships.ps1 works
     unchanged regardless of which one produced the CSV.
 
-    Walks every Team in the tenant (not just VBU-scoped ones - a VBU user can belong to a Team
-    outside their own domain's scope) and every one of its private/shared channels, which is
-    the expensive part on a large tenant - this is why Run-Assessment.ps1 offers
-    -SkipTeamMemberships.
+    The tenant-wide walk (every Team, every channel, every member) used to happen live on every
+    Discovery run - that's the expensive part on a large tenant. It now lives only in
+    Update-TeamsChannelsCacheFile, run standalone via Update-TeamsChannelsCache.ps1 (or on demand
+    from the app's Discovery Cache screen). Invoke-TeamMembershipCollection (the Discovery-time
+    path) only reads the cached TeamsChannelsMembers.json and matches it against the VBU's own
+    (live-queried, cheap) user list - Run-Assessment.ps1 checks the cache is present and fresh
+    (Test-DiscoveryCachePrereqs) before this ever runs. -SkipTeamMemberships still exists as a
+    plain opt-out, though it's no longer needed for speed now that this is cache-backed.
 #>
 
 # -----------------------------------------------------------------------
@@ -119,9 +123,156 @@ function Resolve-DomainMember {
     }
 }
 
+<#
+.SYNOPSIS
+    Flattens a live Graph conversation-member object to the plain schema stored in the cache file.
+#>
+function ConvertTo-CachedMemberRecord {
+    param($Member)
+    [pscustomobject]@{
+        UserId      = "" + $Member.AdditionalProperties['userId']
+        DisplayName = $Member.DisplayName
+        Email       = $Member.AdditionalProperties['email']
+        Roles       = @($Member.Roles)
+    }
+}
+
+<#
+.SYNOPSIS
+    Resolves a cached member record (plain properties, post-JSON-round-trip) to a matched VBU-domain user, or $null.
+.DESCRIPTION
+    Same matching logic as the live-Graph Resolve-DomainMember above, adapted for cached
+    TeamsChannelsMembers.json records - those no longer carry a Graph SDK AdditionalProperties
+    hashtable once they've been through ConvertTo-Json/ConvertFrom-Json, just plain UserId/Email/Roles.
+#>
+function Resolve-CachedDomainMember {
+    param($Member, [hashtable]$DomainUsers, [string]$Domain)
+
+    $uid   = "" + $Member.UserId
+    $email = ("" + $Member.Email).ToLowerInvariant()
+    $hit   = $null
+    if ($uid -and $DomainUsers.ContainsKey($uid)) { $hit = $DomainUsers[$uid] }
+    elseif ($email.EndsWith("@$Domain")) {
+        $hit = [pscustomobject]@{ DisplayName = $Member.DisplayName; UPN = ''; Mail = $Member.Email; UserType = '' }
+    }
+    if (-not $hit) { return $null }
+
+    $roles = @($Member.Roles)
+    $role  = if ($roles -contains 'owner') { 'Owner' }
+             elseif ($roles -contains 'guest') { 'Guest' }
+             else { 'Member' }
+    [pscustomobject]@{
+        DisplayName = if ($hit.DisplayName) { $hit.DisplayName } else { $Member.DisplayName }
+        UPN         = $hit.UPN
+        Mail        = $hit.Mail
+        UserType    = $hit.UserType
+        UserId      = $uid
+        Role        = $role
+    }
+}
+
 # -----------------------------------------------------------------------
-# Public function
+# Public functions
 # -----------------------------------------------------------------------
+
+<#
+.SYNOPSIS
+    Walks every Team, every channel, and every member in the connected tenant and writes the cache file.
+.DESCRIPTION
+    Called by Update-TeamsChannelsCache.ps1, which owns the Graph sign-in first. Unfiltered -
+    every Team tenant-wide, not scoped to any one VBU domain, so the same cache serves every VBU
+    split from this source tenant. Standard channels record their metadata only (Members left
+    empty) - their membership always equals the parent Team's, which is already captured.
+#>
+function Update-TeamsChannelsCacheFile {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$CacheFolder)
+
+    Write-Host ($PREFIX_INFO + 'Enumerating all Teams tenant-wide...') -ForegroundColor DarkGray
+    $teams = @(Invoke-ThrottledGraph -What 'Get-MgTeam -All' -Script { Get-MgTeam -All -Property 'Id,DisplayName,IsArchived' })
+    Write-ProgressLine -Label 'Teams (tenant-wide)' -Count $teams.Count
+
+    $result    = [System.Collections.Generic.List[object]]::new()
+    $teamIndex = 0
+
+    foreach ($team in $teams) {
+        $teamIndex++
+        if ($teamIndex % 25 -eq 0) {
+            Write-Host ($PREFIX_INFO + "  ...$teamIndex / $($teams.Count) teams") -ForegroundColor DarkGray
+        }
+
+        $grp = $null
+        try {
+            $grp = Invoke-ThrottledGraph -What "Get-MgGroup $($team.Id)" -Script {
+                Get-MgGroup -GroupId $team.Id -Property 'Mail,Visibility,DisplayName'
+            }
+        }
+        catch { }
+
+        $memberRecords = @()
+        try {
+            $members = @(Invoke-ThrottledGraph -What "Get-MgTeamMember $($team.DisplayName)" -Script {
+                Get-MgTeamMember -TeamId $team.Id -All
+            })
+            $memberRecords = @($members | ForEach-Object { ConvertTo-CachedMemberRecord -Member $_ })
+        }
+        catch {
+            Write-Host ($PREFIX_WARN + "$($team.DisplayName): could not read members - $($_.Exception.Message.Split([Environment]::NewLine)[0])") -ForegroundColor Yellow
+        }
+
+        $channelRecords = [System.Collections.Generic.List[object]]::new()
+        try {
+            $channels = @(Invoke-ThrottledGraph -What "Get-MgTeamChannel $($team.DisplayName)" -Script {
+                Get-MgTeamChannel -TeamId $team.Id -All -Property 'Id,DisplayName,MembershipType'
+            })
+        }
+        catch {
+            Write-Host ($PREFIX_WARN + "$($team.DisplayName): could not read channels - $($_.Exception.Message.Split([Environment]::NewLine)[0])") -ForegroundColor Yellow
+            $channels = @()
+        }
+
+        foreach ($ch in $channels) {
+            $type     = "" + $ch.MembershipType
+            $chRecord = [pscustomobject]@{
+                ChannelId      = $ch.Id
+                ChannelName    = $ch.DisplayName
+                MembershipType = $type
+                Members        = @()
+            }
+
+            if ($type -in 'private', 'shared') {
+                try {
+                    $chMembers = @(Invoke-ThrottledGraph -What "Get-MgTeamChannelMember $($ch.DisplayName)" -Script {
+                        Get-MgTeamChannelMember -TeamId $team.Id -ChannelId $ch.Id -All
+                    })
+                    $chRecord.Members = @($chMembers | ForEach-Object { ConvertTo-CachedMemberRecord -Member $_ })
+                }
+                catch {
+                    Write-Host ($PREFIX_WARN + "$($team.DisplayName) / $($ch.DisplayName): could not read channel members - $($_.Exception.Message.Split([Environment]::NewLine)[0])") -ForegroundColor Yellow
+                }
+            }
+
+            $channelRecords.Add($chRecord)
+        }
+
+        $result.Add([pscustomobject]@{
+            TeamId          = $team.Id
+            TeamDisplayName = $team.DisplayName
+            TeamMail        = $grp.Mail
+            TeamVisibility  = $grp.Visibility
+            TeamArchived    = [bool]$team.IsArchived
+            Members         = $memberRecords
+            Channels        = $channelRecords.ToArray()
+        })
+    }
+
+    New-Item -ItemType Directory -Path $CacheFolder -Force | Out-Null
+    $cachePath = Join-Path $CacheFolder 'TeamsChannelsMembers.json'
+    $result.ToArray() | ConvertTo-Json -Depth 10 | Set-Content -Path $cachePath -Encoding UTF8
+    Write-Host ($PREFIX_OK + "TeamsChannelsMembers.json cache written: $cachePath") -ForegroundColor Green
+
+    return $result.Count
+}
 
 <#
 .SYNOPSIS
@@ -136,6 +287,7 @@ function Invoke-TeamMembershipCollection {
     param(
         [Parameter(Mandatory)][PSCustomObject]$Context,
         [Parameter(Mandatory)][string]$OutputCsvPath,
+        [Parameter(Mandatory)][string]$CacheFolder,
         [switch]$IncludeStandardChannels
     )
 
@@ -158,45 +310,21 @@ function Invoke-TeamMembershipCollection {
             return New-CollectorResult -Success $true -Counts @{ TeamMembershipRowCount = 0 }
         }
 
-        Write-Host ($PREFIX_INFO + 'Enumerating Teams...') -ForegroundColor DarkGray
-        $teams = @(Invoke-ThrottledGraph -What 'Get-MgTeam -All' -Script { Get-MgTeam -All -Property 'Id,DisplayName,IsArchived' })
-        Write-ProgressLine -Label 'Teams (tenant-wide)' -Count $teams.Count
+        Write-Host ($PREFIX_INFO + 'Reading Teams/channels/members from cache...') -ForegroundColor DarkGray
+        $cachedTeams = Import-AssessmentJson -FileName 'TeamsChannelsMembers.json' -RawPath $CacheFolder
+        Write-ProgressLine -Label 'Teams (from cache)' -Count $cachedTeams.Count
 
-        $rows      = [System.Collections.Generic.List[object]]::new()
-        $teamIndex = 0
+        $rows = [System.Collections.Generic.List[object]]::new()
 
-        foreach ($team in $teams) {
-            $teamIndex++
-            if ($teamIndex % 25 -eq 0) {
-                Write-Host ($PREFIX_INFO + "  ...$teamIndex / $($teams.Count) teams") -ForegroundColor DarkGray
-            }
-
-            try {
-                $members = @(Invoke-ThrottledGraph -What "Get-MgTeamMember $($team.DisplayName)" -Script {
-                    Get-MgTeamMember -TeamId $team.Id -All
-                })
-            }
-            catch {
-                Write-Host ($PREFIX_WARN + "$($team.DisplayName): could not read members - $($_.Exception.Message.Split([Environment]::NewLine)[0])") -ForegroundColor Yellow
-                continue
-            }
-
-            $matched = @(@(foreach ($m in $members) { Resolve-DomainMember -Member $m -DomainUsers $domainUsers -Domain $domain }) | Where-Object { $_ })
-            if ($matched.Count -eq 0) { continue }
-
-            $grp = $null
-            try {
-                $grp = Invoke-ThrottledGraph -What "Get-MgGroup $($team.Id)" -Script {
-                    Get-MgGroup -GroupId $team.Id -Property 'Mail,Visibility,DisplayName'
-                }
-            } catch { }
+        foreach ($team in $cachedTeams) {
+            $matched = @(@(foreach ($m in $team.Members) { Resolve-CachedDomainMember -Member $m -DomainUsers $domainUsers -Domain $domain }) | Where-Object { $_ })
 
             foreach ($u in $matched) {
                 $rows.Add([pscustomobject]@{
-                    TeamDisplayName   = $team.DisplayName
-                    TeamMail          = $grp.Mail
-                    TeamVisibility    = $grp.Visibility
-                    TeamArchived      = [bool]$team.IsArchived
+                    TeamDisplayName   = $team.TeamDisplayName
+                    TeamMail          = $team.TeamMail
+                    TeamVisibility    = $team.TeamVisibility
+                    TeamArchived      = [bool]$team.TeamArchived
                     Scope             = 'Team'
                     ChannelName       = ''
                     ChannelType       = ''
@@ -205,35 +333,16 @@ function Invoke-TeamMembershipCollection {
                     UserMail          = $u.Mail
                     UserType          = $u.UserType
                     Role              = $u.Role
-                    TeamId            = $team.Id
+                    TeamId            = $team.TeamId
                     ChannelId         = ''
                     UserId            = $u.UserId
                 })
             }
 
-            try {
-                $channels = @(Invoke-ThrottledGraph -What "Get-MgTeamChannel $($team.DisplayName)" -Script {
-                    Get-MgTeamChannel -TeamId $team.Id -All -Property 'Id,DisplayName,MembershipType'
-                })
-            }
-            catch {
-                Write-Host ($PREFIX_WARN + "$($team.DisplayName): could not read channels - $($_.Exception.Message.Split([Environment]::NewLine)[0])") -ForegroundColor Yellow
-                $channels = @()
-            }
-
-            foreach ($ch in $channels) {
+            foreach ($ch in $team.Channels) {
                 $type = "" + $ch.MembershipType
                 if ($type -in 'private', 'shared') {
-                    try {
-                        $chMembers = @(Invoke-ThrottledGraph -What "Get-MgTeamChannelMember $($ch.DisplayName)" -Script {
-                            Get-MgTeamChannelMember -TeamId $team.Id -ChannelId $ch.Id -All
-                        })
-                    }
-                    catch {
-                        Write-Host ($PREFIX_WARN + "$($team.DisplayName) / $($ch.DisplayName): could not read channel members - $($_.Exception.Message.Split([Environment]::NewLine)[0])") -ForegroundColor Yellow
-                        continue
-                    }
-                    $chMatched = @(@(foreach ($m in $chMembers) { Resolve-DomainMember -Member $m -DomainUsers $domainUsers -Domain $domain }) | Where-Object { $_ })
+                    $chMatched = @(@(foreach ($m in $ch.Members) { Resolve-CachedDomainMember -Member $m -DomainUsers $domainUsers -Domain $domain }) | Where-Object { $_ })
                 }
                 elseif ($IncludeStandardChannels) {
                     $chMatched = $matched
@@ -244,20 +353,20 @@ function Invoke-TeamMembershipCollection {
 
                 foreach ($u in $chMatched) {
                     $rows.Add([pscustomobject]@{
-                        TeamDisplayName   = $team.DisplayName
-                        TeamMail          = $grp.Mail
-                        TeamVisibility    = $grp.Visibility
-                        TeamArchived      = [bool]$team.IsArchived
+                        TeamDisplayName   = $team.TeamDisplayName
+                        TeamMail          = $team.TeamMail
+                        TeamVisibility    = $team.TeamVisibility
+                        TeamArchived      = [bool]$team.TeamArchived
                         Scope             = 'Channel'
-                        ChannelName       = $ch.DisplayName
+                        ChannelName       = $ch.ChannelName
                         ChannelType       = $type
                         UserDisplayName   = $u.DisplayName
                         UserPrincipalName = $u.UPN
                         UserMail          = $u.Mail
                         UserType          = $u.UserType
                         Role              = $u.Role
-                        TeamId            = $team.Id
-                        ChannelId         = $ch.Id
+                        TeamId            = $team.TeamId
+                        ChannelId         = $ch.ChannelId
                         UserId            = $u.UserId
                     })
                 }
@@ -300,4 +409,4 @@ function Invoke-TeamMembershipCollection {
 # Exports
 # -----------------------------------------------------------------------
 
-Export-ModuleMember -Function 'Invoke-TeamMembershipCollection'
+Export-ModuleMember -Function 'Invoke-TeamMembershipCollection', 'Update-TeamsChannelsCacheFile'

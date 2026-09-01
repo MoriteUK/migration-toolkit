@@ -1574,6 +1574,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
+// Pre-fill the Discovery Cache screen's SPO Admin URL with the same Settings value (or default)
+// Run-Assessment.ps1 itself falls back to, so a refresh here keys the same cache folder Discovery reads.
+async function loadDiscoveryCacheDefaults() {
+  try {
+    const input = document.getElementById('cacheSharePointAdminUrl');
+    if (!input || input.value.trim()) return;
+    const config = await window.electronAPI.getConfig();
+    input.value = (config.success && config.config && config.config.SharePointAdminUrl)
+      ? config.config.SharePointAdminUrl
+      : 'https://ourvolaris-admin.sharepoint.com';
+  } catch (error) {
+    console.error('Error loading Discovery Cache defaults:', error);
+  }
+}
+
 // Populate OneDrive tenant URL dropdown from customer settings
 async function loadOneDriveTenants() {
   try {
@@ -1904,6 +1919,7 @@ function switchView(viewName) {
     'dashboard': 'dashboardView',
     'discovery': 'discoveryView',
     // Discovery sub-views
+    'discovery-cache': 'discoveryCacheView',
     'domainReadiness': 'domainReadinessView',
     'discovery-tenant-licenses': 'discoveryTenantLicensesView',
     // AvePoint Fly sub-views
@@ -1948,6 +1964,8 @@ function switchView(viewName) {
       // Load dropdowns when specific views are shown
       if (viewName === 'discovery') {
         loadDiscoveryDomains();
+      } else if (viewName === 'discovery-cache') {
+        loadDiscoveryCacheDefaults();
       } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip', 'domain-check-cloud', 'domain-check-ad', 'domain-retire-devices'].includes(viewName)) {
         loadTargetDomain();
       } else if (viewName === 'misc-onedrive') {
@@ -3381,6 +3399,70 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         restoreTeamMembershipsRunBtn.disabled = false;
         restoreTeamMembershipsRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Discovery - Refresh SharePoint Sites Cache ───────────────────────────────
+  const refreshSpoSitesCacheBtn = document.getElementById('refreshSpoSitesCacheBtn');
+  if (refreshSpoSitesCacheBtn) {
+    refreshSpoSitesCacheBtn.addEventListener('click', async () => {
+      const url = document.getElementById('cacheSharePointAdminUrl').value.trim();
+      if (!url) { alert('Please enter the SPO Admin URL.'); return; }
+
+      const logSection = document.getElementById('refreshSpoSitesCacheLog');
+      const logOutput  = document.getElementById('refreshSpoSitesCacheLogPre');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      refreshSpoSitesCacheBtn.disabled = true;
+      refreshSpoSitesCacheBtn.textContent = 'Running…';
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('Update-SharePointSitesCache.ps1', ['-SharePointAdminUrl', url]);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        refreshSpoSitesCacheBtn.disabled = false;
+        refreshSpoSitesCacheBtn.textContent = '▶ Refresh SharePoint Sites Cache';
+      }
+    });
+  }
+
+  // ── Discovery - Refresh Teams Channels Cache ─────────────────────────────────
+  const refreshTeamsChannelsCacheBtn = document.getElementById('refreshTeamsChannelsCacheBtn');
+  if (refreshTeamsChannelsCacheBtn) {
+    refreshTeamsChannelsCacheBtn.addEventListener('click', async () => {
+      const url = document.getElementById('cacheSharePointAdminUrl').value.trim();
+      if (!url) { alert('Please enter the SPO Admin URL (used here only as the cache key).'); return; }
+
+      const logSection = document.getElementById('refreshTeamsChannelsCacheLog');
+      const logOutput  = document.getElementById('refreshTeamsChannelsCacheLogPre');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      refreshTeamsChannelsCacheBtn.disabled = true;
+      refreshTeamsChannelsCacheBtn.textContent = 'Running…';
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('Update-TeamsChannelsCache.ps1', ['-SharePointAdminUrl', url]);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        refreshTeamsChannelsCacheBtn.disabled = false;
+        refreshTeamsChannelsCacheBtn.textContent = '▶ Refresh Teams Channels Cache';
       }
     });
   }

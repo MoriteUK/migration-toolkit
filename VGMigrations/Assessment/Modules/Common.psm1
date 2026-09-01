@@ -160,6 +160,70 @@ function New-CollectorResult {
 
 <#
 .SYNOPSIS
+    Derives the persistent cache folder for a given source tenant, keyed by its SPO admin URL.
+.DESCRIPTION
+    Shared by SharePoint.psm1 and TeamMemberships.psm1's cache read/write functions, and by
+    Run-Assessment.ps1's pre-flight freshness check, so all three agree on the same folder for
+    the same tenant. Every VBU split from the same source tenant reuses this one cache -
+    SharePointAdminUrl is already the one tenant-identifying input Run-Assessment.ps1 collects,
+    so it doubles as the cache key rather than inventing a second one.
+#>
+function Get-DiscoveryCacheFolder {
+    param(
+        [Parameter(Mandatory)][string]$SharePointAdminUrl,
+        [Parameter(Mandatory)][string]$CacheRoot
+    )
+    $safe = ($SharePointAdminUrl -replace '^https?://', '') -replace '[^a-zA-Z0-9\.\-]', '-'
+    if (-not $safe) { $safe = 'default' }
+    return Join-Path $CacheRoot $safe
+}
+
+<#
+.SYNOPSIS
+    Checks whether the SharePoint Sites and Teams/Channels/Members caches exist and are fresh.
+.DESCRIPTION
+    Run-Assessment.ps1 calls this before doing any tenant work and stops the whole run if either
+    cache is missing or older than MaxAgeDays - both files are produced by the standalone
+    Update-SharePointSitesCache.ps1 / Update-TeamsChannelsCache.ps1 scripts, which walk the
+    entire tenant (the slow part) once so every VBU's Discovery run can just read and
+    locally filter the result instead of repeating that walk every time.
+#>
+function Test-DiscoveryCachePrereqs {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$SharePointAdminUrl,
+        [Parameter(Mandatory)][string]$CacheRoot,
+        [int]$MaxAgeDays = 7
+    )
+
+    $folder = Get-DiscoveryCacheFolder -SharePointAdminUrl $SharePointAdminUrl -CacheRoot $CacheRoot
+    $checks = @(
+        @{ Name = 'SharePoint Sites (+ OneDrive)'; FileName = 'SharePointSites.json';        Script = 'Update-SharePointSitesCache.ps1' }
+        @{ Name = 'Teams Channels & Members';      FileName = 'TeamsChannelsMembers.json';   Script = 'Update-TeamsChannelsCache.ps1' }
+    )
+
+    $problems = [System.Collections.Generic.List[string]]::new()
+    foreach ($c in $checks) {
+        $path = Join-Path $folder $c.FileName
+        if (-not (Test-Path $path)) {
+            $problems.Add("$($c.Name) cache not found. Run: VGMigrations\$($c.Script) -SharePointAdminUrl `"$SharePointAdminUrl`"")
+            continue
+        }
+        $ageDays = ((Get-Date) - (Get-Item $path).LastWriteTime).TotalDays
+        if ($ageDays -gt $MaxAgeDays) {
+            $problems.Add("$($c.Name) cache is $([math]::Floor($ageDays)) day(s) old (max $MaxAgeDays). Run: VGMigrations\$($c.Script) -SharePointAdminUrl `"$SharePointAdminUrl`"")
+        }
+    }
+
+    [PSCustomObject]@{
+        IsFresh     = ($problems.Count -eq 0)
+        CacheFolder = $folder
+        Problems    = $problems.ToArray()
+    }
+}
+
+<#
+.SYNOPSIS
     Records a collector's status and persists CollectorStatus.json.
 .DESCRIPTION
     Updates the module-scoped status table with the status, optional message, elapsed
@@ -294,6 +358,8 @@ Export-ModuleMember -Function @(
     'Format-Duration'
     'Write-ProgressLine'
     'Write-SectionHeader'
+    'Get-DiscoveryCacheFolder'
+    'Test-DiscoveryCachePrereqs'
 ) -Variable @(
     'PREFIX_OK'
     'PREFIX_WARN'

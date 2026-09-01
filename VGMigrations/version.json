@@ -1,7 +1,18 @@
 {
-  "version": "2.9.116",
+  "version": "2.9.117",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.117",
+      "date": "2026-09-01",
+      "changes": [
+        "Discovery no longer walks the whole tenant for SharePoint sites or Teams/channels/members on every run - both are now cached. Added Update-SharePointSitesCache.ps1 (Get-SPOSite -Limit All incl. OneDrive, once) and Update-TeamsChannelsCache.ps1 (every Team, every channel incl. private/shared membership, once, tenant-wide) - each writes a JSON cache under Assessment\\Cache\\<tenant>\\, keyed by SPO Admin URL so every VBU split from the same source tenant reuses it",
+        "Run-Assessment.ps1 now reads both from cache instead of live: SharePoint.psm1's Get-SPOSiteData/Get-OneDriveData and TeamMemberships.psm1's Invoke-TeamMembershipCollection filter the cached JSON locally to the VBU in scope, rather than re-querying SPO/Graph tenant-wide every time. As a direct result, Discovery no longer opens a SharePoint Online connection at all (SharePoint.psm1's SPO module import - the source of the v2.9.116 crash - is now only needed by the standalone cache script, not by a normal Discovery run)",
+        "Run-Assessment.ps1 refuses to start if either cache is missing or more than 7 days old for the given SharePointAdminUrl (Test-DiscoveryCachePrereqs, new in Common.psm1) - prints exactly which cache is stale/missing and the command to refresh it, then stops before any tenant connection is made. -SkipTeamMemberships still exists as a plain opt-out but is no longer needed for speed now that the walk itself is cached",
+        "MigrationToolkit-Web: Added 'Refresh Discovery Cache' under the Discovery sidebar section - one screen with a shared SPO Admin URL field and a Refresh button each for the SharePoint Sites and Teams Channels caches, streaming their output the same way every other panel does",
+        "Not yet run against a live tenant - the cache read/write logic was verified with fixture JSON (missing/stale/fresh gate behaviour, VBU-domain filtering, cached Team/channel/member matching), but the two new standalone scripts' live SPO/Graph connections haven't been exercised for real yet"
+      ]
+    },
     {
       "version": "2.9.116",
       "date": "2026-09-01",
