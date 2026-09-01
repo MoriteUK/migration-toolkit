@@ -373,8 +373,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       const logOutput = document.getElementById('discoveryLogOutput');
       logSection.classList.remove('hidden');
       logOutput.textContent = `Starting discovery for: ${domainsToRun.join(', ')}\n`;
-      if (vbuId) logOutput.textContent += `VBU ID: ${vbuId}\n`;
-      if (searchTerm) logOutput.textContent += `VBU Search Term: ${searchTerm}\n`;
+      if (domainsToRun.length === 1) {
+        if (vbuId) logOutput.textContent += `VBU ID: ${vbuId}\n`;
+        if (searchTerm) logOutput.textContent += `VBU Search Term: ${searchTerm}\n`;
+      } else {
+        logOutput.textContent += `VBU ID / Search Term: derived per-domain from Settings (domains.json) / domain prefix\n`;
+      }
       logOutput.textContent += `Options: SkipPP=${skipPP}\n`;
       logOutput.textContent += `Output: ${outputFolder}\n\n`;
 
@@ -385,21 +389,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         logOutput.scrollTop = logOutput.scrollHeight;
       });
 
-      let lastResult;
+      let result;
       try {
-        for (const domain of domainsToRun) {
-          if (domainsToRun.length > 1) logOutput.textContent += `\n=== ${domain} ===\n`;
-          const args = ['-Domain', domain, '-OutputPath', outputFolder];
-          // VBUSearchTerm defaults to the domain's first label inside Run-Assessment.ps1 when
-          // omitted - only pass an explicit override when the field isn't blank, so a
-          // multi-domain batch doesn't reuse one domain's search term for every other domain.
+        if (domainsToRun.length === 1) {
+          const args = ['-Domain', domainsToRun[0], '-OutputPath', outputFolder];
           if (searchTerm) args.push('-VBUSearchTerm', searchTerm);
           if (vbuId) args.push('-VBUId', vbuId);
           if (skipPP) args.push('-SkipPowerPlatform');
-          lastResult = await runStreamingScript('Assessment/Run-Assessment.ps1', args);
-          if (!lastResult.success && !continueOnError) break;
+          result = await runStreamingScript('Assessment/Run-Assessment.ps1', args);
+        } else {
+          // A single Run-MultiAssessment.ps1 call, not one Run-Assessment.ps1 process per
+          // domain — every domain here is almost always the same source tenant, so this signs
+          // into SharePoint/Exchange/Graph once for the whole batch instead of once per domain
+          // (spawning a separate process per domain, as this used to, can't reuse a session
+          // across processes no matter what the underlying script does).
+          const args = ['-Domains', ...domainsToRun, '-OutputPath', outputFolder];
+          if (skipPP) args.push('-SkipPowerPlatform');
+          if (continueOnError) args.push('-ContinueOnError');
+          result = await runStreamingScript('Assessment/Run-MultiAssessment.ps1', args);
         }
-        logOutput.textContent += lastResult?.success ? '\n✓ Discovery complete\n' : `\n✗ Failed (exit ${lastResult?.code})\n`;
+        logOutput.textContent += result?.success ? '\n✓ Discovery complete\n' : `\n✗ Failed (exit ${result?.code})\n`;
       } catch (err) {
         logOutput.textContent += `\n✗ Error: ${err.message}\n`;
       } finally {

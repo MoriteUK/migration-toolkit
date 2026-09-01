@@ -1,7 +1,16 @@
 {
-  "version": "2.9.101",
+  "version": "2.9.102",
   "releaseDate": "2026-09-01",
   "changelog": [
+    {
+      "version": "2.9.102",
+      "date": "2026-09-01",
+      "changes": [
+        "Assessment engine: multi-domain runs no longer sign into SharePoint/Exchange/Graph once per domain - every domain in a batch is almost always the same source tenant, so re-authenticating per domain was pure friction. Run-Assessment.ps1 gained -KeepSession (reuses an already-live session instead of reconnecting, and skips sign-out at the end); Run-MultiAssessment.ps1 now passes it for every domain and disconnects once after the whole batch finishes",
+        "MigrationToolkit-Web: the Discovery panel's own 'Multiple domains' mode previously looped, spawning one separate pwsh.exe process per domain - no session could ever be reused there regardless of what the underlying script did, since each process starts cold. It now makes a single Run-MultiAssessment.ps1 call for the whole list instead, gaining the same one-sign-in-per-batch behavior",
+        "Power Platform is unaffected by either change - its scan is a separate child process with its own sign-in per domain regardless, since the scan itself is domain-scoped"
+      ]
+    },
     {
       "version": "2.9.101",
       "date": "2026-09-01",

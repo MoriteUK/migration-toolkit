@@ -8,10 +8,13 @@
     contoso.com - the same convention search-domain.ps1 used internally as $DomainPrefix),
     then calls Run-Assessment.ps1 in-process per domain with every prompt bypassed.
 
-    Unlike search-domain.ps1's batch mode, sessions are not reused across domains - each
-    Run-Assessment.ps1 call connects and disconnects independently in its own finally block.
-    Slower than the legacy batch mode, but correct; each domain gets a clean module/session
-    state instead of carrying over whatever the previous domain left behind.
+    SharePoint/Exchange/Graph sign-in happens once for the whole batch, not once per domain -
+    every domain assessed here is almost always the same source tenant (a VBU domain is just a
+    scoping filter within it, not a separate tenant), so re-authenticating per domain was pure
+    friction. Each Run-Assessment.ps1 call runs with -KeepSession, which reuses an already-live
+    session instead of reconnecting; this script disconnects everything once after the whole
+    batch finishes. Power Platform is the one exception - its scan is a separate child process
+    with its own sign-in per domain regardless, since the scan itself is domain-scoped.
 .PARAMETER Domains
     Domain names to assess, one assessment per domain, in order.
 .PARAMETER ContinueOnError
@@ -74,6 +77,7 @@ foreach ($domain in $Domains) {
         VBUId             = $vbuId
         SkipPowerPlatform = [bool]$SkipPowerPlatform
         DeleteRawJson     = $false
+        KeepSession       = $true
     }
     if ($SharePointAdminUrl) { $params.SharePointAdminUrl = $SharePointAdminUrl }
     if ($OutputPath)         { $params.OutputPath         = $OutputPath }
@@ -94,3 +98,10 @@ foreach ($domain in $Domains) {
 
 Write-Host ''
 Write-Host "Batch complete: $ok succeeded, $fail failed" -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Yellow' })
+
+# Each domain ran with -KeepSession, so the shared SPO/Exchange/Graph session is still live -
+# close it once now that the whole batch is done, instead of leaving it dangling.
+try { Disconnect-MgGraph              -ErrorAction SilentlyContinue } catch {}
+try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+try { Disconnect-SPOService            -ErrorAction SilentlyContinue } catch {}
+$global:AssessmentSpoConnected = $false

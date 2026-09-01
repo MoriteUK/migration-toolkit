@@ -33,6 +33,12 @@
 .PARAMETER DeleteRawJson
     Deletes the Raw\*.json files after the workbook and compatibility CSVs are written.
     Defaults to keeping them when running non-interactively.
+.PARAMETER KeepSession
+    Skips signing out of SharePoint/Exchange/Graph at the end of the run, and skips signing
+    back in if this process is already connected. Used by Run-MultiAssessment.ps1 so a batch
+    of domains against the same source tenant only prompts for sign-in once instead of once
+    per domain - Power Platform is unaffected (its own child-process sign-in still runs per
+    domain regardless, since that scan itself is domain-scoped).
 #>
 
 [CmdletBinding()]
@@ -44,7 +50,8 @@ param(
     [switch]$SkipGraph,
     [switch]$SkipPowerPlatform,
     [string]$OutputPath,
-    [switch]$DeleteRawJson
+    [switch]$DeleteRawJson,
+    [switch]$KeepSession
 )
 
 # Any of these being supplied means we were launched by the GUI/Electron app, not typed by
@@ -219,22 +226,36 @@ Test-Prerequisites -Context $ctx
 Write-SectionHeader 'Authentication'
 
 # SPO must connect first - Exchange and Graph WAM tokens conflict with SPO auth if they connect before it
+# No native "am I connected" query exists for Connect-SPOService, so KeepSession batches track
+# it via a process-wide flag instead - reliable since the underlying session really does live at
+# the process level (Run-MultiAssessment.ps1 re-invokes this script with '&' in the same process).
 if (-not $ctx.SkipSharePoint) {
-    Write-Host ($PREFIX_INFO + 'Connecting to SharePoint Online...') -ForegroundColor DarkGray
-    try {
-        Connect-SPOService -Url $ctx.SPOAdminUrl -ErrorAction Stop
-        Write-Host ($PREFIX_OK + 'SharePoint Online connected') -ForegroundColor Green
+    if ($KeepSession -and $global:AssessmentSpoConnected) {
+        Write-Host ($PREFIX_OK + 'SharePoint Online already connected (reusing session)') -ForegroundColor Green
     }
-    catch {
-        Write-Host ($PREFIX_FAIL + 'SPO connection failed: ' + $_.Exception.Message) -ForegroundColor Red
-        Write-Host ($PREFIX_WARN + 'SharePoint collection will be skipped') -ForegroundColor Yellow
-        $ctx.SkipSharePoint = $true
+    else {
+        Write-Host ($PREFIX_INFO + 'Connecting to SharePoint Online...') -ForegroundColor DarkGray
+        try {
+            Connect-SPOService -Url $ctx.SPOAdminUrl -ErrorAction Stop
+            Write-Host ($PREFIX_OK + 'SharePoint Online connected') -ForegroundColor Green
+            $global:AssessmentSpoConnected = $true
+        }
+        catch {
+            Write-Host ($PREFIX_FAIL + 'SPO connection failed: ' + $_.Exception.Message) -ForegroundColor Red
+            Write-Host ($PREFIX_WARN + 'SharePoint collection will be skipped') -ForegroundColor Yellow
+            $ctx.SkipSharePoint = $true
+        }
     }
 }
 
-Write-Host ($PREFIX_INFO + 'Connecting to Exchange Online...') -ForegroundColor DarkGray
-Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -ErrorAction Stop
-Write-Host ($PREFIX_OK + 'Exchange Online connected') -ForegroundColor Green
+if ($KeepSession -and (Get-ConnectionInformation | Where-Object { $_.State -eq 'Connected' })) {
+    Write-Host ($PREFIX_OK + 'Exchange Online already connected (reusing session)') -ForegroundColor Green
+}
+else {
+    Write-Host ($PREFIX_INFO + 'Connecting to Exchange Online...') -ForegroundColor DarkGray
+    Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -ErrorAction Stop
+    Write-Host ($PREFIX_OK + 'Exchange Online connected') -ForegroundColor Green
+}
 
 $skipGraphSession = [bool]$SkipGraph
 $graphStart = Get-Date
@@ -245,6 +266,9 @@ if (-not $skipGraphSession -and -not $script:Unattended) {
 }
 if ($skipGraphSession) {
     Write-Host ($PREFIX_SKIP + 'Graph collection will be skipped') -ForegroundColor Yellow
+}
+elseif ($KeepSession -and (Get-MgContext)) {
+    Write-Host ($PREFIX_OK + 'Microsoft Graph already connected (reusing session)') -ForegroundColor Green
 }
 else {
     Write-Host ($PREFIX_INFO + 'Connecting to Microsoft Graph...') -ForegroundColor DarkGray
@@ -382,9 +406,12 @@ catch {
     Write-Host ($PREFIX_FAIL + 'Assessment stopped: ' + $_.Exception.Message) -ForegroundColor Red
 }
 finally {
-    try { Disconnect-MgGraph              -ErrorAction SilentlyContinue } catch {}
-    try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue } catch {}
-    try { Disconnect-SPOService           -ErrorAction SilentlyContinue } catch {}
+    if (-not $KeepSession) {
+        try { Disconnect-MgGraph              -ErrorAction SilentlyContinue } catch {}
+        try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+        try { Disconnect-SPOService            -ErrorAction SilentlyContinue } catch {}
+        $global:AssessmentSpoConnected = $false
+    }
 }
 
 # -----------------------------------------------------------------------
