@@ -1,7 +1,17 @@
 {
-  "version": "2.9.124",
+  "version": "2.9.125",
   "releaseDate": "2026-09-02",
   "changelog": [
+    {
+      "version": "2.9.125",
+      "date": "2026-09-02",
+      "changes": [
+        "Refresh Discovery Cache: added a '🔁 Refresh Everything' button that runs the SharePoint Sites, Teams Channels, and (new) Distribution Groups cache refreshes one after another in a single shared log panel, instead of clicking each separately",
+        "Added a third tenant-wide cache: Update-DistributionGroupsCache.ps1 walks every distribution group and mail-enabled security group, with members, via Exchange Online, and writes DistributionGroupsCache.json - Assessment\\Modules\\Exchange.psm1's Get-DistributionGroupData now reads and locally filters that cache when it's present and under 14 days old, instead of repeating a live Get-DistributionGroup + per-group Get-DistributionGroupMember walk on every VBU's Discovery run",
+        "Unlike the SharePoint/Teams caches, the Distribution Groups cache is optional, not a hard prerequisite - Run-Assessment.ps1 does not refuse to start without it; Get-DistributionGroupData falls straight back to the original live per-VBU query if the cache is missing or stale, so existing Discovery runs are unaffected until this is refreshed",
+        "Not yet exercised against a live tenant - the cache-read/filter logic mirrors the already-proven SharePoint Sites pattern, but the new Update-DistributionGroupsCache.ps1 script's live Exchange Online connection hasn't been run for real yet"
+      ]
+    },
     {
       "version": "2.9.124",
       "date": "2026-09-02",

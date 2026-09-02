@@ -3474,6 +3474,88 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── Discovery - Refresh Distribution Groups Cache ────────────────────────────
+  const refreshDLsCacheBtn = document.getElementById('refreshDLsCacheBtn');
+  if (refreshDLsCacheBtn) {
+    refreshDLsCacheBtn.addEventListener('click', async () => {
+      const url = document.getElementById('cacheSharePointAdminUrl').value.trim();
+      if (!url) { alert('Please enter the SPO Admin URL (used here only as the cache key).'); return; }
+
+      const logSection = document.getElementById('refreshDLsCacheLog');
+      const logOutput  = document.getElementById('refreshDLsCacheLogPre');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      refreshDLsCacheBtn.disabled = true;
+      refreshDLsCacheBtn.textContent = 'Running…';
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('Update-DistributionGroupsCache.ps1', ['-SharePointAdminUrl', url]);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        refreshDLsCacheBtn.disabled = false;
+        refreshDLsCacheBtn.textContent = '▶ Refresh Distribution Groups Cache';
+      }
+    });
+  }
+
+  // ── Discovery - Refresh Everything (SharePoint → Teams → Distribution Groups) ──
+  const refreshAllCachesBtn = document.getElementById('refreshAllCachesBtn');
+  if (refreshAllCachesBtn) {
+    refreshAllCachesBtn.addEventListener('click', async () => {
+      const url = document.getElementById('cacheSharePointAdminUrl').value.trim();
+      if (!url) { alert('Please enter the SPO Admin URL.'); return; }
+
+      const logSection = document.getElementById('refreshAllCachesLog');
+      const logOutput  = document.getElementById('refreshAllCachesLogPre');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      const allButtons = [refreshAllCachesBtn, refreshSpoSitesCacheBtn, refreshTeamsChannelsCacheBtn, refreshDLsCacheBtn]
+        .filter(Boolean);
+      allButtons.forEach((b) => { b.disabled = true; });
+      refreshAllCachesBtn.textContent = 'Running…';
+
+      const steps = [
+        { script: 'Update-SharePointSitesCache.ps1',    label: 'SharePoint Sites (+ OneDrive)' },
+        { script: 'Update-TeamsChannelsCache.ps1',       label: 'Teams Channels & Members' },
+        { script: 'Update-DistributionGroupsCache.ps1',  label: 'Distribution Groups & Members' }
+      ];
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+
+      let allOk = true;
+      try {
+        for (const step of steps) {
+          logOutput.textContent += `\n=== ${step.label} ===\n`;
+          logOutput.scrollTop = logOutput.scrollHeight;
+          try {
+            const result = await runStreamingScript(step.script, ['-SharePointAdminUrl', url]);
+            if (!result.success) { allOk = false; logOutput.textContent += `\n✗ ${step.label} failed (exit ${result.code})\n`; }
+          } catch (err) {
+            allOk = false;
+            logOutput.textContent += `\n✗ ${step.label} error: ${err.message || err}\n`;
+          }
+        }
+        logOutput.textContent += allOk ? '\n✓ All caches refreshed\n' : '\n✗ Finished with errors — see above\n';
+      } finally {
+        window.electronAPI.offPsOutput();
+        allButtons.forEach((b) => { b.disabled = false; });
+        refreshAllCachesBtn.textContent = '🔁 Refresh Everything';
+      }
+    });
+  }
+
   // ── Migration - Create Target DLs ────────────────────────────────────────────
   const newDgsRunBtn = document.getElementById('newDgsRunBtn');
   if (newDgsRunBtn) {

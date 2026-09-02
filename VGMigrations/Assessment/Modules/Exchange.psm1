@@ -147,15 +147,13 @@ function Get-MailContactData {
 .SYNOPSIS
     Retrieves VBU-scoped distribution groups with full membership, split into DGs and mail-enabled security groups.
 #>
-function Get-DistributionGroupData {
-    param([PSCustomObject]$Context)
+function Build-DistributionGroupRecords {
+    param([Parameter(Mandatory)][array]$RawGroups)
 
-    $t    = $Context.VBUSearchTerm
-    $raw  = @(Get-DistributionGroup -Filter "EmailAddresses -like '*$t*'" -ResultSize Unlimited -ErrorAction Stop)
     $dgs  = [System.Collections.Generic.List[PSCustomObject]]::new()
     $mesg = [System.Collections.Generic.List[PSCustomObject]]::new()
 
-    foreach ($dg in $raw) {
+    foreach ($dg in $RawGroups) {
         # Members captured here (not just counted) so New-DistributionGroups.ps1 can recreate
         # membership in the destination tenant straight from this collector's output - no
         # separate live re-query needed.
@@ -190,6 +188,93 @@ function Get-DistributionGroupData {
     }
 
     return @{ DGs = $dgs.ToArray(); MailEnabledSecurityGroups = $mesg.ToArray() }
+}
+
+<#
+.SYNOPSIS
+    Builds every distribution group + mail-enabled security group, tenant-wide, with members -
+    the tenant-wide walk behind Update-DistributionGroupsCache.ps1's cache file. Not VBU-scoped.
+#>
+function Get-AllDistributionGroupsWithMembers {
+    $raw = @(Get-DistributionGroup -ResultSize Unlimited -ErrorAction Stop)
+    return Build-DistributionGroupRecords -RawGroups $raw
+}
+
+<#
+.SYNOPSIS
+    Writes the tenant-wide distribution-group cache (DistributionGroupsCache.json) that
+    Get-DistributionGroupData reads from when a fresh cache is available, instead of repeating
+    the Get-DistributionGroup + per-group Get-DistributionGroupMember walk on every VBU's run.
+#>
+function Update-DistributionGroupsCacheFile {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$CacheFolder)
+
+    Write-Host ($PREFIX_INFO + 'Enumerating all distribution groups (incl. members) tenant-wide...') -ForegroundColor DarkGray
+    $result = Get-AllDistributionGroupsWithMembers
+    Write-ProgressLine -Label 'Distribution Groups (tenant-wide)'          -Count $result.DGs.Count
+    Write-ProgressLine -Label 'Mail-Enabled Security Groups (tenant-wide)' -Count $result.MailEnabledSecurityGroups.Count
+
+    New-Item -ItemType Directory -Path $CacheFolder -Force | Out-Null
+    $cachePath = Join-Path $CacheFolder 'DistributionGroupsCache.json'
+    [PSCustomObject]@{
+        DistributionGroups        = $result.DGs
+        MailEnabledSecurityGroups = $result.MailEnabledSecurityGroups
+    } | ConvertTo-Json -Depth 10 | Set-Content -Path $cachePath -Encoding UTF8
+    Write-Host ($PREFIX_OK + "DistributionGroupsCache.json cache written: $cachePath") -ForegroundColor Green
+
+    return $result.DGs.Count + $result.MailEnabledSecurityGroups.Count
+}
+
+<#
+.SYNOPSIS
+    Filters the cached tenant-wide distribution-group list down to one VBU's groups.
+#>
+function Get-DistributionGroupDataFromCache {
+    param([PSCustomObject]$Context, [Parameter(Mandatory)][string]$CacheFolder)
+
+    $t      = $Context.VBUSearchTerm
+    $domain = $Context.VBUDomain
+    $cached = Import-AssessmentJson -FileName 'DistributionGroupsCache.json' -RawPath $CacheFolder
+
+    $matchesVbu = {
+        param($g)
+        ($g.PrimarySmtpAddress -like "*$t*") -or ($g.PrimarySmtpAddress -like "*$domain*") -or
+        ($g.EmailAddresses     -like "*$t*") -or ($g.EmailAddresses     -like "*$domain*")
+    }
+
+    $dgs  = @(@($cached.DistributionGroups)        | Where-Object $matchesVbu)
+    $mesg = @(@($cached.MailEnabledSecurityGroups)  | Where-Object $matchesVbu)
+
+    return @{ DGs = $dgs; MailEnabledSecurityGroups = $mesg }
+}
+
+<#
+.SYNOPSIS
+    Retrieves this VBU's distribution groups and mail-enabled security groups with members.
+.DESCRIPTION
+    Reads and locally filters DistributionGroupsCache.json when -CacheFolder is given and that
+    cache file exists (see Update-DistributionGroupsCache.ps1) - no live Exchange Online query at
+    all in that case. Falls back to the original live, VBU-filtered Get-DistributionGroup call
+    when no cache is available yet, so this stays a soft/optional speed-up rather than a new hard
+    prerequisite like the SharePoint/Teams caches.
+#>
+function Get-DistributionGroupData {
+    param([PSCustomObject]$Context, [string]$CacheFolder, [int]$MaxCacheAgeDays = 14)
+
+    $cachePath = if ($CacheFolder) { Join-Path $CacheFolder 'DistributionGroupsCache.json' } else { $null }
+    if ($cachePath -and (Test-Path $cachePath)) {
+        $ageDays = ((Get-Date) - (Get-Item $cachePath).LastWriteTime).TotalDays
+        if ($ageDays -le $MaxCacheAgeDays) {
+            Write-Host ($PREFIX_INFO + 'Reading distribution groups from cache...') -ForegroundColor DarkGray
+            return Get-DistributionGroupDataFromCache -Context $Context -CacheFolder $CacheFolder
+        }
+        Write-Host ($PREFIX_WARN + "DistributionGroupsCache.json is $([math]::Floor($ageDays)) day(s) old (max $MaxCacheAgeDays) - querying live instead. Refresh it via Update-DistributionGroupsCache.ps1.") -ForegroundColor Yellow
+    }
+
+    $t   = $Context.VBUSearchTerm
+    $raw = @(Get-DistributionGroup -Filter "EmailAddresses -like '*$t*'" -ResultSize Unlimited -ErrorAction Stop)
+    return Build-DistributionGroupRecords -RawGroups $raw
 }
 
 <#
@@ -361,7 +446,7 @@ function Get-JournalRuleData {
 #>
 function Invoke-ExchangeCollection {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][PSCustomObject]$Context)
+    param([Parameter(Mandatory)][PSCustomObject]$Context, [string]$CacheFolder)
 
     $start = Get-Date
     Write-SectionHeader 'Exchange Online'
@@ -385,7 +470,7 @@ function Invoke-ExchangeCollection {
         Write-ProgressLine -Label 'Mail Contacts' -Count $contacts.Count
 
         Write-Host ($PREFIX_INFO + 'Collecting distribution groups...') -ForegroundColor DarkGray
-        $dgResult = Get-DistributionGroupData -Context $Context
+        $dgResult = Get-DistributionGroupData -Context $Context -CacheFolder $CacheFolder
         Write-ProgressLine -Label 'Distribution Groups'          -Count $dgResult.DGs.Count
         Write-ProgressLine -Label 'Mail-Enabled Security Groups' -Count $dgResult.MailEnabledSecurityGroups.Count
 
@@ -466,4 +551,4 @@ function Invoke-ExchangeCollection {
 # Exports
 # -----------------------------------------------------------------------
 
-Export-ModuleMember -Function 'Invoke-ExchangeCollection'
+Export-ModuleMember -Function 'Invoke-ExchangeCollection', 'Update-DistributionGroupsCacheFile'

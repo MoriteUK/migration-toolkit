@@ -329,9 +329,11 @@ try {
         $adResult = New-CollectorResult -Success $false -ErrorMessage $_.Exception.Message
     }
 
-    # Exchange Online - non-critical
+    # Exchange Online - non-critical. Distribution group collection reads from
+    # DistributionGroupsCache.json when present/fresh (Update-DistributionGroupsCache.ps1) instead
+    # of a live per-VBU query - falls back to live automatically if that cache hasn't been built yet.
     try {
-        $exResult = Invoke-ExchangeCollection -Context $ctx
+        $exResult = Invoke-ExchangeCollection -Context $ctx -CacheFolder $cacheCheck.CacheFolder
     }
     catch {
         Write-Host ($PREFIX_FAIL + 'Exchange collection error: ' + $_.Exception.Message) -ForegroundColor Red
