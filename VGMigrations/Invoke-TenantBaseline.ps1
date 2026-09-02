@@ -47,6 +47,79 @@ function Write-Log {
     }
 }
 
+# MSAL/Graph SDK auth failures (e.g. "InteractiveBrowserCredential authentication failed: ")
+# routinely have an EMPTY top-level Exception.Message — the actual reason (AADSTS code, MSAL
+# error) is buried in ErrorDetails or a chain of InnerExceptions. $_.Exception.Message alone
+# was logging that blank message, hiding the real cause. This walks the whole chain.
+#
+# Separately, MSAL/WAM broker diagnostics are known (Get-TenantLicenseReport.ps1 hit this too)
+# to bypass the exception object ENTIRELY and write straight to .NET's Console.Out/Error — so
+# even the walk above can still come up empty. Start-ConsoleCapture installs a tee around
+# [Console]::Out/Error (forwards everything to the real console so live output is unaffected,
+# while also mirroring it into a buffer); Get-FullErrorMessage appends whatever landed in that
+# buffer since the last Reset-ConsoleCapture, so a genuinely blank exception still shows a reason.
+function Add-ConsoleTeeType {
+    if (-not ('MigrationToolkit.ConsoleTeeWriter' -as [type])) {
+        Add-Type -TypeDefinition @"
+using System;
+using System.IO;
+using System.Text;
+
+namespace MigrationToolkit {
+    public class ConsoleTeeWriter : TextWriter {
+        private TextWriter _inner;
+        private StringBuilder _capture;
+        public ConsoleTeeWriter(TextWriter inner, StringBuilder capture) {
+            _inner = inner;
+            _capture = capture;
+        }
+        public override Encoding Encoding { get { return _inner.Encoding; } }
+        public override void Write(char value) { _inner.Write(value); _capture.Append(value); }
+        public override void Write(string value) { _inner.Write(value); _capture.Append(value); }
+        public override void WriteLine(string value) { _inner.WriteLine(value); _capture.Append(value).Append(Environment.NewLine); }
+    }
+}
+"@
+    }
+}
+
+function Start-ConsoleCapture {
+    Add-ConsoleTeeType
+    $script:ConsoleCaptureBuffer  = [System.Text.StringBuilder]::new()
+    $script:ConsoleCaptureOrigOut = [Console]::Out
+    $script:ConsoleCaptureOrigErr = [Console]::Error
+    [Console]::SetOut([MigrationToolkit.ConsoleTeeWriter]::new($script:ConsoleCaptureOrigOut, $script:ConsoleCaptureBuffer))
+    [Console]::SetError([MigrationToolkit.ConsoleTeeWriter]::new($script:ConsoleCaptureOrigErr, $script:ConsoleCaptureBuffer))
+}
+
+function Reset-ConsoleCapture {
+    if ($script:ConsoleCaptureBuffer) { $script:ConsoleCaptureBuffer.Clear() | Out-Null }
+}
+
+function Stop-ConsoleCapture {
+    if ($script:ConsoleCaptureOrigOut) { [Console]::SetOut($script:ConsoleCaptureOrigOut) }
+    if ($script:ConsoleCaptureOrigErr) { [Console]::SetError($script:ConsoleCaptureOrigErr) }
+}
+
+function Get-FullErrorMessage {
+    param($ErrorRecord)
+    $parts = [System.Collections.Generic.List[string]]::new()
+    if ($ErrorRecord.ErrorDetails.Message) { $parts.Add($ErrorRecord.ErrorDetails.Message) }
+    $ex = $ErrorRecord.Exception
+    while ($ex) {
+        if ($ex.Message) { $parts.Add($ex.Message) }
+        $ex = $ex.InnerException
+    }
+    $parts = @($parts | Where-Object { $_ -and $_.Trim() } | Select-Object -Unique)
+    $msg = if ($parts.Count -eq 0) { $ErrorRecord.Exception.GetType().FullName } else { ($parts -join ' | ') }
+
+    if ($script:ConsoleCaptureBuffer) {
+        $swallowed = $script:ConsoleCaptureBuffer.ToString().Trim()
+        if ($swallowed) { $msg = "$msg — console output: $($swallowed -replace '[\r\n]+', ' ')" }
+    }
+    return $msg
+}
+
 $global:summary = [System.Collections.Generic.List[object]]::new()
 function Add-Summary {
     param([int]$Num, [string]$Name, [string]$Result)
@@ -113,7 +186,7 @@ function Ensure-Module {
             $newMod = Get-Module -ListAvailable -Name $ModuleName | Sort-Object Version -Descending | Select-Object -First 1
             Write-Log "[OK] $ModuleName installed — version $($newMod.Version)" "OK"
         } catch {
-            Write-Log "[ERROR] Failed to install ${ModuleName}: $($_.Exception.Message)" "ERROR"
+            Write-Log "[ERROR] Failed to install ${ModuleName}: $(Get-FullErrorMessage $_)" "ERROR"
             $global:logContent -join "`n" | Out-File -FilePath $LogPath -Encoding utf8
             return
         }
@@ -145,7 +218,7 @@ foreach ($graphSubmodule in @('Microsoft.Graph.Authentication','Microsoft.Graph.
         }
         Import-Module -Name $graphSubmodule -RequiredVersion $GraphPinnedVersion -Force -ErrorAction Stop
     } catch {
-        Write-Log "[ERROR] Could not load pinned ${graphSubmodule} ${GraphPinnedVersion}: $($_.Exception.Message)" "ERROR"
+        Write-Log "[ERROR] Could not load pinned ${graphSubmodule} ${GraphPinnedVersion}: $(Get-FullErrorMessage $_)" "ERROR"
         $global:logContent -join "`n" | Out-File -FilePath $LogPath -Encoding utf8
         return
     }
@@ -212,7 +285,7 @@ try {
             return
         }
     } else {
-        Write-Log "[ERROR] Exception during Connect-MgGraph: $($_.Exception.Message)" "ERROR"
+        Write-Log "[ERROR] Exception during Connect-MgGraph: $(Get-FullErrorMessage $_)" "ERROR"
         $global:logContent -join "`n" | Out-File -FilePath $LogPath -Encoding utf8
         return
     }
@@ -225,6 +298,7 @@ if (-not $context) {
     return
 }
 Write-Log "[OK] Connected to Graph as: $($context.Account) (tenant $($context.TenantId))" "OK"
+Start-ConsoleCapture
 
 # --- Rename the log file to include the tenant name, now that we know it ---
 try {
@@ -241,6 +315,7 @@ Write-Log "[INFO] Log file for this run: $LogPath" "INFO"
 # STEP 2 — Authorization Policy (Entra ID user settings)
 # =========================================================================
 Write-Host "`n=== Step 2: Configure Entra ID User Settings ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
     $authPolicyUri = "https://graph.microsoft.com/v1.0/policies/authorizationPolicy"
     $currentAuthPolicy = Invoke-MgGraphRequest -Method GET -Uri $authPolicyUri
@@ -280,14 +355,15 @@ try {
         Add-Summary 2 "Configure_EntraID_User_Settings" "Success"
     }
 } catch {
-    Write-Log "[ERROR] Step 2 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 2 "Configure_EntraID_User_Settings" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 2 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 2 "Configure_EntraID_User_Settings" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # STEP 3 — Admin User Consent Workflow
 # =========================================================================
 Write-Host "`n=== Step 3: Configure Admin User Consent Workflow ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
     $reviewerGroupName         = "Admin Consent Reviewers"
     $reviewerGroupMailNickname = "AdminConsentReviewers"
@@ -353,14 +429,15 @@ try {
         }
     }
 } catch {
-    Write-Log "[ERROR] Step 3 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 3 "Configure_Admin_User_Consent_Workflow" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 3 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 3 "Configure_Admin_User_Consent_Workflow" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # STEP 4 — Intune MDM User Scope
 # =========================================================================
 Write-Host "`n=== Step 4: Set Intune MDM User Scope ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
     $uri = "https://graph.microsoft.com/beta/policies/mobileDeviceManagementPolicies"
     $response = Invoke-MgGraphRequest -Method GET -Uri $uri
@@ -380,21 +457,23 @@ try {
         Add-Summary 4 "Set_Intune_MDM_User_Scope" "Success"
     }
 } catch {
-    Write-Log "[ERROR] Step 4 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 4 "Set_Intune_MDM_User_Scope" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 4 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 4 "Set_Intune_MDM_User_Scope" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # STEP 5 — Dynamic Device Groups
 # =========================================================================
 Write-Host "`n=== Step 5: Create Dynamic Device Groups ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 function New-DynamicGroupIfMissing {
     param([string]$DisplayName, [string]$Description, [string]$MembershipRule)
+    Reset-ConsoleCapture
     $checkUri = "https://graph.microsoft.com/v1.0/groups?`$filter=displayName eq '$DisplayName'"
     try {
         $existing = (Invoke-MgGraphRequest -Method GET -Uri $checkUri).value
     } catch {
-        Write-Log "[ERROR] Step 5: Failed to check group '$DisplayName': $($_.Exception.Message)" "ERROR"
+        Write-Log "[ERROR] Step 5: Failed to check group '$DisplayName': $(Get-FullErrorMessage $_)" "ERROR"
         return "Error"
     }
     if ($existing) {
@@ -417,7 +496,7 @@ function New-DynamicGroupIfMissing {
         Write-Log "[OK] Step 5: Created group '$DisplayName'." "OK"
         return "Success"
     } catch {
-        Write-Log "[ERROR] Step 5: Failed to create '$DisplayName': $($_.Exception.Message)" "ERROR"
+        Write-Log "[ERROR] Step 5: Failed to create '$DisplayName': $(Get-FullErrorMessage $_)" "ERROR"
         return "Error"
     }
 }
@@ -448,8 +527,9 @@ if ($step5Results -contains "Error") {
 # STEP 6 — Block Personal Device Enrollment
 # =========================================================================
 Write-Host "`n=== Step 6: Block Personal Device Enrollment ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
-    $defaultConfig = Get-MgDeviceManagementDeviceEnrollmentConfiguration | Where-Object { $_.Id -like "*_DefaultPlatformRestrictions" }
+    $defaultConfig = Get-MgDeviceManagementDeviceEnrollmentConfiguration -ErrorAction Stop | Where-Object { $_.Id -like "*_DefaultPlatformRestrictions" }
     if (-not $defaultConfig) {
         Write-Log "[ERROR] Step 6: Default platform restrictions configuration not found." "ERROR"
         Add-Summary 6 "Block_Personal_Device_Enrollment" "Error: config not found"
@@ -483,14 +563,15 @@ try {
         }
     }
 } catch {
-    Write-Log "[ERROR] Step 6 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 6 "Block_Personal_Device_Enrollment" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 6 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 6 "Block_Personal_Device_Enrollment" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # STEP 7 — BitLocker Compliance Policy
 # =========================================================================
 Write-Host "`n=== Step 7: Deploy BitLocker Compliance Policy ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
     $policyDisplayName = "Enforce BitLocker Encryption"
     $existingPolicies = Get-MgDeviceManagementDeviceConfiguration | Where-Object { $_.displayName -eq $policyDisplayName }
@@ -519,14 +600,15 @@ try {
         Add-Summary 7 "Deploy_BitLocker_Compliance_Policy" "Success"
     }
 } catch {
-    Write-Log "[ERROR] Step 7 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 7 "Deploy_BitLocker_Compliance_Policy" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 7 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 7 "Deploy_BitLocker_Compliance_Policy" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # STEP 8 — Windows Compliance Policy
 # =========================================================================
 Write-Host "`n=== Step 8: Deploy Windows Compliance Policy ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
     $policyName = "Baseline Compliance Policy - Windows 10/11"
     $existingPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/beta/deviceManagement/deviceCompliancePolicies"
@@ -565,14 +647,15 @@ try {
         Add-Summary 8 "Deploy_Windows_Compliance_Policy" "Success"
     }
 } catch {
-    Write-Log "[ERROR] Step 8 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 8 "Deploy_Windows_Compliance_Policy" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 8 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 8 "Deploy_Windows_Compliance_Policy" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # STEP 9 — iOS App Protection Policy
 # =========================================================================
 Write-Host "`n=== Step 9: Configure iOS App Protection Policy ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
     $desiredPolicyName = "iOS App Protection Policy"
     $currentPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/deviceAppManagement/iosManagedAppProtections"
@@ -608,14 +691,15 @@ try {
         Add-Summary 9 "Configure_iOS_App_Protection_Policy" "Success"
     }
 } catch {
-    Write-Log "[ERROR] Step 9 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 9 "Configure_iOS_App_Protection_Policy" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 9 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 9 "Configure_iOS_App_Protection_Policy" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # STEP 10 — Android App Protection Policy
 # =========================================================================
 Write-Host "`n=== Step 10: Configure Android App Protection Policy ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
     $desiredPolicyName = "Android App Protection Policy"
     $currentPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/deviceAppManagement/androidManagedAppProtections"
@@ -651,14 +735,15 @@ try {
         Add-Summary 10 "Configure_Android_App_Protection_Policy" "Success"
     }
 } catch {
-    Write-Log "[ERROR] Step 10 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 10 "Configure_Android_App_Protection_Policy" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 10 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 10 "Configure_Android_App_Protection_Policy" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # STEP 11 — Conditional Access Policies
 # =========================================================================
 Write-Host "`n=== Step 11: Deploy Conditional Access Policies ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
     # GB is included for UK-based admins/users, but UK ISP traffic sometimes geolocates
     # to Dublin (IE) at the Microsoft/Azure network edge, so IE is trusted too — otherwise
@@ -734,8 +819,8 @@ try {
         Add-Summary 11 "Deploy_Conditional_Access_Policies" "Success ($createdCount created, $skippedCount already existed)"
     }
 } catch {
-    Write-Log "[ERROR] Step 11 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 11 "Deploy_Conditional_Access_Policies" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 11 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 11 "Deploy_Conditional_Access_Policies" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
@@ -768,7 +853,7 @@ try {
         }
     }
 } catch {
-    Write-Log "[ERROR] Could not connect to Exchange Online: $($_.Exception.Message). Steps 12 & 13 will be skipped." "ERROR"
+    Write-Log "[ERROR] Could not connect to Exchange Online: $(Get-FullErrorMessage $_). Steps 12 & 13 will be skipped." "ERROR"
     Add-Summary 12 "Enable_EOP_Default_Security_Policies" "Skipped (no EXO connection)"
     Add-Summary 13 "Configure_Exchange_Online_Settings" "Skipped (no EXO connection)"
     $AdminUPN = $null
@@ -792,7 +877,7 @@ if ($AdminUPN) {
         }
     } catch {
         if (Test-PresetNotFoundError $_) { $presetNotInitialized = $true; Write-Log "[WARN] Step 12: EOP preset rule never initialized in Defender portal." "WARN" }
-        else { Write-Log "[ERROR] Step 12 (EOP): $($_.Exception.Message)" "ERROR" }
+        else { Write-Log "[ERROR] Step 12 (EOP): $(Get-FullErrorMessage $_)" "ERROR" }
     }
 
     try {
@@ -805,7 +890,7 @@ if ($AdminUPN) {
         }
     } catch {
         if (Test-PresetNotFoundError $_) { $presetNotInitialized = $true; Write-Log "[WARN] Step 12: ATP preset rule never initialized in Defender portal." "WARN" }
-        else { Write-Log "[ERROR] Step 12 (ATP): $($_.Exception.Message)" "ERROR" }
+        else { Write-Log "[ERROR] Step 12 (ATP): $(Get-FullErrorMessage $_)" "ERROR" }
     }
 
     if ($presetNotInitialized) {
@@ -869,7 +954,7 @@ if ($AdminUPN) {
                 Write-Log "[OK] Step 13: Created role assignment policy '$newPolicyName'." "OK"
                 $policyCreated = $true
             } catch {
-                Write-Log "[ERROR] Step 13: Failed to create '$newPolicyName': $($_.Exception.Message)" "ERROR"
+                Write-Log "[ERROR] Step 13: Failed to create '$newPolicyName': $(Get-FullErrorMessage $_)" "ERROR"
             }
         } else {
             Write-Log "[SKIP] Step 13: Role assignment policy '$newPolicyName' already exists." "SKIP"
@@ -890,9 +975,9 @@ if ($AdminUPN) {
         Add-Content $auditLog "=== END SCRIPT RUN (combined) ===`n"
         Add-Summary 13 "Configure_Exchange_Online_Settings" "Success"
     } catch {
-        Write-Log "[ERROR] Step 13 failed: $($_.Exception.Message)" "ERROR"
-        Add-Content $auditLog "ERROR: $($_.Exception.Message)"
-        Add-Summary 13 "Configure_Exchange_Online_Settings" "Error: $($_.Exception.Message)"
+        Write-Log "[ERROR] Step 13 failed: $(Get-FullErrorMessage $_)" "ERROR"
+        Add-Content $auditLog "ERROR: $(Get-FullErrorMessage $_)"
+        Add-Summary 13 "Configure_Exchange_Online_Settings" "Error: $(Get-FullErrorMessage $_)"
     }
 }
 
@@ -900,6 +985,7 @@ if ($AdminUPN) {
 # STEP 14 — Entra LAPS
 # =========================================================================
 Write-Host "`n=== Step 14: Enable LAPS Policy (Entra ID) ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 $accountname = "Local-Admin"
 try {
     $ConfigCheckUri = "https://graph.microsoft.com/beta/deviceManagement/configurationPolicies?`$filter=templateReference/TemplateDisplayName%20eq%20%27Local%20admin%20password%20solution%20(Windows%20LAPS)%27"
@@ -979,14 +1065,15 @@ if ($localadmins -like "*>Placeholder<*") { Write-Host ">Placeholder< is a membe
         Add-Summary 14 "Enable_LAPS_Policy_EntraID" "Success"
     }
 } catch {
-    Write-Log "[ERROR] Step 14 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 14 "Enable_LAPS_Policy_EntraID" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 14 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 14 "Enable_LAPS_Policy_EntraID" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # STEP 15 — Verify / Disable Conditional Access Policies
 # =========================================================================
 Write-Host "`n=== Step 15: Verify Conditional Access Policies Disabled ===" -ForegroundColor Cyan
+Reset-ConsoleCapture
 try {
     $expectedPolicyNames = @(
         "Block Access Outside Approved Countries"
@@ -1026,13 +1113,14 @@ try {
         Add-Summary 15 "Verify_Disable_CA_Policies" "Skipped (all already disabled)"
     }
 } catch {
-    Write-Log "[ERROR] Step 15 failed: $($_.Exception.Message)" "ERROR"
-    Add-Summary 15 "Verify_Disable_CA_Policies" "Error: $($_.Exception.Message)"
+    Write-Log "[ERROR] Step 15 failed: $(Get-FullErrorMessage $_)" "ERROR"
+    Add-Summary 15 "Verify_Disable_CA_Policies" "Error: $(Get-FullErrorMessage $_)"
 }
 
 # =========================================================================
 # Finish
 # =========================================================================
+Stop-ConsoleCapture
 $elapsed = (Get-Date) - $startTime
 $global:logContent -join "`n" | Out-File -FilePath $LogPath -Encoding utf8
 

@@ -1,7 +1,17 @@
 {
-  "version": "2.9.120",
+  "version": "2.9.121",
   "releaseDate": "2026-09-02",
   "changelog": [
+    {
+      "version": "2.9.121",
+      "date": "2026-09-02",
+      "changes": [
+        "Invoke-TenantBaseline.ps1: Fixed every Graph-based step failing with a useless blank 'InteractiveBrowserCredential authentication failed: ' (reported live: happened on a re-run against a tenant already known to be configured, with Connect-MgGraph itself reporting success moments earlier) — confirmed this is the same class of bug already fixed in Get-TenantLicenseReport.ps1 (v2.9.85/v2.9.117-era note): MSAL/WAM broker diagnostics bypass the exception object entirely and write straight to .NET's Console.Out/Error, so $_.Exception.Message (and even its InnerException chain) can come back completely empty",
+        "Added Get-FullErrorMessage (walks the full InnerException chain instead of just the top message) and a console tee (Start-ConsoleCapture/Reset-ConsoleCapture/Stop-ConsoleCapture, backed by a small Add-Type'd TextWriter) that mirrors everything written to Console.Out/Error into a per-step buffer without hiding it from the live window — every 'Step N failed' log line now appends that buffer's contents, so the real broker/AADSTS text shows up instead of a blank string",
+        "Also fixed Step 6 (Block Personal Device Enrollment) silently mismarking an auth failure as 'configuration not found': its Get-MgDeviceManagementDeviceEnrollmentConfiguration call had no -ErrorAction Stop, so a non-terminating failure fell through to the same '-not $defaultConfig' branch used for a genuine not-found result, masking the real cause",
+        "Not yet re-run live against a live failure to confirm what the real underlying reason is — re-run against the same tenant and check the new log for the appended console output"
+      ]
+    },
     {
       "version": "2.9.120",
       "date": "2026-09-02",
