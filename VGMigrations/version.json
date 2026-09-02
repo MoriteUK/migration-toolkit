@@ -1,7 +1,15 @@
 {
-  "version": "2.9.119",
-  "releaseDate": "2026-09-01",
+  "version": "2.9.120",
+  "releaseDate": "2026-09-02",
   "changelog": [
+    {
+      "version": "2.9.120",
+      "date": "2026-09-02",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Now also writes a simplified summary CSV (Domain + PoliciesCreated only) alongside the existing 11-column detail CSV, and opens the summary automatically instead of the detail report — reported: reading all the per-check columns/permission-error text to answer a plain yes/no was too noisy. The detail CSV is still written to the same folder for troubleshooting which specific check is missing",
+        "MigrationToolkit-Web: Check Baseline Status help text updated to describe both output files"
+      ]
+    },
     {
       "version": "2.9.119",
       "date": "2026-09-01",

@@ -67,7 +67,9 @@
     CSV only: column name to read tenant identifiers from. Auto-detected if omitted.
 
 .PARAMETER OutputPath
-    Path for the consolidated CSV report. Defaults to a timestamped file next to TenantsFile.
+    Path for the consolidated CSV report. Defaults to a timestamped file next to TenantsFile. A
+    second, simplified CSV (Domain + PoliciesCreated only) is always written alongside it, and is
+    the one opened automatically — the full detail report stays on disk for troubleshooting.
 
 .PARAMETER RefreshIntervalDays
     How often the local lookup copy is refreshed from -TenantsFile, in days. Default 3.5.
@@ -541,8 +543,12 @@ try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
 if ($allRows.Count -gt 0) {
     $allRows | Export-Csv -Path $OutputPath -NoTypeInformation -Encoding UTF8 -Force
     Write-Host ""
-    Write-Host "Report written: $OutputPath" -ForegroundColor Green
-    Write-Output "##OPEN_FILE:$OutputPath##"
+    Write-Host "Detail report written: $OutputPath" -ForegroundColor Green
+
+    $summaryPath = Join-Path (Split-Path $OutputPath -Parent) ((Split-Path $OutputPath -LeafBase) + '_Summary.csv')
+    $allRows | Select-Object Domain, PoliciesCreated | Export-Csv -Path $summaryPath -NoTypeInformation -Encoding UTF8 -Force
+    Write-Host "Summary report written: $summaryPath" -ForegroundColor Green
+    Write-Output "##OPEN_FILE:$summaryPath##"
 }
 
 Write-Host ""
