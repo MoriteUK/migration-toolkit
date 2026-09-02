@@ -1,7 +1,14 @@
 {
-  "version": "2.9.125",
+  "version": "2.9.126",
   "releaseDate": "2026-09-02",
   "changelog": [
+    {
+      "version": "2.9.126",
+      "date": "2026-09-02",
+      "changes": [
+        "Update-TeamsChannelsCache.ps1: Fixed 'Could not load file or assembly Microsoft.Graph.Authentication, Version=2.38.0.0 ... Assembly with same name is already loaded' (confirmed live) — after Ensure-GraphModules.ps1 already pinned and imported Microsoft.Graph.Groups/Teams at 2.33.0, the script immediately re-imported both AGAIN without -RequiredVersion, which resolves to the newest installed version (2.38.0) instead of reusing what was already loaded, and PowerShell can't have two versions of the same strong-named assembly loaded in one process. Removed the redundant re-imports — Ensure-GraphModules.ps1 already leaves the pinned modules imported and ready. Same class of bug previously fixed in Check-TenantBaselineStatus.ps1 (v2.9.69); every other script that dot-sources Ensure-GraphModules.ps1 was checked and doesn't have this pattern"
+      ]
+    },
     {
       "version": "2.9.125",
       "date": "2026-09-02",

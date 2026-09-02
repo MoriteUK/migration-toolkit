@@ -51,10 +51,15 @@ Write-Host ('=' * 40) -ForegroundColor Cyan
 Write-Host ''
 
 # Pins Microsoft.Graph.* to 2.33.0 - the last version before WAM became mandatory for interactive
-# sign-in (see Ensure-GraphModules.ps1's own header for the full history).
+# sign-in (see Ensure-GraphModules.ps1's own header for the full history). Ensure-GraphModules.ps1
+# already imports Authentication/Groups/Teams at that pinned version below - do NOT re-import them
+# again here without -RequiredVersion: an unversioned Import-Module resolves to the newest
+# installed version instead of reusing what's already loaded (2.38.0 on machines that also have
+# the regular Microsoft.Graph meta-module installed), and PowerShell can't load two versions of
+# the same strong-named assembly in one process - confirmed live: "Could not load file or assembly
+# 'Microsoft.Graph.Authentication, Version=2.38.0.0...'. Assembly with same name is already
+# loaded." This is the same class of bug fixed in Check-TenantBaselineStatus.ps1 (v2.9.69).
 . (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Groups', 'Microsoft.Graph.Teams')
-Import-Module Microsoft.Graph.Groups -DisableNameChecking -ErrorAction Stop
-Import-Module Microsoft.Graph.Teams  -DisableNameChecking -ErrorAction Stop
 
 try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
 Write-Host ($PREFIX_INFO + 'Connecting to Microsoft Graph...') -ForegroundColor DarkGray
