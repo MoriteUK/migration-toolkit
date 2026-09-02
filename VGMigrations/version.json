@@ -1,7 +1,15 @@
 {
-  "version": "2.9.121",
+  "version": "2.9.122",
   "releaseDate": "2026-09-02",
   "changelog": [
+    {
+      "version": "2.9.122",
+      "date": "2026-09-02",
+      "changes": [
+        "Invoke-TenantBaseline.ps1: The v2.9.121 diagnostic fix confirmed live — the blank auth errors were AADSTS530035 'Access has been blocked by security defaults' on every Graph write/read after a successful Connect-MgGraph. Not a script bug: the tenant has Microsoft Entra Security Defaults enabled (its automatic fallback for a tenant with no custom Conditional Access policies yet — which is exactly what Step 11 of this script deploys). Security Defaults requires MFA on every sign-in and was blocking these calls at the policy layer even though the initial interactive sign-in itself succeeded",
+        "Get-FullErrorMessage now recognizes AADSTS530035/'blocked by security defaults' and appends plain-English guidance: sign in again via a fresh/InPrivate browser window so a cached non-MFA session can't be silently reused, or have a Global Admin temporarily disable Security Defaults (Entra admin center > Identity > Overview > Properties) until Step 11's Conditional Access policies are in place as its replacement"
+      ]
+    },
     {
       "version": "2.9.121",
       "date": "2026-09-02",

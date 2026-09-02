@@ -117,6 +117,15 @@ function Get-FullErrorMessage {
         $swallowed = $script:ConsoleCaptureBuffer.ToString().Trim()
         if ($swallowed) { $msg = "$msg — console output: $($swallowed -replace '[\r\n]+', ' ')" }
     }
+
+    # AADSTS530035 shows up here as a per-call block even though Connect-MgGraph itself already
+    # succeeded — confirmed live against a tenant with no custom Conditional Access policies yet
+    # (Security Defaults is Microsoft's automatic fallback for exactly that case). The identity
+    # claims come through fine but privileged Graph writes get rejected at the policy layer, which
+    # reads exactly like a credential failure unless you already know to look for this.
+    if ($msg -match 'AADSTS530035|blocked by security defaults') {
+        $msg += " — TENANT HAS SECURITY DEFAULTS ENABLED, which requires MFA on every sign-in and is blocking this run. Either sign in again in a fresh/InPrivate browser window (so a cached non-MFA session isn't silently reused), or have a Global Admin temporarily disable Security Defaults for this tenant (Entra admin center > Identity > Overview > Properties > Manage security defaults) until Step 11's Conditional Access policies are deployed as its replacement."
+    }
     return $msg
 }
 
