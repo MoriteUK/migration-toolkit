@@ -1,7 +1,15 @@
 {
-  "version": "2.9.122",
+  "version": "2.9.123",
   "releaseDate": "2026-09-02",
   "changelog": [
+    {
+      "version": "2.9.123",
+      "date": "2026-09-02",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Changed PoliciesCreated logic from 'Yes only if every one of the 11 checks confirms Configured' to 'Yes if ANY check confirms Configured or partially applied' — all 11 checks come from the single all-in-one Invoke-TenantBaseline.ps1 run, so evidence that even one step succeeded already proves the script has been run against that tenant, even if a later step failed or was blocked partway through (e.g. AADSTS530035/Security Defaults, see v2.9.121-122). Previously a tenant where the run got through several steps before hitting a blocker further down still showed 'No', which read as 'never run' rather than 'partially run'",
+        "No is now reserved for tenants where nothing is confirmed applied AND at least one check is confirmed missing; Unknown is unchanged (nothing confirmed either way, permission gap on the app registration)"
+      ]
+    },
     {
       "version": "2.9.122",
       "date": "2026-09-02",

@@ -12,10 +12,13 @@
     enrollment, BitLocker/Windows compliance policies, iOS/Android app protection, the
     Conditional Access policy set, and LAPS. Writes one consolidated CSV, one row per tenant,
     with a headline PoliciesCreated column (Yes/No/Unknown) plus one detail column per
-    individual check. PoliciesCreated is Yes only if every check is confirmed Configured, No if
-    any check is confirmed NOT configured (including partially configured), and Unknown when
-    nothing is confirmed missing but one or more checks couldn't be verified (a permission gap
-    on the app registration, not a real answer either way).
+    individual check. All 11 checks come from the one all-in-one Invoke-TenantBaseline.ps1 run,
+    so PoliciesCreated is Yes if ANY check is confirmed Configured or partially applied — that's
+    enough evidence the script has been run against this tenant, even if a later step failed or
+    was blocked (e.g. by the tenant's Conditional Access/Security Defaults) partway through.
+    PoliciesCreated is No only when nothing is confirmed applied and at least one check is
+    confirmed NOT configured; Unknown when nothing is confirmed either way because one or more
+    checks couldn't be verified (a permission gap on the app registration, not a real answer).
 
     Connects using ONLY the existing per-tenant app registration already used by
     Get-TenantLicenseReport.ps1 (stored appcreds_<tenantid>.json, or the workbook's AppId/
@@ -498,16 +501,17 @@ foreach ($rec in $tenantRecords) {
 
     $checks = @($authPolicyStatus, $adminConsentStatus, $intuneScopeStatus, $dynGroupsStatus, $blockPersonalStatus,
                 $bitLockerStatus, $winComplianceStatus, $iosProtectionStatus, $androidProtectionStatus, $caStatus, $lapsStatus)
-    $configuredCount    = @($checks | Where-Object { $_ -eq 'Configured' }).Count
-    $notConfiguredCount = @($checks | Where-Object { $_ -eq 'NotConfigured' -or $_ -like 'Partial*' }).Count
+    $configuredCount    = @($checks | Where-Object { $_ -eq 'Configured' -or $_ -like 'Partial*' }).Count
+    $notConfiguredCount = @($checks | Where-Object { $_ -eq 'NotConfigured' }).Count
     $unknownCount       = @($checks | Where-Object { $_ -like 'Unknown*' }).Count
 
-    # PoliciesCreated: Yes only if every check confirms Configured. No if any check confirms it
-    # is NOT configured (Partial counts as No — the baseline isn't fully applied). Unknown only
-    # when nothing is confirmed missing but one or more checks couldn't be verified (permission
-    # gap on the app registration) — kept distinct from No so a permissions gap is never mistaken
-    # for a genuinely missing policy.
-    $policiesCreated = if ($configuredCount -eq $checks.Count) { 'Yes' }
+    # PoliciesCreated: all 11 checks come from the one all-in-one Invoke-TenantBaseline.ps1 run,
+    # so ANY check confirmed Configured (or even partially applied) is already proof the script
+    # has been run against this tenant — Yes, regardless of whether a later step failed or was
+    # blocked partway through (e.g. by the tenant's own Conditional Access/Security Defaults).
+    # No only when nothing is confirmed applied and at least one check is confirmed missing.
+    # Unknown only when nothing is confirmed either way (permission gap on the app registration).
+    $policiesCreated = if ($configuredCount -gt 0) { 'Yes' }
                         elseif ($notConfiguredCount -gt 0) { 'No' }
                         else { 'Unknown' }
 
