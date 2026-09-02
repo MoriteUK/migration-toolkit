@@ -1,5 +1,9 @@
 // Migration Toolkit - Renderer Process (UI Logic)
 
+// Settings > Documentation "Open Runbook" link — kept in sync with the toolkit by hand
+// (see VGMigrations/version.json's changelog for the source of truth on what changed).
+const RUNBOOK_URL = 'https://claude.ai/code/artifact/48d1fa4f-056b-4443-bf7c-eae3764224e5';
+
 // ---------------------------------------------------------------------------
 // File browser helper — opens a native CSV file-open dialog and writes the
 // chosen path into the given input element.  Works for any Browse button.
@@ -620,6 +624,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('testConnectionBtn').addEventListener('click', testConnection);
   document.getElementById('checkUpdatesBtn').addEventListener('click', manualCheckUpdates);
   document.getElementById('settingsAosSignInBtn').addEventListener('click', settingsAosSignIn);
+  document.getElementById('openRunbookBtn').addEventListener('click', () => {
+    window.electronAPI.openExternal(RUNBOOK_URL);
+  });
 
   // Skip rename operations checkbox handler
   const skipRenameCheckbox = document.getElementById('skipRenameOperations');

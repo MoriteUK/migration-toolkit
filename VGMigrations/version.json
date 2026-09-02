@@ -1,7 +1,14 @@
 {
-  "version": "2.9.123",
+  "version": "2.9.124",
   "releaseDate": "2026-09-02",
   "changelog": [
+    {
+      "version": "2.9.124",
+      "date": "2026-09-02",
+      "changes": [
+        "MigrationToolkit-Web: Added a 'Documentation' field under Settings > Config with an 'Open Runbook' button, linking to the toolkit's how-to guide / script reference / FAQ (opens in the default browser via the existing openExternal IPC handler)"
+      ]
+    },
     {
       "version": "2.9.123",
       "date": "2026-09-02",
