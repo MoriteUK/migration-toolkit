@@ -165,17 +165,61 @@ if ($defaultTargets.Count -eq 0 -and $rowsWithoutTargets.Count -gt 0) {
 
 $scopes = @('User.Invite.All', 'User.Read.All', 'Group.ReadWrite.All', 'GroupMember.ReadWrite.All')
 
+# Cheap authenticated probe - proves the session actually has a usable access token, not just a
+# recorded account. Connect-MgGraph can report "Connected as ..." while the token acquisition
+# silently failed; the failure then only surfaces on the first real request as
+# "InteractiveBrowserCredential authentication failed".
+function Test-GraphToken {
+    try {
+        Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/organization?$select=id' `
+            -OutputType PSObject -ErrorAction Stop | Out-Null
+        return $true
+    } catch {
+        $m = $_.Exception.Message.Split([Environment]::NewLine)[0]
+        if (Test-IsAuthError $m) { return $false }
+        return $true   # non-auth error from the probe endpoint - the token itself is fine
+    }
+}
+
 $ctx = Get-MgContext -ErrorAction SilentlyContinue
 $haveScopes = $ctx -and -not ($scopes | Where-Object { $_ -notin $ctx.Scopes })
-if ($haveScopes -and (-not $TenantId -or $ctx.TenantId -eq $TenantId)) {
+if ($haveScopes -and (Test-GraphToken)) {
     Write-Host "Reusing existing Graph session: $($ctx.Account)  (tenant $($ctx.TenantId))" -ForegroundColor Green
 } else {
-    Write-Host "Connecting to Microsoft Graph — sign in when the browser opens..." -ForegroundColor Yellow
+    # NOTE: no -TenantId here on purpose. Passing it alongside a shared/cached MSAL token store
+    # (a prior Connect-MgGraph to another tenant, Azure CLI, WAM) frequently breaks silent token
+    # acquisition - the cached account is for a different authority, the silent request fails,
+    # and the interactive fallback dies in the app's headless runner. The admin's UPN suffix
+    # already targets the right tenant; -TenantId is only used as a post-connect sanity check.
     $connect = @{ Scopes = $scopes; NoWelcome = $true; ErrorAction = 'Stop' }
-    if ($TenantId) { $connect.TenantId = $TenantId }
+
+    Write-Host "Connecting to Microsoft Graph — sign in when the browser opens..." -ForegroundColor Yellow
     Connect-MgGraph @connect
+
+    if (-not (Test-GraphToken)) {
+        Write-Warning "Interactive browser sign-in did not yield a usable token (common when launched from the app's headless runner). Retrying with device-code sign-in — open the URL below and enter the code..."
+        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+        Connect-MgGraph @connect -UseDeviceCode
+
+        if (-not (Test-GraphToken)) {
+            Write-Error @"
+Could not obtain a working Microsoft Graph token.
+Try one of:
+  - Run this script from a normal PowerShell 7 window (pwsh) instead of the app button, then re-run it here.
+  - If device-code sign-in was blocked (AADSTS error above), the tenant has a Conditional Access
+    'Authentication flows' policy blocking it - sign in from a real browser session first.
+Nothing was changed.
+"@
+            exit 1
+        }
+    }
     $ctx = Get-MgContext
     Write-Host "Connected as $($ctx.Account)  (tenant $($ctx.TenantId))" -ForegroundColor Green
+}
+
+if ($TenantId -and $ctx.TenantId -and
+    $ctx.TenantId -ne $TenantId -and ("$($ctx.Account)" -notlike "*@$TenantId")) {
+    Write-Warning "Signed into tenant '$($ctx.TenantId)' as $($ctx.Account), but -TenantId was '$TenantId'. Continuing against the signed-in tenant."
 }
 
 $grantedScopes = @($ctx.Scopes)

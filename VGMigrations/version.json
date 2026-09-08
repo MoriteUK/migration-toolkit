@@ -1,7 +1,16 @@
 {
-  "version": "2.9.129",
+  "version": "2.9.130",
   "releaseDate": "2026-09-08",
   "changelog": [
+    {
+      "version": "2.9.130",
+      "date": "2026-09-08",
+      "changes": [
+        "Invite-externalUsers.ps1: still hit 'InteractiveBrowserCredential authentication failed' after v2.9.129 even though the granted-scopes list showed Group.ReadWrite.All present - so not scopes, and (with only Authentication loaded) not an assembly clash. Connect-MgGraph recorded the account but the token acquisition had silently failed; the first real request then triggered interactive auth, which dies in the app's headless runner (no console/window)",
+        "Removed -TenantId from the Connect-MgGraph call. Passing it alongside a shared/cached MSAL token store (a prior Connect-MgGraph to another tenant, Azure CLI, WAM) breaks silent token acquisition - the cached account is for a different authority. The admin UPN suffix already targets the right tenant; -TenantId is now only a post-connect sanity check that warns on a mismatch",
+        "Added Test-GraphToken - a cheap GET /organization probe run straight after connect (and before reusing an existing session) that proves the session has a real access token, not just a recorded account. On failure the script now disconnects and retries once with Connect-MgGraph -UseDeviceCode (device-code sign-in works in a headless process - the URL+code stream into the panel). If that also fails it stops with explicit guidance (run from a real pwsh window / Conditional Access 'Authentication flows' policy blocking device code) instead of a bare error"
+      ]
+    },
     {
       "version": "2.9.129",
       "date": "2026-09-08",
