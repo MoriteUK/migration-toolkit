@@ -721,13 +721,17 @@ function Show-DiscoveryMenu {
             if (-not (Test-Path $SingleScript)) {
                 [System.Windows.Forms.MessageBox]::Show("Script not found:`n$SingleScript",'Not Found','OK','Error') | Out-Null; return
             }
-            Write-Log "Run (single): domain=$domain  SearchTerm='$searchTerm'  SkipPP=$($chkSkipPP.Checked)  SkipTM=$($chkSkipTM.Checked)  VBUId='$buid'  SPOAdmin='$spoUrl'"
-            $escS = $SingleScript -replace "'","''"
-            $cmd  = "& '$escS' -Domain '$domain' -VBUSearchTerm '$($searchTerm -replace "'","''")' -OutputPath '$escOut'"
-            if ($chkSkipPP.Checked)  { $cmd += ' -SkipPowerPlatform' }
-            if ($chkSkipTM.Checked)  { $cmd += ' -SkipTeamMemberships' }
-            if ($buid)               { $cmd += " -VBUId '$buid'" }
-            if ($spoUrl)             { $cmd += " -SharePointAdminUrl '$($spoUrl -replace "'","''")'" }
+            Write-Log "Run (single): domain=$domain  SearchTerm='$searchTerm'  VBUId='$buid'  SPOAdmin='$spoUrl'"
+            # Run-Assessment.ps1 is interactive in this build - no parameters. Launch it in its
+            # own window; the operator picks the mode and answers the VBU Domain / Search Term /
+            # VBU ID / SPO Admin URL prompts there. The form values are echoed into that window
+            # first as a reminder of what to type.
+            $escS   = $SingleScript -replace "'","''"
+            $reminder = "Enter at the Run-Assessment.ps1 prompts:  VBU Domain = $domain   VBU Search Term = $searchTerm"
+            if ($buid)   { $reminder += "   VBU ID = $buid" }
+            if ($spoUrl) { $reminder += "   SPO Admin URL = $spoUrl" }
+            $escReminder = $reminder -replace "'","''"
+            $cmd = "Write-Host '$escReminder' -ForegroundColor Cyan; Write-Host ''; & '$escS'"
             & $buildAndLaunch $cmd "Single: $domain" ''
 
         } else {

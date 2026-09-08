@@ -54,8 +54,8 @@ function Save-CollectorStatus {
     Creates the assessment context object passed to all collectors.
 .DESCRIPTION
     Builds a PSCustomObject holding the VBU identifiers, Raw output path, SPO admin URL,
-    assessment start timestamp, and the SkipSharePoint/SkipAD/SkipPowerPlatform flags.
-    VBUName is derived from VBUDomain via TLD stripping and is used for folder naming only.
+    assessment start timestamp, and the SkipSharePoint flag. VBUName is derived from
+    VBUDomain via TLD stripping and is used for folder naming only.
 #>
 function New-AssessmentContext {
     [CmdletBinding()]
@@ -68,16 +68,14 @@ function New-AssessmentContext {
     )
 
     [PSCustomObject]@{
-        VBUDomain         = $VBUDomain
-        VBUName           = Get-VBUName -Domain $VBUDomain
-        VBUId             = $VBUId
-        VBUSearchTerm     = $VBUSearchTerm
-        RawPath           = $RawPath
-        SPOAdminUrl       = $SPOAdminUrl
-        AssessmentDate    = Get-Date
-        SkipSharePoint    = $false
-        SkipAD            = $false
-        SkipPowerPlatform = $false
+        VBUDomain      = $VBUDomain
+        VBUName        = Get-VBUName -Domain $VBUDomain
+        VBUId          = $VBUId
+        VBUSearchTerm  = $VBUSearchTerm
+        RawPath        = $RawPath
+        SPOAdminUrl    = $SPOAdminUrl
+        AssessmentDate = Get-Date
+        SkipSharePoint = $false
     }
 }
 
@@ -106,31 +104,30 @@ function Write-JsonOutput {
 
 <#
 .SYNOPSIS
-    Loads a JSON file from a Raw output folder, returning an empty array if the file is missing, empty, or null.
+    Reads a collector JSON file from the Raw output folder, returning an array (empty when missing or unreadable).
 .DESCRIPTION
-    Shared by Workbook.psm1 (assessment workbook) and LegacyExport.psm1 (Domain Removal
-    CSV compatibility layer) so both read collector output the same way.
+    Compatibility helper retained for Workbook.psm1, which reads every collector's Raw\*.json
+    back in to build the assessment workbook. Missing files and parse failures return @() so a
+    partial/degraded assessment still produces a workbook from whatever JSON was written.
 #>
 function Import-AssessmentJson {
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$FileName,
         [Parameter(Mandatory)][string]$RawPath
     )
-    # The leading comma on every return below is deliberate, not decorative: PowerShell
-    # unrolls an array written to the pipeline into its individual elements, so a bare
-    # "return @()" (zero elements) hands the caller literally nothing - and `$x = Import-...`
-    # then assigns $null, not an empty array. `,@()` wraps the array as a single pipeline
-    # object, which is what actually survives the return boundary as an empty array. Confirmed
-    # live: without this, every direct (unwrapped) caller of this function crashed on
-    # Export-Csv with "Cannot bind argument to parameter 'InputObject' because it is null"
-    # whenever the underlying collector genuinely found zero of something.
+
     $path = Join-Path $RawPath $FileName
-    if (-not (Test-Path $path)) { return ,@() }
-    $content = Get-Content $path -Raw -ErrorAction SilentlyContinue
-    if ([string]::IsNullOrWhiteSpace($content)) { return ,@() }
-    $parsed = $content | ConvertFrom-Json
-    if ($null -eq $parsed) { return ,@() }
-    return ,@($parsed)
+    if (-not (Test-Path $path)) { return @() }
+    try {
+        $raw = Get-Content -Path $path -Raw -Encoding UTF8
+        if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
+        return @($raw | ConvertFrom-Json)
+    }
+    catch {
+        Write-Host ($script:PREFIX_WARN + "Could not read $FileName : " + $_.Exception.Message) -ForegroundColor Yellow
+        return @()
+    }
 }
 
 <#
@@ -155,70 +152,6 @@ function New-CollectorResult {
         ErrorMessage = $ErrorMessage
         Counts       = $Counts
         Skipped      = $Skipped
-    }
-}
-
-<#
-.SYNOPSIS
-    Derives the persistent cache folder for a given source tenant, keyed by its SPO admin URL.
-.DESCRIPTION
-    Shared by SharePoint.psm1 and TeamMemberships.psm1's cache read/write functions, and by
-    Run-Assessment.ps1's pre-flight freshness check, so all three agree on the same folder for
-    the same tenant. Every VBU split from the same source tenant reuses this one cache -
-    SharePointAdminUrl is already the one tenant-identifying input Run-Assessment.ps1 collects,
-    so it doubles as the cache key rather than inventing a second one.
-#>
-function Get-DiscoveryCacheFolder {
-    param(
-        [Parameter(Mandatory)][string]$SharePointAdminUrl,
-        [Parameter(Mandatory)][string]$CacheRoot
-    )
-    $safe = ($SharePointAdminUrl -replace '^https?://', '') -replace '[^a-zA-Z0-9\.\-]', '-'
-    if (-not $safe) { $safe = 'default' }
-    return Join-Path $CacheRoot $safe
-}
-
-<#
-.SYNOPSIS
-    Checks whether the SharePoint Sites and Teams/Channels/Members caches exist and are fresh.
-.DESCRIPTION
-    Run-Assessment.ps1 calls this before doing any tenant work and stops the whole run if either
-    cache is missing or older than MaxAgeDays - both files are produced by the standalone
-    Update-SharePointSitesCache.ps1 / Update-TeamsChannelsCache.ps1 scripts, which walk the
-    entire tenant (the slow part) once so every VBU's Discovery run can just read and
-    locally filter the result instead of repeating that walk every time.
-#>
-function Test-DiscoveryCachePrereqs {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$SharePointAdminUrl,
-        [Parameter(Mandatory)][string]$CacheRoot,
-        [int]$MaxAgeDays = 7
-    )
-
-    $folder = Get-DiscoveryCacheFolder -SharePointAdminUrl $SharePointAdminUrl -CacheRoot $CacheRoot
-    $checks = @(
-        @{ Name = 'SharePoint Sites (+ OneDrive)'; FileName = 'SharePointSites.json';        Script = 'Update-SharePointSitesCache.ps1' }
-        @{ Name = 'Teams Channels & Members';      FileName = 'TeamsChannelsMembers.json';   Script = 'Update-TeamsChannelsCache.ps1' }
-    )
-
-    $problems = [System.Collections.Generic.List[string]]::new()
-    foreach ($c in $checks) {
-        $path = Join-Path $folder $c.FileName
-        if (-not (Test-Path $path)) {
-            $problems.Add("$($c.Name) cache not found. Run: VGMigrations\$($c.Script) -SharePointAdminUrl `"$SharePointAdminUrl`"")
-            continue
-        }
-        $ageDays = ((Get-Date) - (Get-Item $path).LastWriteTime).TotalDays
-        if ($ageDays -gt $MaxAgeDays) {
-            $problems.Add("$($c.Name) cache is $([math]::Floor($ageDays)) day(s) old (max $MaxAgeDays). Run: VGMigrations\$($c.Script) -SharePointAdminUrl `"$SharePointAdminUrl`"")
-        }
-    }
-
-    [PSCustomObject]@{
-        IsFresh     = ($problems.Count -eq 0)
-        CacheFolder = $folder
-        Problems    = $problems.ToArray()
     }
 }
 
@@ -298,6 +231,51 @@ function Convert-SizeToGB {
 
 <#
 .SYNOPSIS
+    Converts EXO/SPO size values to raw bytes.
+.DESCRIPTION
+    Handles null, empty, and 'Unlimited' (all return 0), ByteQuantifiedSize strings like
+    "1.5 GB (1,610,612,736 bytes)", unit-tagged strings, and raw numeric values - bytes
+    by default, megabytes when -FromMB is set. Returns a long.
+#>
+function Convert-SizeToBytes {
+    [CmdletBinding()]
+    param(
+        [AllowNull()][AllowEmptyString()]$Value,
+        [switch]$FromMB
+    )
+
+    if ($null -eq $Value) { return [long]0 }
+    $str = "$Value".Trim()
+    if ($str -eq '' -or $str -eq 'Unlimited') { return [long]0 }
+
+    # ByteQuantifiedSize string: "1.5 GB (1,610,612,736 bytes)"
+    if ($str -match '\(([0-9,]+)\s+bytes\)') {
+        return [long]($Matches[1] -replace ',', '')
+    }
+
+    # Unit-tagged string: "1.5 GB", "500 MB", "100 KB"
+    if ($str -match '^([\d.]+)\s*(GB|MB|KB|B|bytes)$') {
+        $num = [double]$Matches[1]
+        switch ($Matches[2]) {
+            'GB'    { return [long]($num * 1GB) }
+            'MB'    { return [long]($num * 1MB) }
+            'KB'    { return [long]($num * 1KB) }
+            default { return [long]$num }
+        }
+    }
+
+    # Raw numeric value: bytes by default, MB if -FromMB
+    if ($str -match '^[\d.]+$') {
+        $num = [double]$str
+        if ($FromMB) { return [long]($num * 1MB) }
+        return [long]$num
+    }
+
+    return [long]0
+}
+
+<#
+.SYNOPSIS
     Formats the elapsed time since a start datetime as an mm:ss string.
 .DESCRIPTION
     Computes whole seconds elapsed between Start and now. Returns a zero-padded
@@ -344,6 +322,24 @@ function Write-SectionHeader {
     Write-Host $Title -ForegroundColor Cyan
 }
 
+<#
+.SYNOPSIS
+    Tests whether Text contains Term as a whole word, case-insensitively.
+.DESCRIPTION
+    Search-term scoping must not match on substrings buried inside longer words - a term
+    like 'amic' should match 'AMIC', '(amic)', and 'amic-systems' but never 'dynamics' or
+    'ceramics'. The term is regex-escaped and wrapped in \b anchors. Empty or whitespace
+    Text or Term returns $false. Use this for NAME/search-term matching only - domain
+    matches (proxy addresses, UPNs, SMTP addresses) must stay plain substring tests,
+    because a domain legitimately appears mid-string.
+#>
+function Test-WholeWordMatch {
+    param([string]$Text, [string]$Term)
+    if ([string]::IsNullOrWhiteSpace($Text) -or [string]::IsNullOrWhiteSpace($Term)) { return $false }
+    $pattern = '\b' + [regex]::Escape($Term) + '\b'
+    return [regex]::Match($Text, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase).Success
+}
+
 # -----------------------------------------------------------------------
 # Exports
 # -----------------------------------------------------------------------
@@ -355,11 +351,11 @@ Export-ModuleMember -Function @(
     'New-CollectorResult'
     'Update-CollectorStatus'
     'Convert-SizeToGB'
+    'Convert-SizeToBytes'
     'Format-Duration'
     'Write-ProgressLine'
     'Write-SectionHeader'
-    'Get-DiscoveryCacheFolder'
-    'Test-DiscoveryCachePrereqs'
+    'Test-WholeWordMatch'
 ) -Variable @(
     'PREFIX_OK'
     'PREFIX_WARN'

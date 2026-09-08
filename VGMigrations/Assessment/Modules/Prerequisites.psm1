@@ -48,12 +48,10 @@ function Install-Prerequisites {
 .SYNOPSIS
     Validates required modules and AD connectivity before an assessment run.
 .DESCRIPTION
-    ActiveDirectory (RSAT) is soft-fail: when the module is missing or the domain is
-    unreachable, Context.SkipAD is set and AD-sourced sections come back empty instead of
-    stopping the run — this is what lets a cloud-only tenant (no RSAT, no line of sight to
-    on-prem AD) still complete an assessment. Missing PSGallery modules are installed via
-    Install-Prerequisites; a failed SharePoint module install is likewise non-fatal and sets
-    SkipSharePoint on the context instead.
+    Hard-fails if the ActiveDirectory module (RSAT) is missing or the domain is
+    unreachable. Missing PSGallery modules are installed via Install-Prerequisites;
+    a failed SharePoint module install is non-fatal and sets SkipSharePoint on the
+    context instead.
 #>
 function Test-Prerequisites {
     [CmdletBinding()]
@@ -63,22 +61,21 @@ function Test-Prerequisites {
 
     Write-SectionHeader 'Prerequisites'
 
-    # --- ActiveDirectory (soft-fail) ---
+    # --- ActiveDirectory ---
     # Cannot be installed from PSGallery - requires RSAT via Windows optional features
     if (-not (Get-Module -ListAvailable -Name ActiveDirectory)) {
-        Write-Host ($PREFIX_WARN + 'ActiveDirectory module not found - AD-sourced sections will be skipped') -ForegroundColor Yellow
-        Write-Host ($PREFIX_INFO + 'To include on-prem AD data, install RSAT via Settings -> Apps -> Optional Features -> RSAT: Active Directory Domain Services and Lightweight Directory Services Tools') -ForegroundColor DarkGray
-        $Context.SkipAD = $true
+        Write-Host ($PREFIX_FAIL + 'ActiveDirectory module not found.') -ForegroundColor Red
+        Write-Host ($PREFIX_INFO + 'Install RSAT via Settings -> Apps -> Optional Features -> RSAT: Active Directory Domain Services and Lightweight Directory Services Tools') -ForegroundColor Yellow
+        throw 'ActiveDirectory module not found. Install RSAT to continue.'
     }
-    else {
-        try {
-            Get-ADDomain -ErrorAction Stop | Out-Null
-            Write-Host ($PREFIX_OK + 'ActiveDirectory module present and domain reachable') -ForegroundColor Green
-        }
-        catch {
-            Write-Host ($PREFIX_WARN + 'AD connectivity check failed - AD-sourced sections will be skipped: ' + $_.Exception.Message) -ForegroundColor Yellow
-            $Context.SkipAD = $true
-        }
+
+    try {
+        Get-ADDomain -ErrorAction Stop | Out-Null
+        Write-Host ($PREFIX_OK + 'ActiveDirectory module present and domain reachable') -ForegroundColor Green
+    }
+    catch {
+        Write-Host ($PREFIX_FAIL + 'AD connectivity check failed: ' + $_.Exception.Message) -ForegroundColor Red
+        throw
     }
 
     # --- ExchangeOnlineManagement ---
@@ -115,22 +112,6 @@ function Test-Prerequisites {
     }
     else {
         Write-Host ($PREFIX_OK + 'Microsoft.Online.SharePoint.PowerShell present') -ForegroundColor Green
-    }
-
-    # --- Microsoft.PowerApps.Administration.PowerShell ---
-    # Install failure is non-fatal - sets SkipPowerPlatform on the context
-    if (-not (Get-Module -ListAvailable -Name 'Microsoft.PowerApps.Administration.PowerShell')) {
-        Write-Host ($PREFIX_WARN + 'Microsoft.PowerApps.Administration.PowerShell not found - installing...') -ForegroundColor Yellow
-        try {
-            Install-Prerequisites -ModuleNames @('Microsoft.PowerApps.Administration.PowerShell')
-        }
-        catch {
-            Write-Host ($PREFIX_WARN + 'Power Platform module install failed - Power Platform collection will be skipped') -ForegroundColor Yellow
-            $Context.SkipPowerPlatform = $true
-        }
-    }
-    else {
-        Write-Host ($PREFIX_OK + 'Microsoft.PowerApps.Administration.PowerShell present') -ForegroundColor Green
     }
 
     # --- ImportExcel ---

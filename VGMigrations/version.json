@@ -1,7 +1,19 @@
 {
-  "version": "2.9.127",
+  "version": "2.9.128",
   "releaseDate": "2026-09-08",
   "changelog": [
+    {
+      "version": "2.9.128",
+      "date": "2026-09-08",
+      "changes": [
+        "Discovery engine: replaced Assessment/Run-Assessment.ps1 and the AD/Common/Exchange/Graph/MappingFiles/Prerequisites/SharePoint modules with an earlier, self-contained snapshot supplied wholesale, and rewired every entry point to it. This is a deliberate revert - it drops the caching layer, non-interactive parameters, soft-fail AD, Power Platform / Domain Team Memberships / LegacyExport CSV stages, and the WAM/2.33.0 Graph pin added across v2.9.98-2.9.126",
+        "Run-Assessment.ps1 is now interactive only: an arrow-key mode menu (Run Assessment / Generate Mapping Files) then Read-Host prompts for VBU Domain / Search Term / VBU ID / SPO Admin URL and a final 'delete Raw JSON?' prompt. AD collection is hard-fail (RSAT required). SharePoint/OneDrive collect live via Connect-SPOService + Get-SPOSite (no cache). Graph connects with a plain Connect-MgGraph (no version pin / DisableWAM)",
+        "Because the engine no longer takes parameters or reads stdin, all three launchers now open it in its own visible PowerShell window instead of streaming/param-passing: the Electron Discovery panel uses launch-script (single -> Run-Assessment.ps1, multi -> Run-MultiAssessment.ps1) and shows the entered field values as a reminder of what to type; discovery-menu.ps1's single-domain run launches with no params (values echoed into the window); Run-MultiAssessment.ps1 opens one Run-Assessment.ps1 window per domain, sequentially, waiting for each to close",
+        "Added Import-AssessmentJson back to Common.psm1 as a compatibility shim so the retained Workbook.psm1 still builds the assessment workbook (the supplied Common.psm1 omitted it). Workbook.psm1 is unchanged - no replacement was supplied",
+        "Left in place but now orphaned (no longer imported by Run-Assessment.ps1): Modules/PowerPlatform.psm1, Modules/TeamMemberships.psm1, Modules/LegacyExport.psm1. Consequences: no Power Platform scan, no DomainTeamMemberships-*.csv, and no per-run Discovery\\ CSV folder - the Domain Removal scripts that read that folder will not find it after a Discovery run. The standalone Update-*Cache.ps1 scripts and the 'Refresh Discovery Cache' panel still work but are no longer consumed by Discovery",
+        "Not exercised against a live tenant - PowerShell parse-checked only"
+      ]
+    },
     {
       "version": "2.9.127",
       "date": "2026-09-08",

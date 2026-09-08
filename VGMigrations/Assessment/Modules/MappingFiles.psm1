@@ -67,6 +67,20 @@ function Import-WorkbookSheet {
 
 <#
 .SYNOPSIS
+    Tests whether a workbook row is flagged for migration via its Migrate column.
+.DESCRIPTION
+    Returns true when Migrate = 'Yes' (case-insensitive). Sheets from older workbooks
+    that predate the Migrate column have no such property - those rows are treated as
+    Migrate = Yes for backward compatibility.
+#>
+function Test-MigrateFlag {
+    param([Parameter(Mandatory)][object]$Row)
+    if (-not $Row.PSObject.Properties['Migrate']) { return $true }
+    return ($Row.Migrate -eq 'Yes')
+}
+
+<#
+.SYNOPSIS
     Writes mapping rows to a plain xlsx with a 'Migration mappings' sheet and prints the record count; skips the file when there are no rows.
 #>
 function Write-MappingFile {
@@ -125,13 +139,25 @@ function Invoke-MappingFileGeneration {
     New-Item -ItemType Directory -Path $outFolder -Force | Out-Null
     Write-Host ($PREFIX_OK + "Output folder: $outFolder") -ForegroundColor Green
 
+    # --- Mapping file names - sanitized VBU name from the Assessment Summary sheet ---
+    $summarySheet = Import-WorkbookSheet -Path $workbookPath -SheetName 'Assessment Summary'
+    $vbuNameValue = ($summarySheet | Where-Object { $_.Section -eq 'VBU Name' } | Select-Object -First 1 -ExpandProperty Value)
+    $safeName     = ("$vbuNameValue" -replace '[^\w\-]', '')
+
+    $teamsFileName      = "$safeName-teams-mapping.xlsx"
+    $m365GroupsFileName = "$safeName-m365groups-mapping.xlsx"
+    $sharepointFileName = "$safeName-sharepoint-mapping.xlsx"
+    $onedriveFileName   = "$safeName-onedrive-mapping.xlsx"
+    $teamschatFileName  = "$safeName-teamschat-mapping.xlsx"
+    $exchangeFileName   = "$safeName-exchange-mapping.xlsx"
+
     # --- Read source sheets ---
     Write-Host ($PREFIX_INFO + 'Reading workbook sheets...') -ForegroundColor DarkGray
     $teams           = Import-WorkbookSheet -Path $workbookPath -SheetName 'Teams'
     $m365Groups      = Import-WorkbookSheet -Path $workbookPath -SheetName 'M365 Groups'
     $spoSites        = Import-WorkbookSheet -Path $workbookPath -SheetName 'SharePoint Sites'
     $oneDrives       = Import-WorkbookSheet -Path $workbookPath -SheetName 'OneDrives'
-    $adUsers         = Import-WorkbookSheet -Path $workbookPath -SheetName 'AD Users'
+    $adUsers         = Import-WorkbookSheet -Path $workbookPath -SheetName 'Users'
     $userMailboxes   = Import-WorkbookSheet -Path $workbookPath -SheetName 'User Mailboxes'
     $sharedMailboxes = Import-WorkbookSheet -Path $workbookPath -SheetName 'Shared Mailboxes'
 
@@ -143,7 +169,7 @@ function Invoke-MappingFileGeneration {
 
     # --- Teams ---
     $teamRows = @($teams |
-        Where-Object { $_.MigrationObjectType -eq 'Migrated as Team' } |
+        Where-Object { $_.MigrationObjectType -eq 'Migrated as Team' -and (Test-MigrateFlag -Row $_) } |
         ForEach-Object {
             $srcEmail = if ($_.GroupId -and $groupIdToEmail.ContainsKey($_.GroupId)) { $groupIdToEmail[$_.GroupId] } else { '' }
             [PSCustomObject]@{
@@ -168,7 +194,7 @@ function Invoke-MappingFileGeneration {
 
     # --- SharePoint ---
     $spoRows = @($spoSites |
-        Where-Object { $_.MigrationObjectType -eq 'Migrate as SharePoint Site' } |
+        Where-Object { $_.MigrationObjectType -eq 'Migrate as SharePoint Site' -and (Test-MigrateFlag -Row $_) } |
         ForEach-Object {
             [PSCustomObject]@{
                 'Source URL'               = $_.Url
@@ -182,7 +208,7 @@ function Invoke-MappingFileGeneration {
     # --- OneDrive ---
     # Key-field guard excludes the '(No data collected)' placeholder row on empty sheets
     $oneDriveRows = @($oneDrives |
-        Where-Object { $_.PSObject.Properties['OwnerUPN'] -and $_.OwnerUPN } |
+        Where-Object { $_.PSObject.Properties['OwnerUPN'] -and $_.OwnerUPN -and (Test-MigrateFlag -Row $_) } |
         ForEach-Object {
             [PSCustomObject]@{
                 'Source user'      = $_.OwnerUPN
@@ -192,7 +218,7 @@ function Invoke-MappingFileGeneration {
 
     # --- Teams Chat ---
     $teamsChatRows = @($adUsers |
-        Where-Object { $_.PSObject.Properties['UserPrincipalName'] -and $_.UserPrincipalName } |
+        Where-Object { $_.PSObject.Properties['UserPrincipalName'] -and $_.UserPrincipalName -and (Test-MigrateFlag -Row $_) } |
         ForEach-Object {
             [PSCustomObject]@{
                 'Source user'      = $_.UserPrincipalName
@@ -202,7 +228,7 @@ function Invoke-MappingFileGeneration {
 
     # --- Exchange - User Mailboxes first, then Shared Mailboxes ---
     $exchangeRows = [System.Collections.Generic.List[PSCustomObject]]::new()
-    foreach ($mb in ($userMailboxes | Where-Object { $_.PSObject.Properties['PrimarySmtpAddress'] -and $_.PrimarySmtpAddress })) {
+    foreach ($mb in ($userMailboxes | Where-Object { $_.PSObject.Properties['PrimarySmtpAddress'] -and $_.PrimarySmtpAddress -and (Test-MigrateFlag -Row $_) })) {
         $exchangeRows.Add([PSCustomObject]@{
             'Source'           = $mb.PrimarySmtpAddress
             'Source type'      = 'User mailbox'
@@ -210,7 +236,7 @@ function Invoke-MappingFileGeneration {
             'Destination type' = 'User mailbox'
         })
     }
-    foreach ($mb in ($sharedMailboxes | Where-Object { $_.PSObject.Properties['PrimarySmtpAddress'] -and $_.PrimarySmtpAddress })) {
+    foreach ($mb in ($sharedMailboxes | Where-Object { $_.PSObject.Properties['PrimarySmtpAddress'] -and $_.PrimarySmtpAddress -and (Test-MigrateFlag -Row $_) })) {
         $exchangeRows.Add([PSCustomObject]@{
             'Source'           = $mb.PrimarySmtpAddress
             'Source type'      = 'Shared mailbox'
@@ -221,12 +247,12 @@ function Invoke-MappingFileGeneration {
 
     # --- Write files and summary ---
     Write-SectionHeader 'Mapping Files'
-    Write-MappingFile -Path (Join-Path $outFolder "$vbuName mapping teams.xlsx")      -Rows $teamRows               -Label 'Teams mappings'
-    Write-MappingFile -Path (Join-Path $outFolder "$vbuName mapping m365groups.xlsx") -Rows $groupRows              -Label 'M365 Group mappings'
-    Write-MappingFile -Path (Join-Path $outFolder "$vbuName mapping sharepoint.xlsx") -Rows $spoRows                -Label 'SharePoint mappings'
-    Write-MappingFile -Path (Join-Path $outFolder "$vbuName mapping onedrive.xlsx")   -Rows $oneDriveRows           -Label 'OneDrive mappings'
-    Write-MappingFile -Path (Join-Path $outFolder "$vbuName mapping teamschat.xlsx")  -Rows $teamsChatRows          -Label 'Teams Chat mappings'
-    Write-MappingFile -Path (Join-Path $outFolder "$vbuName mapping exchange.xlsx")   -Rows $exchangeRows.ToArray() -Label 'Exchange mappings'
+    Write-MappingFile -Path (Join-Path $outFolder $teamsFileName)      -Rows $teamRows               -Label 'Teams mappings'
+    Write-MappingFile -Path (Join-Path $outFolder $m365GroupsFileName) -Rows $groupRows              -Label 'M365 Group mappings'
+    Write-MappingFile -Path (Join-Path $outFolder $sharepointFileName) -Rows $spoRows                -Label 'SharePoint mappings'
+    Write-MappingFile -Path (Join-Path $outFolder $onedriveFileName)   -Rows $oneDriveRows           -Label 'OneDrive mappings'
+    Write-MappingFile -Path (Join-Path $outFolder $teamschatFileName)  -Rows $teamsChatRows          -Label 'Teams Chat mappings'
+    Write-MappingFile -Path (Join-Path $outFolder $exchangeFileName)   -Rows $exchangeRows.ToArray() -Label 'Exchange mappings'
 
     Write-Host ''
     Write-Host ($PREFIX_OK + 'Mapping file generation complete') -ForegroundColor Green

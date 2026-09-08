@@ -388,38 +388,36 @@ document.addEventListener('DOMContentLoaded', async () => {
       logOutput.textContent += `Output: ${outputFolder}\n\n`;
 
       startDiscoveryBtn.disabled = true;
-      startDiscoveryBtn.textContent = 'Running...';
-      window.electronAPI.onPsOutput((text) => {
-        logOutput.textContent += text;
-        logOutput.scrollTop = logOutput.scrollHeight;
-      });
+      startDiscoveryBtn.textContent = 'Opening…';
 
-      let result;
+      // Run-Assessment.ps1 is interactive in this build (mode menu + VBU Domain / Search Term /
+      // VBU ID / SPO Admin URL prompts + a final "delete Raw JSON?" prompt) and takes no
+      // parameters, so it can't be streamed into this panel — it's launched in its own visible
+      // PowerShell window instead. The form values below are shown here only as a reminder of
+      // what to type into that window.
       try {
-        if (domainsToRun.length === 1) {
-          const args = ['-Domain', domainsToRun[0], '-OutputPath', outputFolder];
-          if (searchTerm) args.push('-VBUSearchTerm', searchTerm);
-          if (vbuId) args.push('-VBUId', vbuId);
-          if (skipPP) args.push('-SkipPowerPlatform');
-          if (skipTM) args.push('-SkipTeamMemberships');
-          result = await runStreamingScript('Assessment/Run-Assessment.ps1', args);
+        const script = domainsToRun.length === 1
+          ? 'Assessment/Run-Assessment.ps1'
+          : 'Assessment/Run-MultiAssessment.ps1';
+        const result = await window.electronAPI.launchScript(script);
+
+        if (result?.success) {
+          logOutput.textContent += `A PowerShell window has opened for ${script.split('/').pop()}.\n`;
+          logOutput.textContent += `Pick "Run Assessment" on the menu, then enter these at the prompts:\n`;
+          if (domainsToRun.length === 1) {
+            logOutput.textContent += `  VBU Domain      : ${domainsToRun[0]}\n`;
+            if (searchTerm) logOutput.textContent += `  VBU Search Term : ${searchTerm}\n`;
+            if (vbuId)      logOutput.textContent += `  VBU ID          : ${vbuId}\n`;
+          } else {
+            logOutput.textContent += `  One window opens per domain (in order): ${domainsToRun.join(', ')}\n`;
+          }
+          logOutput.textContent += `\nOutput is only visible in that window — nothing streams back here.\n`;
         } else {
-          // A single Run-MultiAssessment.ps1 call, not one Run-Assessment.ps1 process per
-          // domain — every domain here is almost always the same source tenant, so this signs
-          // into SharePoint/Exchange/Graph once for the whole batch instead of once per domain
-          // (spawning a separate process per domain, as this used to, can't reuse a session
-          // across processes no matter what the underlying script does).
-          const args = ['-Domains', ...domainsToRun, '-OutputPath', outputFolder];
-          if (skipPP) args.push('-SkipPowerPlatform');
-          if (skipTM) args.push('-SkipTeamMemberships');
-          if (continueOnError) args.push('-ContinueOnError');
-          result = await runStreamingScript('Assessment/Run-MultiAssessment.ps1', args);
+          logOutput.textContent += `\n✗ Could not open the window: ${result?.error || 'unknown error'}\n`;
         }
-        logOutput.textContent += result?.success ? '\n✓ Discovery complete\n' : `\n✗ Failed (exit ${result?.code})\n`;
       } catch (err) {
         logOutput.textContent += `\n✗ Error: ${err.message}\n`;
       } finally {
-        window.electronAPI.offPsOutput();
         startDiscoveryBtn.disabled = false;
         startDiscoveryBtn.textContent = 'Start Discovery';
       }

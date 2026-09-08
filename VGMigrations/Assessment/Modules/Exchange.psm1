@@ -7,7 +7,8 @@ $script:EXOMailboxProperties = @(
     'DisplayName', 'UserPrincipalName', 'PrimarySmtpAddress', 'EmailAddresses',
     'Alias', 'ExchangeGuid', 'RecipientTypeDetails', 'Database',
     'LitigationHoldEnabled', 'ArchiveStatus', 'WhenCreated', 'WhenMailboxCreated',
-    'ProhibitSendQuota', 'ProhibitSendReceiveQuota'
+    'ProhibitSendQuota', 'ProhibitSendReceiveQuota', 'ForwardingSmtpAddress',
+    'GrantSendOnBehalfTo', 'CustomAttribute6', 'CustomAttribute7'
 )
 
 # -----------------------------------------------------------------------
@@ -17,20 +18,49 @@ $script:EXOMailboxProperties = @(
 <#
 .SYNOPSIS
     Retrieves all VBU-scoped mailboxes of the four recipient types in a single server-side filtered Get-EXOMailbox call.
+.DESCRIPTION
+    The server-side -like filter cannot express a word boundary, so it deliberately
+    over-includes and a client-side pass then trims the CustomAttribute6 substring false
+    positives - e.g. a mailbox tagged 'Ceramics' surfacing for the search term 'amic'.
+    The trim only ever removes CustomAttribute6-only hits: a mailbox that also qualifies
+    via CustomAttribute7 (exact VBU ID) or whose UPN/addresses carry the VBU domain is
+    always kept, as is one with a blank CustomAttribute6.
 #>
 function Get-AllMailboxesRaw {
     param([PSCustomObject]$Context)
 
     $t      = $Context.VBUSearchTerm
+    $d      = $Context.VBUDomain
     $i      = $Context.VBUId
     $filter = "(CustomAttribute6 -like '*$t*') -or (CustomAttribute7 -eq '$i') -or " +
               "(UserPrincipalName -like '*$t*')"
 
-    return @(Get-EXOMailbox -Filter $filter `
+    $raw = @(Get-EXOMailbox -Filter $filter `
         -RecipientTypeDetails UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox `
         -ResultSize Unlimited `
         -Properties $script:EXOMailboxProperties `
         -ErrorAction Stop)
+
+    $kept = @($raw | Where-Object {
+        $ca6 = "$($_.CustomAttribute6)"
+
+        # Blank CustomAttribute6 was never a search-term hit; a whole-word hit is genuine.
+        $ca6Ok = [string]::IsNullOrWhiteSpace($ca6) -or (Test-WholeWordMatch -Text $ca6 -Term $t)
+
+        # Independent signals - either one keeps the mailbox regardless of CustomAttribute6.
+        $addresses = @($_.EmailAddresses) + @($_.UserPrincipalName) + @($_.PrimarySmtpAddress)
+        $byId      = (-not [string]::IsNullOrWhiteSpace($i)) -and ("$($_.CustomAttribute7)" -eq $i)
+        $byDomain  = @($addresses | Where-Object { $_ -and $_ -like "*$d*" }).Count -gt 0
+
+        $ca6Ok -or $byId -or $byDomain
+    })
+
+    $dropped = $raw.Count - $kept.Count
+    if ($dropped -gt 0) {
+        Write-Host ($PREFIX_INFO + "Trimmed $dropped mailbox(es) matching '$t' only as a substring") -ForegroundColor DarkGray
+    }
+
+    return $kept
 }
 
 <#
@@ -49,6 +79,7 @@ function Build-MailboxRecords {
     foreach ($mb in ($RawMailboxes | Where-Object { $_.RecipientTypeDetails -eq $RecipientType })) {
         $itemCount    = $null
         $sizeGB       = [double]0
+        $sizeBytes    = [long]0
         $lastLogon    = $null
 
         if ($needStats) {
@@ -56,6 +87,7 @@ function Build-MailboxRecords {
                 $stats     = Get-EXOMailboxStatistics -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop
                 $itemCount = $stats.ItemCount
                 $sizeGB    = Convert-SizeToGB -Value $stats.TotalItemSize
+                $sizeBytes = Convert-SizeToBytes -Value $stats.TotalItemSize
                 $lastLogon = if ($stats.PSObject.Properties['LastLogonTime']) {
                     $stats.LastLogonTime
                 } elseif ($stats.PSObject.Properties['LastUserActionTime']) {
@@ -78,6 +110,7 @@ function Build-MailboxRecords {
                 Database                     = $mb.Database
                 ItemCount                    = $itemCount
                 TotalItemSizeGB              = $sizeGB
+                TotalItemSizeBytes           = $sizeBytes
                 ProhibitSendQuotaGB          = Convert-SizeToGB -Value $mb.ProhibitSendQuota
                 ProhibitSendReceiveQuotaGB   = Convert-SizeToGB -Value $mb.ProhibitSendReceiveQuota
                 LitigationHoldEnabled        = $mb.LitigationHoldEnabled
@@ -85,6 +118,7 @@ function Build-MailboxRecords {
                 LastLogonTime                = $lastLogon
                 WhenCreated                  = $mb.WhenCreated
                 WhenMailboxCreated           = $mb.WhenMailboxCreated
+                ForwardingSmtpAddress        = if ($mb.ForwardingSmtpAddress) { $mb.ForwardingSmtpAddress.ToString() } else { '' }
             })
         }
         elseif ($RecipientType -eq 'SharedMailbox') {
@@ -96,26 +130,29 @@ function Build-MailboxRecords {
                 ExchangeGuid                 = $mb.ExchangeGuid.ToString()
                 ItemCount                    = $itemCount
                 TotalItemSizeGB              = $sizeGB
+                TotalItemSizeBytes           = $sizeBytes
                 ProhibitSendQuotaGB          = Convert-SizeToGB -Value $mb.ProhibitSendQuota
                 ProhibitSendReceiveQuotaGB   = Convert-SizeToGB -Value $mb.ProhibitSendReceiveQuota
                 LitigationHoldEnabled        = $mb.LitigationHoldEnabled
                 ArchiveStatus                = $mb.ArchiveStatus
                 WhenCreated                  = $mb.WhenCreated
                 WhenMailboxCreated           = $mb.WhenMailboxCreated
+                ForwardingSmtpAddress        = if ($mb.ForwardingSmtpAddress) { $mb.ForwardingSmtpAddress.ToString() } else { '' }
             })
         }
         else {
             # Room or Equipment -> Resource Mailboxes
             $resourceType = if ($RecipientType -eq 'RoomMailbox') { 'Room' } else { 'Equipment' }
             $records.Add([PSCustomObject]@{
-                DisplayName        = $mb.DisplayName
-                PrimarySmtpAddress = $mb.PrimarySmtpAddress
-                EmailAddresses     = $emailAddresses
-                Alias              = $mb.Alias
-                ResourceType       = $resourceType
-                ExchangeGuid       = $mb.ExchangeGuid.ToString()
-                WhenCreated        = $mb.WhenCreated
-                WhenMailboxCreated = $mb.WhenMailboxCreated
+                DisplayName            = $mb.DisplayName
+                PrimarySmtpAddress     = $mb.PrimarySmtpAddress
+                EmailAddresses         = $emailAddresses
+                Alias                  = $mb.Alias
+                ResourceType           = $resourceType
+                ExchangeGuid           = $mb.ExchangeGuid.ToString()
+                WhenCreated            = $mb.WhenCreated
+                WhenMailboxCreated     = $mb.WhenMailboxCreated
+                ForwardingSmtpAddress  = if ($mb.ForwardingSmtpAddress) { $mb.ForwardingSmtpAddress.ToString() } else { '' }
             })
         }
     }
@@ -145,26 +182,21 @@ function Get-MailContactData {
 
 <#
 .SYNOPSIS
-    Retrieves VBU-scoped distribution groups with full membership, split into DGs and mail-enabled security groups.
+    Retrieves VBU-scoped distribution groups with member counts, split into DGs and mail-enabled security groups.
 #>
-function Build-DistributionGroupRecords {
-    param([Parameter(Mandatory)][array]$RawGroups)
+function Get-DistributionGroupData {
+    param([PSCustomObject]$Context)
 
+    $t    = $Context.VBUSearchTerm
+    $raw  = @(Get-DistributionGroup -Filter "EmailAddresses -like '*$t*'" -ResultSize Unlimited -ErrorAction Stop)
     $dgs  = [System.Collections.Generic.List[PSCustomObject]]::new()
     $mesg = [System.Collections.Generic.List[PSCustomObject]]::new()
 
-    foreach ($dg in $RawGroups) {
-        # Members captured here (not just counted) so New-DistributionGroups.ps1 can recreate
-        # membership in the destination tenant straight from this collector's output - no
-        # separate live re-query needed.
-        $memberAddresses = @()
+    foreach ($dg in $raw) {
         try {
-            $members = @(Get-DistributionGroupMember -Identity $dg.Guid.ToString() -ResultSize Unlimited -ErrorAction Stop)
-            $memberAddresses = @($members | ForEach-Object {
-                if ($_.PrimarySmtpAddress) { $_.PrimarySmtpAddress.ToString() } else { $_.Name }
-            } | Where-Object { $_ })
+            $memberCount = (Get-DistributionGroupMember -Identity $dg.Guid.ToString() -ResultSize Unlimited -ErrorAction Stop).Count
         }
-        catch { $memberAddresses = @() }
+        catch { $memberCount = $null }
 
         $record = [PSCustomObject]@{
             DisplayName                  = $dg.DisplayName
@@ -172,8 +204,7 @@ function Build-DistributionGroupRecords {
             EmailAddresses               = if ($dg.EmailAddresses) { ($dg.EmailAddresses | Sort-Object) -join '|' } else { '' }
             Alias                        = $dg.Alias
             GroupType                    = $dg.RecipientTypeDetails.ToString()
-            MemberCount                  = $memberAddresses.Count
-            Members                      = $memberAddresses -join '|'
+            MemberCount                  = $memberCount
             ManagedBy                    = if ($dg.ManagedBy) { ($dg.ManagedBy | ForEach-Object { $_.ToString() }) -join '|' } else { '' }
             HiddenFromAddressListsEnabled = $dg.HiddenFromAddressListsEnabled
             WhenCreated                  = $dg.WhenCreated
@@ -188,93 +219,6 @@ function Build-DistributionGroupRecords {
     }
 
     return @{ DGs = $dgs.ToArray(); MailEnabledSecurityGroups = $mesg.ToArray() }
-}
-
-<#
-.SYNOPSIS
-    Builds every distribution group + mail-enabled security group, tenant-wide, with members -
-    the tenant-wide walk behind Update-DistributionGroupsCache.ps1's cache file. Not VBU-scoped.
-#>
-function Get-AllDistributionGroupsWithMembers {
-    $raw = @(Get-DistributionGroup -ResultSize Unlimited -ErrorAction Stop)
-    return Build-DistributionGroupRecords -RawGroups $raw
-}
-
-<#
-.SYNOPSIS
-    Writes the tenant-wide distribution-group cache (DistributionGroupsCache.json) that
-    Get-DistributionGroupData reads from when a fresh cache is available, instead of repeating
-    the Get-DistributionGroup + per-group Get-DistributionGroupMember walk on every VBU's run.
-#>
-function Update-DistributionGroupsCacheFile {
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$CacheFolder)
-
-    Write-Host ($PREFIX_INFO + 'Enumerating all distribution groups (incl. members) tenant-wide...') -ForegroundColor DarkGray
-    $result = Get-AllDistributionGroupsWithMembers
-    Write-ProgressLine -Label 'Distribution Groups (tenant-wide)'          -Count $result.DGs.Count
-    Write-ProgressLine -Label 'Mail-Enabled Security Groups (tenant-wide)' -Count $result.MailEnabledSecurityGroups.Count
-
-    New-Item -ItemType Directory -Path $CacheFolder -Force | Out-Null
-    $cachePath = Join-Path $CacheFolder 'DistributionGroupsCache.json'
-    [PSCustomObject]@{
-        DistributionGroups        = $result.DGs
-        MailEnabledSecurityGroups = $result.MailEnabledSecurityGroups
-    } | ConvertTo-Json -Depth 10 | Set-Content -Path $cachePath -Encoding UTF8
-    Write-Host ($PREFIX_OK + "DistributionGroupsCache.json cache written: $cachePath") -ForegroundColor Green
-
-    return $result.DGs.Count + $result.MailEnabledSecurityGroups.Count
-}
-
-<#
-.SYNOPSIS
-    Filters the cached tenant-wide distribution-group list down to one VBU's groups.
-#>
-function Get-DistributionGroupDataFromCache {
-    param([PSCustomObject]$Context, [Parameter(Mandatory)][string]$CacheFolder)
-
-    $t      = $Context.VBUSearchTerm
-    $domain = $Context.VBUDomain
-    $cached = Import-AssessmentJson -FileName 'DistributionGroupsCache.json' -RawPath $CacheFolder
-
-    $matchesVbu = {
-        param($g)
-        ($g.PrimarySmtpAddress -like "*$t*") -or ($g.PrimarySmtpAddress -like "*$domain*") -or
-        ($g.EmailAddresses     -like "*$t*") -or ($g.EmailAddresses     -like "*$domain*")
-    }
-
-    $dgs  = @(@($cached.DistributionGroups)        | Where-Object $matchesVbu)
-    $mesg = @(@($cached.MailEnabledSecurityGroups)  | Where-Object $matchesVbu)
-
-    return @{ DGs = $dgs; MailEnabledSecurityGroups = $mesg }
-}
-
-<#
-.SYNOPSIS
-    Retrieves this VBU's distribution groups and mail-enabled security groups with members.
-.DESCRIPTION
-    Reads and locally filters DistributionGroupsCache.json when -CacheFolder is given and that
-    cache file exists (see Update-DistributionGroupsCache.ps1) - no live Exchange Online query at
-    all in that case. Falls back to the original live, VBU-filtered Get-DistributionGroup call
-    when no cache is available yet, so this stays a soft/optional speed-up rather than a new hard
-    prerequisite like the SharePoint/Teams caches.
-#>
-function Get-DistributionGroupData {
-    param([PSCustomObject]$Context, [string]$CacheFolder, [int]$MaxCacheAgeDays = 14)
-
-    $cachePath = if ($CacheFolder) { Join-Path $CacheFolder 'DistributionGroupsCache.json' } else { $null }
-    if ($cachePath -and (Test-Path $cachePath)) {
-        $ageDays = ((Get-Date) - (Get-Item $cachePath).LastWriteTime).TotalDays
-        if ($ageDays -le $MaxCacheAgeDays) {
-            Write-Host ($PREFIX_INFO + 'Reading distribution groups from cache...') -ForegroundColor DarkGray
-            return Get-DistributionGroupDataFromCache -Context $Context -CacheFolder $CacheFolder
-        }
-        Write-Host ($PREFIX_WARN + "DistributionGroupsCache.json is $([math]::Floor($ageDays)) day(s) old (max $MaxCacheAgeDays) - querying live instead. Refresh it via Update-DistributionGroupsCache.ps1.") -ForegroundColor Yellow
-    }
-
-    $t   = $Context.VBUSearchTerm
-    $raw = @(Get-DistributionGroup -Filter "EmailAddresses -like '*$t*'" -ResultSize Unlimited -ErrorAction Stop)
-    return Build-DistributionGroupRecords -RawGroups $raw
 }
 
 <#
@@ -301,30 +245,80 @@ function Get-DynamicDistributionGroupData {
 
 <#
 .SYNOPSIS
-    Collects non-inherited, non-NT AUTHORITY permissions on the already-collected user mailboxes.
+    Collects FullAccess, SendAs, and SendOnBehalf delegation across user, shared, and resource mailboxes, one row per grant.
 #>
+function Resolve-DelegateIdentity {
+    param([string]$Value, [hashtable]$Cache)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $Value }
+    if ($Cache.ContainsKey($Value)) { return $Cache[$Value] }
+    $resolved = $Value
+    try {
+        $rcpt = Get-EXORecipient -Identity $Value -ErrorAction Stop
+        if ($rcpt.PrimarySmtpAddress) { $resolved = $rcpt.PrimarySmtpAddress.ToString() }
+        elseif ($rcpt.DisplayName)    { $resolved = $rcpt.DisplayName }
+    }
+    catch { }
+    $Cache[$Value] = $resolved
+    return $resolved
+}
+
 function Get-MailboxPermissionData {
-    param([object[]]$UserMailboxes)
+    param([object[]]$Mailboxes)
 
     $records = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $delegateCache = @{}
 
-    foreach ($mb in $UserMailboxes) {
+    foreach ($mb in $Mailboxes) {
+        $mailboxType = $mb.RecipientTypeDetails.ToString()
+        $mailboxSmtp = $mb.PrimarySmtpAddress.ToString()
+        $mailboxUpn  = if ($mailboxType -eq 'UserMailbox') { $mb.UserPrincipalName } else { '' }
+
         try {
-            $perms = Get-EXOMailboxPermission -Identity $mb.ExchangeGuid -ErrorAction Stop |
-                Where-Object { -not $_.IsInherited -and $_.User -notlike 'NT AUTHORITY\*' }
-            foreach ($p in $perms) {
+            $fullAccess = Get-EXOMailboxPermission -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop |
+                Where-Object { -not $_.IsInherited -and $_.User -ne 'NT AUTHORITY\SELF' -and $_.User -notlike 'S-1-5-*' }
+            foreach ($p in $fullAccess) {
                 $records.Add([PSCustomObject]@{
-                    Mailbox      = $mb.DisplayName
-                    MailboxUPN   = $mb.UserPrincipalName
-                    User         = $p.User
-                    AccessRights = ($p.AccessRights | ForEach-Object { $_.ToString() }) -join '|'
-                    IsInherited  = $p.IsInherited
-                    Deny         = $p.Deny
+                    Mailbox        = $mailboxSmtp
+                    MailboxUPN     = $mailboxUpn
+                    MailboxType    = $mailboxType
+                    Delegate       = Resolve-DelegateIdentity -Value "$($p.User)" -Cache $delegateCache
+                    PermissionType = 'FullAccess'
+                    AccessRights   = ($p.AccessRights | ForEach-Object { $_.ToString() }) -join '|'
                 })
             }
         }
         catch {
-            Write-Host ($PREFIX_WARN + "Could not get permissions for '$($mb.DisplayName)': " + $_.Exception.Message) -ForegroundColor Yellow
+            Write-Host ($PREFIX_WARN + "Could not get FullAccess permissions for '$($mb.DisplayName)': " + $_.Exception.Message) -ForegroundColor Yellow
+        }
+
+        try {
+            $sendAs = Get-EXORecipientPermission -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop |
+                Where-Object { -not $_.IsInherited -and $_.AccessRights -contains 'SendAs' -and $_.Trustee -ne 'NT AUTHORITY\SELF' }
+            foreach ($p in $sendAs) {
+                $records.Add([PSCustomObject]@{
+                    Mailbox        = $mailboxSmtp
+                    MailboxUPN     = $mailboxUpn
+                    MailboxType    = $mailboxType
+                    Delegate       = Resolve-DelegateIdentity -Value "$($p.Trustee)" -Cache $delegateCache
+                    PermissionType = 'SendAs'
+                    AccessRights   = ($p.AccessRights | ForEach-Object { $_.ToString() }) -join '|'
+                })
+            }
+        }
+        catch {
+            Write-Host ($PREFIX_WARN + "Could not get SendAs permissions for '$($mb.DisplayName)': " + $_.Exception.Message) -ForegroundColor Yellow
+        }
+
+        foreach ($delegate in @($mb.GrantSendOnBehalfTo)) {
+            if ($null -eq $delegate -or "$delegate" -eq '') { continue }
+            $records.Add([PSCustomObject]@{
+                Mailbox        = $mailboxSmtp
+                MailboxUPN     = $mailboxUpn
+                MailboxType    = $mailboxType
+                Delegate       = Resolve-DelegateIdentity -Value "$delegate" -Cache $delegateCache
+                PermissionType = 'SendOnBehalf'
+                AccessRights   = ''
+            })
         }
     }
 
@@ -388,10 +382,11 @@ function Get-AcceptedDomainData {
     return @(Get-AcceptedDomain -ErrorAction Stop |
         ForEach-Object {
             [PSCustomObject]@{
-                Name       = $_.Name
-                DomainName = $_.DomainName
-                DomainType = $_.DomainType.ToString()
-                Default    = $_.Default
+                Name               = $_.Name
+                DomainName         = $_.DomainName
+                DomainType         = $_.DomainType.ToString()
+                Default            = $_.Default
+                AuthenticationType = $_.AuthenticationType
             }
         })
 }
@@ -446,7 +441,7 @@ function Get-JournalRuleData {
 #>
 function Invoke-ExchangeCollection {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][PSCustomObject]$Context, [string]$CacheFolder)
+    param([Parameter(Mandatory)][PSCustomObject]$Context)
 
     $start = Get-Date
     Write-SectionHeader 'Exchange Online'
@@ -470,7 +465,7 @@ function Invoke-ExchangeCollection {
         Write-ProgressLine -Label 'Mail Contacts' -Count $contacts.Count
 
         Write-Host ($PREFIX_INFO + 'Collecting distribution groups...') -ForegroundColor DarkGray
-        $dgResult = Get-DistributionGroupData -Context $Context -CacheFolder $CacheFolder
+        $dgResult = Get-DistributionGroupData -Context $Context
         Write-ProgressLine -Label 'Distribution Groups'          -Count $dgResult.DGs.Count
         Write-ProgressLine -Label 'Mail-Enabled Security Groups' -Count $dgResult.MailEnabledSecurityGroups.Count
 
@@ -479,7 +474,7 @@ function Invoke-ExchangeCollection {
         Write-ProgressLine -Label 'Dynamic Distribution Groups' -Count $ddgs.Count
 
         Write-Host ($PREFIX_INFO + 'Collecting mailbox permissions...') -ForegroundColor DarkGray
-        $permissions = Get-MailboxPermissionData -UserMailboxes $userMailboxes
+        $permissions = Get-MailboxPermissionData -Mailboxes $allRaw
         Write-ProgressLine -Label 'Mailbox Permissions' -Count $permissions.Count
 
         Write-Host ($PREFIX_INFO + 'Collecting transport rules...') -ForegroundColor DarkGray
@@ -551,4 +546,4 @@ function Invoke-ExchangeCollection {
 # Exports
 # -----------------------------------------------------------------------
 
-Export-ModuleMember -Function 'Invoke-ExchangeCollection', 'Update-DistributionGroupsCacheFile'
+Export-ModuleMember -Function 'Invoke-ExchangeCollection'

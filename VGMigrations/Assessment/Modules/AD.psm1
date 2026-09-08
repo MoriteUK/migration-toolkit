@@ -1,18 +1,25 @@
 #Requires -Version 7.0
 
 Import-Module (Join-Path $PSScriptRoot 'Common.psm1') -DisableNameChecking -Force -Global
-
-# ActiveDirectory is only imported when actually needed (Context.SkipAD is false) - see
-# Invoke-ADCollection. Importing it unconditionally at module-load time would fail on a
-# machine without RSAT before Invoke-ADCollection gets a chance to check SkipAD.
+Import-Module ActiveDirectory -DisableNameChecking -ErrorAction Stop
 
 $script:ManagerCache = @{}
 
 $script:ADUserProperties = @(
     'DisplayName', 'GivenName', 'Surname', 'UserPrincipalName', 'Mail',
     'Department', 'Title', 'Company', 'Manager', 'EmployeeID',
-    'extensionAttribute6', 'extensionAttribute7', 'proxyAddresses',
-    'ObjectGUID', 'SID', 'Enabled', 'DistinguishedName', 'SamAccountName'
+    'proxyAddresses', 'ObjectGUID', 'SID', 'Enabled', 'DistinguishedName', 'SamAccountName',
+    'Initials', 'EmailAddress', 'mailNickname', 'EmployeeNumber', 'EmployeeType', 'directReports',
+    'physicalDeliveryOfficeName', 'telephoneNumber', 'mobile', 'homePhone', 'facsimileTelephoneNumber',
+    'StreetAddress', 'l', 'st', 'PostalCode', 'c', 'postOfficeBox', 'Description', 'LockedOut',
+    'PasswordExpired', 'PasswordLastSet', 'PasswordNeverExpires', 'AccountExpirationDate', 'LastLogonDate',
+    'UserAccountControl', 'WhenCreated', 'WhenChanged', 'CanonicalName', 'targetAddress',
+    'msExchHideFromAddressLists', 'msExchRecipientTypeDetails', 'msExchRemoteRecipientType',
+    'extensionAttribute1', 'extensionAttribute2', 'extensionAttribute3', 'extensionAttribute4',
+    'extensionAttribute5', 'extensionAttribute6', 'extensionAttribute7', 'extensionAttribute8',
+    'extensionAttribute9', 'extensionAttribute10', 'extensionAttribute11', 'extensionAttribute12',
+    'extensionAttribute13', 'extensionAttribute14', 'extensionAttribute15',
+    'memberOf', 'servicePrincipalName'
 )
 
 $script:ADGroupProperties = @(
@@ -50,7 +57,13 @@ function Resolve-ManagerName {
 
 <#
 .SYNOPSIS
-    Retrieves all AD users and filters client-side to the VBU scope on name, UPN, proxy addresses, and extension attributes.
+    Retrieves all AD users and filters client-side to the VBU scope on tagging attributes and mail domain.
+.DESCRIPTION
+    Users are scoped by how they are tagged and by their mail domain - never by display name.
+    A user is in scope when ANY of these holds: extensionAttribute7 exactly matches the VBU ID,
+    extensionAttribute6 contains the VBU search term (it holds a name such as 'Bravura Security',
+    not the domain), any proxyAddress contains the VBU domain, or the UPN contains the VBU domain.
+    Name/search-term matching is a group, SharePoint, and Teams concern only.
 #>
 function Get-VBUScopedUsers {
     param([PSCustomObject]$Context)
@@ -63,42 +76,114 @@ function Get-VBUScopedUsers {
     # Full client-side filter avoids double-query deduplication and catches all match paths correctly.
     $raw = Get-ADUser -Filter * -Properties $script:ADUserProperties -ErrorAction Stop |
         Where-Object {
-            ($_.DisplayName         -like "*$t*") -or
-            ($_.UserPrincipalName   -like "*$t*") -or
-            ($_.extensionAttribute6 -eq $d)        -or
-            ($_.extensionAttribute7 -eq $i)        -or
-            ($_.proxyAddresses -and ($_.proxyAddresses | Where-Object { $_ -like "*$t*" }))
+            ($_.extensionAttribute7 -eq   $i)       -or
+            (Test-WholeWordMatch -Text $_.extensionAttribute6 -Term $t) -or
+            ($_.UserPrincipalName   -like "*$d*")   -or
+            ($_.proxyAddresses -and ($_.proxyAddresses | Where-Object { $_ -like "*$d*" }))
         }
 
     return @($raw | ForEach-Object {
+        $u = $_
+
+        $imAddress = ''
+        if ($u.proxyAddresses) {
+            $sip = @($u.proxyAddresses | Where-Object { $_ -like 'sip:*' }) | Select-Object -First 1
+            if ($sip) { $imAddress = $sip -replace '^sip:', '' }
+        }
+
+        $ou = if ($u.DistinguishedName) { $u.DistinguishedName -replace '^CN=[^,]+,', '' } else { '' }
+
+        $primary = @($u.proxyAddresses | Where-Object { $_ -clike 'SMTP:*' }) | Select-Object -First 1
+
+        $discoveredBy =
+            if (($u.UserPrincipalName -like "*$d*") -or ($primary -like "*$d*"))       { 'PrimarySmtp/UPN' }
+            elseif ($u.extensionAttribute7 -eq $i)                                     { 'VBU ID' }
+            elseif (Test-WholeWordMatch -Text $u.extensionAttribute6 -Term $t)         { 'VBU Name' }
+            elseif ($u.proxyAddresses -and ($u.proxyAddresses | Where-Object { $_ -like "*$d*" })) { 'Alias' }
+            else                                                                       { '' }
+
         [PSCustomObject]@{
-            DisplayName         = $_.DisplayName
-            GivenName           = $_.GivenName
-            Surname             = $_.Surname
-            UserPrincipalName   = $_.UserPrincipalName
-            Mail                = $_.Mail
-            Department          = $_.Department
-            Title               = $_.Title
-            Company             = $_.Company
-            Manager             = Resolve-ManagerName -ManagerDN $_.Manager
-            EmployeeID          = $_.EmployeeID
-            ExtensionAttribute6 = $_.extensionAttribute6
-            ExtensionAttribute7 = $_.extensionAttribute7
-            ProxyAddresses      = ($_.proxyAddresses | Sort-Object) -join '|'
-            ObjectGUID          = $_.ObjectGUID.ToString()
-            SID                 = $_.SID.ToString()
-            Enabled             = $_.Enabled
-            # Included for device correlation in Get-ADDeviceData and the Domain Removal
-            # CSV compatibility layer (LegacyExport.psm1) - not a workbook field
-            DistinguishedName   = $_.DistinguishedName
-            SamAccountName      = $_.SamAccountName
+            DisplayName               = $_.DisplayName
+            DiscoveredBy              = $discoveredBy
+            GivenName                 = $_.GivenName
+            Surname                   = $_.Surname
+            UserPrincipalName         = $_.UserPrincipalName
+            Mail                      = $_.Mail
+            IMAddress                 = $imAddress
+            Department                = $_.Department
+            Title                     = $_.Title
+            Company                   = $_.Company
+            Manager                   = Resolve-ManagerName -ManagerDN $_.Manager
+            EmployeeID                = $_.EmployeeID
+            ProxyAddresses            = ($_.proxyAddresses | Sort-Object) -join '|'
+            ObjectGUID                = $_.ObjectGUID.ToString()
+            SID                       = $_.SID.ToString()
+            Enabled                   = $_.Enabled
+            Initials                  = $_.Initials
+            EmailAddress              = $_.EmailAddress
+            MailNickname              = $_.mailNickname
+            EmployeeNumber            = $_.EmployeeNumber
+            EmployeeType              = $_.EmployeeType
+            ManagerDN                 = $_.Manager
+            DirectReportCount         = if ($_.directReports) { @($_.directReports).Count } else { 0 }
+            Office                    = $_.physicalDeliveryOfficeName
+            OfficePhone               = $_.telephoneNumber
+            MobilePhone               = $_.mobile
+            HomePhone                 = $_.homePhone
+            Fax                       = $_.facsimileTelephoneNumber
+            StreetAddress             = $_.StreetAddress
+            City                      = $_.l
+            State                     = $_.st
+            PostalCode                = $_.PostalCode
+            Country                   = $_.c
+            POBox                     = $_.postOfficeBox
+            Description               = $_.Description
+            LockedOut                 = $_.LockedOut
+            PasswordExpired           = $_.PasswordExpired
+            PasswordLastSet           = $_.PasswordLastSet
+            PasswordNeverExpires      = $_.PasswordNeverExpires
+            AccountExpirationDate     = $_.AccountExpirationDate
+            LastLogonDate             = $_.LastLogonDate
+            UserAccountControl        = $_.UserAccountControl
+            WhenCreated               = $_.WhenCreated
+            WhenChanged               = $_.WhenChanged
+            OU                        = $ou
+            CanonicalName             = $_.CanonicalName
+            TargetAddress             = $_.targetAddress
+            HideFromGAL               = $_.msExchHideFromAddressLists
+            MsExchRecipientTypeDetails = $_.msExchRecipientTypeDetails
+            MsExchRemoteRecipientType = $_.msExchRemoteRecipientType
+            ExtensionAttribute1       = $_.extensionAttribute1
+            ExtensionAttribute2       = $_.extensionAttribute2
+            ExtensionAttribute3       = $_.extensionAttribute3
+            ExtensionAttribute4       = $_.extensionAttribute4
+            ExtensionAttribute5       = $_.extensionAttribute5
+            ExtensionAttribute6       = $_.extensionAttribute6
+            ExtensionAttribute7       = $_.extensionAttribute7
+            ExtensionAttribute8       = $_.extensionAttribute8
+            ExtensionAttribute9       = $_.extensionAttribute9
+            ExtensionAttribute10      = $_.extensionAttribute10
+            ExtensionAttribute11      = $_.extensionAttribute11
+            ExtensionAttribute12      = $_.extensionAttribute12
+            ExtensionAttribute13      = $_.extensionAttribute13
+            ExtensionAttribute14      = $_.extensionAttribute14
+            ExtensionAttribute15      = $_.extensionAttribute15
+            GroupMembershipCount      = if ($_.memberOf) { @($_.memberOf).Count } else { 0 }
+            ServicePrincipalNames     = if ($_.servicePrincipalName) { ($_.servicePrincipalName | Sort-Object) -join '|' } else { '' }
+            # Included for device correlation in Get-ADDeviceData - not a workbook field
+            DistinguishedName         = $_.DistinguishedName
+            SamAccountName            = $_.SamAccountName
         }
     })
 }
 
 <#
 .SYNOPSIS
-    Retrieves AD groups matching the VBU search term on Name, mail, or proxyAddresses via server-side filter.
+    Retrieves AD groups matching the VBU search term as a whole word on Name, mail, or proxyAddresses.
+.DESCRIPTION
+    LDAP filters cannot express word boundaries, so the server-side -like filter deliberately
+    over-includes (substring is a superset of whole-word) and a client-side Test-WholeWordMatch
+    pass then drops the substring false positives - e.g. 'ceramics' for the term 'amic'.
 #>
 function Get-VBUScopedGroups {
     param([PSCustomObject]$Context)
@@ -106,7 +191,12 @@ function Get-VBUScopedGroups {
     $t      = $Context.VBUSearchTerm
     $filter = "(Name -like '*$t*') -or (mail -like '*$t*') -or (proxyAddresses -like '*$t*')"
 
-    $raw = Get-ADGroup -Filter $filter -Properties $script:ADGroupProperties -ErrorAction Stop
+    $raw = Get-ADGroup -Filter $filter -Properties $script:ADGroupProperties -ErrorAction Stop |
+        Where-Object {
+            (Test-WholeWordMatch -Text $_.Name -Term $t) -or
+            (Test-WholeWordMatch -Text $_.Mail -Term $t) -or
+            ($_.proxyAddresses -and ($_.proxyAddresses | Where-Object { Test-WholeWordMatch -Text $_ -Term $t }))
+        }
 
     return @($raw | ForEach-Object {
         [PSCustomObject]@{
@@ -243,12 +333,10 @@ function Get-ADDeviceData {
 .SYNOPSIS
     Orchestrates Active Directory collection of users, groups, memberships, and devices.
 .DESCRIPTION
-    Returns a skipped result immediately when Context.SkipAD is set (module missing or
-    domain unreachable - see Prerequisites.psm1). Otherwise runs the four AD workloads
-    against the inherited domain session and writes ADUsers.json, ADGroups.json,
-    ADGroupMemberships.json, and ADDevices.json. AD collection is non-critical like every
-    other collector: a failure here is recorded and returned, not rethrown, so it never
-    stops the rest of the assessment.
+    Runs the four AD workloads against the inherited domain session and writes
+    ADUsers.json, ADGroups.json, ADGroupMemberships.json, and ADDevices.json.
+    AD collection is critical: on failure the status is recorded and the error
+    is rethrown so the orchestrator stops the run.
 #>
 function Invoke-ADCollection {
     [CmdletBinding()]
@@ -257,20 +345,7 @@ function Invoke-ADCollection {
     $start = Get-Date
     Write-SectionHeader 'Active Directory'
 
-    if ($Context.SkipAD) {
-        Write-Host ($PREFIX_SKIP + 'AD collection skipped (SkipAD = true)') -ForegroundColor Yellow
-        Update-CollectorStatus -CollectorName 'AD Data' -Status 'Skipped' `
-            -RawPath $Context.RawPath -StartTime $start
-        Write-JsonOutput -FileName 'ADUsers.json'            -Data @() -RawPath $Context.RawPath
-        Write-JsonOutput -FileName 'ADGroups.json'           -Data @() -RawPath $Context.RawPath
-        Write-JsonOutput -FileName 'ADGroupMemberships.json' -Data @() -RawPath $Context.RawPath
-        Write-JsonOutput -FileName 'ADDevices.json'          -Data @() -RawPath $Context.RawPath
-        return New-CollectorResult -Skipped $true
-    }
-
     try {
-        Import-Module ActiveDirectory -DisableNameChecking -ErrorAction Stop
-
         Write-Host ($PREFIX_INFO + 'Collecting AD users...') -ForegroundColor DarkGray
         $users = Get-VBUScopedUsers -Context $Context
         Write-ProgressLine -Label 'AD Users' -Count $users.Count
@@ -309,11 +384,7 @@ function Invoke-ADCollection {
         Write-Host ($PREFIX_FAIL + 'AD collection failed: ' + $_.Exception.Message) -ForegroundColor Red
         Update-CollectorStatus -CollectorName 'AD Data' -Status 'Failed' `
             -RawPath $Context.RawPath -StartTime $start -Message $_.Exception.Message
-        Write-JsonOutput -FileName 'ADUsers.json'            -Data @() -RawPath $Context.RawPath
-        Write-JsonOutput -FileName 'ADGroups.json'           -Data @() -RawPath $Context.RawPath
-        Write-JsonOutput -FileName 'ADGroupMemberships.json' -Data @() -RawPath $Context.RawPath
-        Write-JsonOutput -FileName 'ADDevices.json'          -Data @() -RawPath $Context.RawPath
-        return New-CollectorResult -Success $false -ErrorMessage $_.Exception.Message
+        throw  # AD failure is critical - rethrow so orchestrator stops the run
     }
 }
 
