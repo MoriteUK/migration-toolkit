@@ -193,25 +193,21 @@ if ($haveScopes -and (Test-GraphToken)) {
     # already targets the right tenant; -TenantId is only used as a post-connect sanity check.
     $connect = @{ Scopes = $scopes; NoWelcome = $true; ErrorAction = 'Stop' }
 
-    Write-Host "Connecting to Microsoft Graph — sign in when the browser opens..." -ForegroundColor Yellow
+    Write-Host "Connecting to Microsoft Graph — a browser sign-in window will open..." -ForegroundColor Yellow
     Connect-MgGraph @connect
 
     if (-not (Test-GraphToken)) {
-        Write-Warning "Interactive browser sign-in did not yield a usable token (common when launched from the app's headless runner). Retrying with device-code sign-in — open the URL below and enter the code..."
-        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
-        Connect-MgGraph @connect -UseDeviceCode
-
-        if (-not (Test-GraphToken)) {
-            Write-Error @"
-Could not obtain a working Microsoft Graph token.
-Try one of:
-  - Run this script from a normal PowerShell 7 window (pwsh) instead of the app button, then re-run it here.
-  - If device-code sign-in was blocked (AADSTS error above), the tenant has a Conditional Access
-    'Authentication flows' policy blocking it - sign in from a real browser session first.
+        # Device-code sign-in is deliberately NOT attempted - it's blocked tenant-wide by a
+        # Conditional Access 'Authentication flows' policy on the tenants this is used against.
+        Write-Error @"
+Signed-in account was recorded but no usable Microsoft Graph token was obtained
+(the browser sign-in did not complete).
+  - Finish the sign-in in the browser window that opened, then run this again.
+  - If no browser window opened, this script needs its own console window: launch it from the
+    'Invite External Users' button in the app, or run it directly in a PowerShell 7 (pwsh) window.
 Nothing was changed.
 "@
-            exit 1
-        }
+        exit 1
     }
     $ctx = Get-MgContext
     Write-Host "Connected as $($ctx.Account)  (tenant $($ctx.TenantId))" -ForegroundColor Green

@@ -3742,7 +3742,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!csvFile) { alert('Please browse for the external users CSV.'); return; }
 
       inviteExternalRunBtn.disabled = true;
-      inviteExternalRunBtn.textContent = 'Running…';
+      inviteExternalRunBtn.textContent = 'Opening…';
       if (inviteExternalLog) inviteExternalLog.style.display = '';
       if (inviteExternalLogPre) inviteExternalLogPre.textContent = '';
 
@@ -3752,14 +3752,21 @@ document.addEventListener('DOMContentLoaded', () => {
       if (inviteExternalSendEmail?.checked) args.push('-SendInvitationEmail');
       if (inviteExternalWhatIf?.checked)    args.push('-WhatIf');
 
-      window.electronAPI.onPsOutput(appendInviteExternalLog);
+      // Runs in its own PowerShell window, not streamed here — Connect-MgGraph's interactive
+      // browser sign-in can't complete in the app's headless child process, and device-code
+      // sign-in is blocked on this tenant. The new window gives that flow a real console.
       try {
-        const result = await runStreamingScript('Invite-externalUsers.ps1', args);
-        appendInviteExternalLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+        const result = await window.electronAPI.launchScript('Invite-externalUsers.ps1', args);
+        if (result?.success) {
+          appendInviteExternalLog('A PowerShell window has opened for Invite External Users.\n');
+          appendInviteExternalLog('Complete the sign-in and watch the run there — output is not mirrored here.\n');
+          appendInviteExternalLog(`Results CSV is written to %APPDATA%\\FlyMigration\\Logs\\InviteExternalUsers-*.csv\n`);
+        } else {
+          appendInviteExternalLog(`\n✗ Could not open the window: ${result?.error || 'unknown error'}\n`);
+        }
       } catch (err) {
         appendInviteExternalLog(`\nError: ${err.message || err}\n`);
       } finally {
-        window.electronAPI.offPsOutput();
         inviteExternalRunBtn.disabled = false;
         inviteExternalRunBtn.textContent = '▶ Invite & Add';
       }

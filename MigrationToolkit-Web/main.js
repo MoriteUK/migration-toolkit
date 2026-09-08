@@ -143,22 +143,26 @@ function executePowerShellScript(scriptName, args = []) {
 
 // Register IPC Handlers
 function registerIPCHandlers() {
-  ipcMain.handle('launch-script', async (event, scriptName) => {
+  ipcMain.handle('launch-script', async (event, scriptName, args = []) => {
     try {
-      // Launch PowerShell script in NEW VISIBLE window
+      // Launch the script in its OWN new console window. Electron is a GUI-subsystem process
+      // with no console, so spawning pwsh.exe detached makes Windows allocate a fresh console
+      // window for it — which is what interactive Connect-MgGraph / Connect-ExchangeOnline
+      // browser sign-in needs (the app's streamed pwsh child has no window and that flow dies
+      // there). -NoExit keeps the window up after the script finishes so results/errors stay
+      // readable. Passing args as an array avoids all the cmd.exe "start" quoting problems with
+      // paths that contain spaces.
       const scriptPath = path.join(PS_SCRIPT_PATH, scriptName);
+      const psArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', scriptPath];
+      if (Array.isArray(args)) {
+        for (const a of args) psArgs.push(String(a));
+      }
 
-      // Use 'start' command to open in a new window (Windows-specific)
-      const child = spawn('cmd.exe', [
-        '/c', 'start',
-        'pwsh.exe',
-        '-NoProfile',
-        '-ExecutionPolicy', 'Bypass',
-        '-File', scriptPath
-      ], {
+      const child = spawn('pwsh.exe', psArgs, {
         cwd: PS_SCRIPT_PATH,
         detached: true,
-        shell: true
+        stdio: 'ignore',
+        windowsHide: false
       });
 
       child.unref();

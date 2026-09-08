@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Expose protected methods to renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
   // Launch PowerShell scripts
-  launchScript: (scriptName) => ipcRenderer.invoke('launch-script', scriptName),
+  launchScript: (scriptName, args = []) => ipcRenderer.invoke('launch-script', scriptName, args),
 
   // Check for updates
   checkUpdates: () => ipcRenderer.invoke('check-updates'),

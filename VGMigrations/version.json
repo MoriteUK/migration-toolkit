@@ -1,7 +1,16 @@
 {
-  "version": "2.9.130",
+  "version": "2.9.131",
   "releaseDate": "2026-09-08",
   "changelog": [
+    {
+      "version": "2.9.131",
+      "date": "2026-09-08",
+      "changes": [
+        "Invite External Users: device-code sign-in (the v2.9.130 fallback) is blocked tenant-wide by a Conditional Access 'Authentication flows' policy, and Connect-MgGraph's interactive browser sign-in can't complete in the app's headless streamed pwsh child. The 'Invite & Add' button now launches Invite-externalUsers.ps1 in its OWN console window (like Discovery) so that browser sign-in has a real window to use. Output is no longer mirrored into the panel - the run and its results CSV are in that window",
+        "main.js launch-script handler now takes an args array and passes it through, and spawns pwsh.exe detached with -NoExit (Electron has no console, so a detached console-subsystem child gets its own new window; -NoExit keeps it open so results/errors stay readable). Replaces the old 'cmd /c start' form, which mangled quoting on CSV paths containing spaces. preload.js launchScript signature updated to (scriptName, args)",
+        "Invite-externalUsers.ps1: removed the -UseDeviceCode retry (blocked on these tenants). Test-GraphToken failure now stops with guidance to finish the browser sign-in / run in a pwsh window, rather than attempting device code"
+      ]
+    },
     {
       "version": "2.9.130",
       "date": "2026-09-08",
