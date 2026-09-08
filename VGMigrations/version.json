@@ -1,7 +1,16 @@
 {
-  "version": "2.9.126",
-  "releaseDate": "2026-09-02",
+  "version": "2.9.127",
+  "releaseDate": "2026-09-08",
   "changelog": [
+    {
+      "version": "2.9.127",
+      "date": "2026-09-08",
+      "changes": [
+        "Misc Scripts: added 'Invite External Users' — reworked Invite-externalUsers.ps1 from a one-team, prompt-driven script into a headless streaming run script wired into the web UI (index.html view + sidebar item, renderer.js handler and view-map entry). Purpose: after a migration, external collaborators who lost access because their guest account did not come across can be re-added in bulk. Reads a CSV (Email required; optional Name, Groups, Message), invites each person as a B2B guest (reusing an existing guest instead of re-inviting), then adds them as a member of the target Team(s) / M365 Group(s). Because a Team's membership is its underlying group's membership and a group-connected SharePoint site inherits access from that same group, one add restores Teams, Groups and their SharePoint sites together",
+        "Targets come from a 'Target Team(s)/Group(s)' UI field (';'- or ','-separated) applied to every row, or a per-row 'Groups' column that overrides it; each target is resolved by mail address, mailNickname or object id and cached. 'Already a member' is treated as a no-op success. WhatIf previews every invite/add without making changes. Reuses an existing Microsoft.Graph session when it already carries the needed scopes (User.Invite.All, User.Read.All, Group.ReadWrite.All, GroupMember.ReadWrite.All); modules pinned to 2.33.0 via Ensure-GraphModules.ps1. Writes a per-row results CSV to %APPDATA%\\FlyMigration\\Logs",
+        "Not yet exercised against a live tenant — no Graph connection was available while writing this. Run with WhatIf first and check the results CSV before a live run"
+      ]
+    },
     {
       "version": "2.9.126",
       "date": "2026-09-02",

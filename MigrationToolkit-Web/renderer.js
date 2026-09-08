@@ -1940,6 +1940,7 @@ function switchView(viewName) {
     'misc-baseline-status': 'miscBaselineStatusView',
     'misc-onedrive': 'miscOneDriveView',
     'misc-teams': 'miscTeamsView',
+    'misc-invite-external': 'miscInviteExternalView',
     'misc-deduplicate': 'miscDeduplicateView',
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-restore-proxy': 'miscRestoreProxyView',
@@ -3715,6 +3716,54 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         setTeamsOwnersBtn.disabled = false;
         setTeamsOwnersBtn.textContent = '▶ Add Owner';
+      }
+    });
+  }
+
+  // ── Invite External Users ─────────────────────────────────────────────────
+  const inviteExternalRunBtn   = document.getElementById('inviteExternalRunBtn');
+  const inviteExternalCsvFile  = document.getElementById('inviteExternalCsvFile');
+  const inviteExternalGroups   = document.getElementById('inviteExternalTargetGroups');
+  const inviteExternalTenantId = document.getElementById('inviteExternalTenantId');
+  const inviteExternalSendEmail = document.getElementById('inviteExternalSendEmail');
+  const inviteExternalWhatIf   = document.getElementById('inviteExternalWhatIf');
+  const inviteExternalLog      = document.getElementById('inviteExternalLog');
+  const inviteExternalLogPre   = document.getElementById('inviteExternalLogPre');
+
+  function appendInviteExternalLog(text) {
+    if (!inviteExternalLogPre) return;
+    inviteExternalLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    inviteExternalLogPre.scrollTop = inviteExternalLogPre.scrollHeight;
+  }
+
+  if (inviteExternalRunBtn) {
+    inviteExternalRunBtn.addEventListener('click', async () => {
+      const csvFile = inviteExternalCsvFile?.value?.trim();
+      const groups  = inviteExternalGroups?.value?.trim();
+      const tenantId = inviteExternalTenantId?.value?.trim();
+      if (!csvFile) { alert('Please browse for the external users CSV.'); return; }
+
+      inviteExternalRunBtn.disabled = true;
+      inviteExternalRunBtn.textContent = 'Running…';
+      if (inviteExternalLog) inviteExternalLog.style.display = '';
+      if (inviteExternalLogPre) inviteExternalLogPre.textContent = '';
+
+      const args = ['-CsvFile', csvFile];
+      if (groups)   args.push('-TargetGroups', groups);
+      if (tenantId) args.push('-TenantId', tenantId);
+      if (inviteExternalSendEmail?.checked) args.push('-SendInvitationEmail');
+      if (inviteExternalWhatIf?.checked)    args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput(appendInviteExternalLog);
+      try {
+        const result = await runStreamingScript('Invite-externalUsers.ps1', args);
+        appendInviteExternalLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendInviteExternalLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        inviteExternalRunBtn.disabled = false;
+        inviteExternalRunBtn.textContent = '▶ Invite & Add';
       }
     });
   }

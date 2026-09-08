@@ -197,6 +197,9 @@
             <button type="button" class="sidebar-subitem" data-view="misc-teams">
               <span class="sidebar-sublabel">Set Teams Owners</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-invite-external">
+              <span class="sidebar-sublabel">Invite External Users</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="misc-purge-spo">
               <span class="sidebar-sublabel">Purge Deleted SPO Sites</span>
             </button>
@@ -1142,6 +1145,60 @@
 
           <div id="teamsOwnersLog" style="margin-top:12px;">
             <pre id="teamsOwnersLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Invite External Users -->
+      <div id="miscInviteExternalView" class="view-container hidden">
+        <h2 class="view-title">Invite External Users</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Re-add External Collaborators After a Migration</h3>
+          <p class="form-help">Invites each person in the CSV as a B2B guest, then adds them as a member of the target Team(s) / Microsoft&nbsp;365 Group(s). Because a Team's membership is its group's membership — and a group-connected SharePoint site inherits access from that same group — this restores Teams, Groups and their SharePoint sites together. Existing guests are reused, not re-invited. Requires the Microsoft.Graph module; sign in as Teams Administrator + User Administrator, or Global Administrator.</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">External Users CSV</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="inviteExternalCsvFile" placeholder="C:\external-users.csv" readonly>
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv">Browse</button>
+            </div>
+            <small class="form-help">Column <code>Email</code> required. Optional: <code>Name</code>, <code>Groups</code> (per-row targets, ";"-separated), <code>Message</code>.</small>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-label">Target Team(s) / Group(s)</label>
+            <input type="text" class="form-input form-input-compact" id="inviteExternalTargetGroups" placeholder="team-mail@domain.com; another-group@domain.com">
+            <small class="form-help">Mail address, mailNickname or object id. Used for every CSV row without its own <code>Groups</code> value. Leave blank only if every row carries <code>Groups</code>.</small>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-label">Tenant <span style="font-weight:400;color:#6B7280">(optional)</span></label>
+            <input type="text" class="form-input form-input-compact" id="inviteExternalTenantId" placeholder="contoso.onmicrosoft.com — leave blank for default sign-in">
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-checkbox">
+              <input type="checkbox" id="inviteExternalSendEmail">
+              <span style="font-size:12px;">Send Microsoft's "you've been invited" email to each new guest</span>
+            </label>
+          </div>
+
+          <div class="form-group-tight">
+            <label class="form-checkbox">
+              <input type="checkbox" id="inviteExternalWhatIf">
+              <span style="font-size:12px;">WhatIf — preview only, no invitations or changes made</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-success btn-xs" id="inviteExternalRunBtn">
+              ▶ Invite &amp; Add
+            </button>
+          </div>
+
+          <div id="inviteExternalLog" style="margin-top:12px;">
+            <pre id="inviteExternalLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:320px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
         </div>
       </div>
