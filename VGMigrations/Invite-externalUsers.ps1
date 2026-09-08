@@ -9,20 +9,25 @@
     access to a Team, its SharePoint site, or an M365 Group lose that access because their
     guest account did not come across. This script re-establishes it:
 
-      1. Invites each person in the CSV as an Entra ID B2B guest (New-MgInvitation). If a guest
+      1. Invites each person in the CSV as an Entra ID B2B guest (POST /invitations). If a guest
          with that email already exists in the tenant it is reused, not re-invited.
       2. Adds the resulting guest directory object as a MEMBER of every target group
-         (New-MgGroupMember). A Team's membership IS its underlying M365 group's membership, and
-         a group-connected SharePoint site inherits access from that same group — so this one
-         action restores Teams, Groups and their SharePoint sites together. "Already a member"
-         is treated as a no-op success.
+         (POST /groups/{id}/members/$ref). A Team's membership IS its underlying M365 group's
+         membership, and a group-connected SharePoint site inherits access from that same group
+         — so this one action restores Teams, Groups and their SharePoint sites together.
+         "Already a member" is treated as a no-op success.
 
-    Targets are resolved once and cached. Each target may be given as the group's mail address,
-    its mailNickname, or its object id (GUID).
+    Every Graph call goes through Invoke-MgGraphRequest (raw REST) rather than the typed
+    Microsoft.Graph.Users / .Groups / .Identity.SignIns cmdlets. Those submodules each carry
+    their own copy of Microsoft.Graph.Authentication; loading more than one version into the
+    same process leaves Connect-MgGraph's token in one copy and the cmdlet calls reading an
+    empty context in another, which shows up as "InteractiveBrowserCredential authentication
+    failed" on the first real call. Invoke-MgGraphRequest lives in Authentication itself and
+    always sees the live context, so only that one module has to load.
 
-    Connects to Microsoft Graph (delegated). Sign in with an account that can invite guests and
-    manage group membership — Teams Administrator + User Administrator, or Global Administrator.
-    An existing Graph session with the required scopes is reused.
+    Target groups are resolved once, up front. If the resolve can't authenticate or is denied,
+    the run stops immediately with the real error — it does not fall through to a misleading
+    "group not found" for every row.
 
 .PARAMETER CsvFile
     Path to the input CSV. Columns:
@@ -34,8 +39,8 @@
 
 .PARAMETER TargetGroups
     Default target group(s) applied to every CSV row that has no own 'Groups' value. One or
-    more group mail addresses / mailNicknames / object ids, separated by ';' or ','.
-    Required unless every row carries its own 'Groups' value.
+    more group mail addresses / mailNicknames / display names / object ids, separated by ';'
+    or ','. Required unless every row carries its own 'Groups' value.
 
 .PARAMETER TenantId
     Optional tenant id or verified domain to sign into (passed to Connect-MgGraph) when your
@@ -57,7 +62,8 @@
     %APPDATA%\FlyMigration\Logs\InviteExternalUsers-<timestamp>.csv
 
 .PARAMETER WhatIf
-    Preview every action (guest invite, group add) without making any changes.
+    Preview every action (guest invite, group add) without making any changes. Target groups
+    are still resolved live so the preview is real.
 
 .EXAMPLE
     .\Invite-externalUsers.ps1 -CsvFile .\guests.csv -TargetGroups "project-falcon@contoso.com" -WhatIf
@@ -67,8 +73,8 @@
         -TargetGroups "project-falcon@contoso.com; sales-team@contoso.com" -SendInvitationEmail
 
 .NOTES
-    Requires the Microsoft.Graph SDK. Ensure-GraphModules.ps1 pins the submodules to 2.33.0 so
-    interactive sign-in uses a plain browser popup.
+    Ensure-GraphModules.ps1 pins Microsoft.Graph.Authentication to 2.33.0 so interactive
+    sign-in uses a plain browser popup.
     Delegated scopes: User.Invite.All, User.Read.All, Group.ReadWrite.All, GroupMember.ReadWrite.All
     Guests are added with the default Member role. Teams does not allow guests to be owners.
     Standalone (non-group-connected) SharePoint sites are not group-managed and are out of
@@ -95,11 +101,23 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$GraphBase = 'https://graph.microsoft.com/v1.0'
 
 function Split-Targets {
     param([string]$Value)
     if (-not $Value) { return @() }
     return @($Value -split '[;,]' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
+
+# OData string literal - single quotes doubled, spaces %20-encoded so a raw URI is safe.
+function ConvertTo-ODataLiteral {
+    param([string]$Value)
+    return ($Value -replace "'", "''") -replace ' ', '%20'
+}
+
+function Test-IsAuthError {
+    param([string]$Message)
+    return $Message -match 'InteractiveBrowserCredential|authentication failed|AADSTS|InvalidAuthenticationToken|token has expired|Lifetime validation failed|Authorization_RequestDenied|Insufficient privileges|Access is denied|Forbidden|401|403'
 }
 
 # ── Results CSV location ─────────────────────────────────────────────────────────
@@ -139,10 +157,11 @@ if ($defaultTargets.Count -eq 0 -and $rowsWithoutTargets.Count -gt 0) {
     exit 1
 }
 
-# ── Graph modules + connection ─────────────────────────────────────────────────
-. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @(
-    'Microsoft.Graph.Users', 'Microsoft.Graph.Groups', 'Microsoft.Graph.Identity.SignIns'
-)
+# ── Graph module (Authentication only) + connection ───────────────────────────
+# Only Microsoft.Graph.Authentication is loaded. Invoke-MgGraphRequest below covers every call,
+# so the .Users / .Groups / .Identity.SignIns submodules (and their duplicate copies of the
+# Authentication assembly) are never brought into the process.
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @()
 
 $scopes = @('User.Invite.All', 'User.Read.All', 'Group.ReadWrite.All', 'GroupMember.ReadWrite.All')
 
@@ -159,11 +178,36 @@ if ($haveScopes -and (-not $TenantId -or $ctx.TenantId -eq $TenantId)) {
     Write-Host "Connected as $($ctx.Account)  (tenant $($ctx.TenantId))" -ForegroundColor Green
 }
 
-# ── Target group resolution (mail / mailNickname / GUID), cached ───────────────
+$grantedScopes = @($ctx.Scopes)
+Write-Host "Granted scopes: $($grantedScopes -join ', ')" -ForegroundColor DarkGray
+if ('Group.Read.All' -notin $grantedScopes -and 'Group.ReadWrite.All' -notin $grantedScopes) {
+    Write-Warning "The sign-in did not grant Group.Read.All / Group.ReadWrite.All — group lookups will be denied. Re-run and complete the admin-consent prompt, or have a Global Admin consent for the app."
+}
+
+# ── Thin Graph REST wrapper ───────────────────────────────────────────────────
+function Invoke-Graph {
+    param(
+        [string]$Method = 'GET',
+        [Parameter(Mandatory)][string]$Uri,
+        $Body,
+        [switch]$AdvancedQuery   # adds ConsistencyLevel: eventual for $filter/$count/$search
+    )
+    $p = @{ Method = $Method; Uri = $Uri; OutputType = 'PSObject'; ErrorAction = 'Stop' }
+    if ($PSBoundParameters.ContainsKey('Body') -and $null -ne $Body) {
+        $p.Body        = ($Body | ConvertTo-Json -Depth 6 -Compress)
+        $p.ContentType = 'application/json'
+    }
+    if ($AdvancedQuery) { $p.Headers = @{ ConsistencyLevel = 'eventual' } }
+    return Invoke-MgGraphRequest @p
+}
+
+# ── Target group resolution (mail / mailNickname / displayName / GUID), cached ──
 $groupCache = @{}   # raw target string (lower) -> @{ Id; Name; Label } or $null
 $guidRegex  = '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
-$selectProps = 'id,displayName,mail,mailNickname,groupTypes,resourceProvisioningOptions'
+$grpSelect  = 'id,displayName,mail,mailNickname,groupTypes,resourceProvisioningOptions'
 
+# Throws on auth/permission errors (caught once at the top-level resolve pass so the whole run
+# stops with a real message); returns $null only for a genuine clean no-match.
 function Resolve-Group {
     param([string]$Target)
 
@@ -173,18 +217,22 @@ function Resolve-Group {
     $group = $null
     try {
         if ($Target -match $guidRegex) {
-            $group = Get-MgGroup -GroupId $Target -Property $selectProps -ErrorAction Stop
+            $group = Invoke-Graph -Uri "$GraphBase/groups/$Target`?`$select=$grpSelect"
         } else {
-            $group = Get-MgGroup -Filter "mail eq '$Target'" -Property $selectProps -ConsistencyLevel eventual -CountVariable c -ErrorAction Stop |
-                     Select-Object -First 1
-            if (-not $group) {
-                $nick = $Target -replace '@.*', ''
-                $group = Get-MgGroup -Filter "mailNickname eq '$nick'" -Property $selectProps -ConsistencyLevel eventual -CountVariable c -ErrorAction Stop |
-                         Select-Object -First 1
+            $lit  = ConvertTo-ODataLiteral $Target
+            $nick = ConvertTo-ODataLiteral ($Target -replace '@.*', '')
+            foreach ($clause in @("mail eq '$lit'", "mailNickname eq '$nick'", "displayName eq '$lit'")) {
+                $enc = $clause -replace ' ', '%20'
+                $r = Invoke-Graph -AdvancedQuery -Uri "$GraphBase/groups?`$filter=$enc&`$select=$grpSelect&`$count=true&`$top=2"
+                if ($r.value -and $r.value.Count -gt 0) { $group = $r.value[0]; break }
             }
         }
     } catch {
-        Write-Warning "  Group lookup failed for '$Target' — $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+        $m = $_.Exception.Message.Split([Environment]::NewLine)[0]
+        if (Test-IsAuthError $m) {
+            throw "Graph rejected the group lookup for '$Target': $m"
+        }
+        Write-Warning "  Group lookup error for '$Target' — $m"
     }
 
     if (-not $group) {
@@ -192,15 +240,50 @@ function Resolve-Group {
         return $null
     }
 
-    $isTeam    = $group.AdditionalProperties['resourceProvisioningOptions'] -contains 'Team'
-    $isUnified = $group.GroupTypes -contains 'Unified'
+    $rpo       = @($group.resourceProvisioningOptions)
+    $gt        = @($group.groupTypes)
+    $isTeam    = $rpo -contains 'Team'
+    $isUnified = $gt  -contains 'Unified'
     $label = if ($isTeam)         { 'Team' }
              elseif ($isUnified)  { 'M365 Group' }
              else                 { 'Group' }
 
-    $entry = @{ Id = $group.Id; Name = $group.DisplayName; Label = $label }
+    $entry = @{ Id = $group.id; Name = $group.displayName; Label = $label }
     $groupCache[$key] = $entry
     return $entry
+}
+
+# ── Resolve every target up front - fail fast on auth/permission problems ──────
+$allTargets = [System.Collections.Generic.List[string]]::new()
+foreach ($t in $defaultTargets) { if ($t -notin $allTargets) { $allTargets.Add($t) } }
+foreach ($row in $rows) {
+    if ($row.PSObject.Properties['Groups'] -and ("" + $row.Groups).Trim()) {
+        foreach ($t in (Split-Targets $row.Groups)) { if ($t -notin $allTargets) { $allTargets.Add($t) } }
+    }
+}
+
+Write-Host ""
+Write-Host "Resolving $($allTargets.Count) target group(s)..." -ForegroundColor Cyan
+$unresolved = [System.Collections.Generic.List[string]]::new()
+try {
+    foreach ($t in $allTargets) {
+        $g = Resolve-Group -Target $t
+        if ($g) {
+            Write-Host "  OK  $t  ->  [$($g.Label)] $($g.Name)  ($($g.Id))" -ForegroundColor Green
+        } else {
+            Write-Warning "  NOT FOUND  $t  — no group in this tenant has that mail / mailNickname / displayName / id"
+            $unresolved.Add($t)
+        }
+    }
+} catch {
+    Write-Host ""
+    Write-Error $_.Exception.Message
+    Write-Host "Nothing was changed. Re-run once the sign-in / permissions are sorted." -ForegroundColor Yellow
+    exit 1
+}
+if ($unresolved.Count -eq $allTargets.Count) {
+    Write-Error "None of the target group(s) could be resolved in tenant '$($ctx.TenantId)'. Check the address/name is exactly as it appears in this tenant."
+    exit 1
 }
 
 # ── Guest resolution (invite-or-reuse), cached ────────────────────────────────
@@ -212,18 +295,19 @@ function Resolve-Guest {
     $key = $Email.ToLowerInvariant()
     if ($guestCache.ContainsKey($key)) { return $guestCache[$key] }
 
+    $lit = ConvertTo-ODataLiteral $Email
     try {
-        $existing = Get-MgUser -Filter "mail eq '$Email'" -Property Id,Mail -ErrorAction Stop | Select-Object -First 1
-        if (-not $existing) {
-            $existing = Get-MgUser -Filter "otherMails/any(x:x eq '$Email')" -Property Id,Mail -ConsistencyLevel eventual -CountVariable c -ErrorAction Stop |
-                        Select-Object -First 1
-        }
-        if ($existing) {
+        $r = Invoke-Graph -AdvancedQuery -Uri "$GraphBase/users?`$filter=mail%20eq%20'$lit'%20or%20otherMails/any(x:x%20eq%20'$lit')&`$select=id,mail&`$count=true&`$top=2"
+        if ($r.value -and $r.value.Count -gt 0) {
             Write-Host "  Guest already exists: $Email" -ForegroundColor DarkGray
-            $guestCache[$key] = $existing.Id
-            return $existing.Id
+            $guestCache[$key] = $r.value[0].id
+            return $r.value[0].id
         }
-    } catch { }
+    } catch {
+        $m = $_.Exception.Message.Split([Environment]::NewLine)[0]
+        if (Test-IsAuthError $m) { throw "Graph rejected the user lookup for '$Email': $m" }
+        Write-Warning "  User lookup error for ${Email}: $m"
+    }
 
     if ($WhatIf) {
         Write-Host "  WhatIf — would invite guest: $Email" -ForegroundColor Yellow
@@ -232,19 +316,18 @@ function Resolve-Guest {
     }
 
     try {
-        $params = @{
-            InvitedUserEmailAddress = $Email
-            InviteRedirectUrl       = $InviteRedirectUrl
-            SendInvitationMessage   = [bool]$SendInvitationEmail
-            ErrorAction             = 'Stop'
+        $body = @{
+            invitedUserEmailAddress = $Email
+            inviteRedirectUrl       = $InviteRedirectUrl
+            sendInvitationMessage   = [bool]$SendInvitationEmail
         }
-        if ($Name)    { $params.InvitedUserDisplayName = $Name }
-        if ($Message) { $params.InvitedUserMessageInfo = @{ CustomizedMessageBody = $Message } }
+        if ($Name)    { $body.invitedUserDisplayName = $Name }
+        if ($Message) { $body.invitedUserMessageInfo = @{ customizedMessageBody = $Message } }
 
-        $inv = New-MgInvitation @params
+        $inv = Invoke-Graph -Method POST -Uri "$GraphBase/invitations" -Body $body
         Write-Host "  Invited guest: $Email" -ForegroundColor Green
-        $guestCache[$key] = $inv.InvitedUser.Id
-        return $inv.InvitedUser.Id
+        $guestCache[$key] = $inv.invitedUser.id
+        return $inv.invitedUser.id
     } catch {
         Write-Warning "  FAILED to invite ${Email}: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
         $guestCache[$key] = $null
@@ -256,9 +339,9 @@ function Resolve-Guest {
 function Add-GroupMemberSafe {
     param([string]$GroupId, [string]$GuestUserId)
 
-    $ref = @{ '@odata.id' = "https://graph.microsoft.com/v1.0/directoryObjects/$GuestUserId" }
+    $body = @{ '@odata.id' = "https://graph.microsoft.com/v1.0/directoryObjects/$GuestUserId" }
     try {
-        New-MgGroupMember -GroupId $GroupId -BodyParameter $ref -ErrorAction Stop
+        Invoke-Graph -Method POST -Uri "$GraphBase/groups/$GroupId/members/`$ref" -Body $body | Out-Null
         return @{ Success = $true; Message = 'Added' }
     } catch {
         $msg = $_.Exception.Message.Split([Environment]::NewLine)[0]
@@ -301,7 +384,15 @@ foreach ($row in $rows) {
     }
 
     Write-Host "[$i/$total] $email" -ForegroundColor Cyan
-    $guestId = Resolve-Guest -Email $email -Name $name -Message $msg
+    try {
+        $guestId = Resolve-Guest -Email $email -Name $name -Message $msg
+    } catch {
+        Write-Host ""
+        Write-Error $_.Exception.Message
+        Write-Host "Stopped after $ok add(s). Re-run once the sign-in / permissions are sorted." -ForegroundColor Yellow
+        $results | Export-Csv -Path $ResultsCsv -NoTypeInformation -Encoding UTF8
+        exit 1
+    }
 
     if (-not $guestId -and -not $WhatIf) {
         foreach ($t in $rowTargets) {
@@ -314,7 +405,7 @@ foreach ($row in $rows) {
     foreach ($t in $rowTargets) {
         $g = Resolve-Group -Target $t
         if (-not $g) {
-            Write-Warning "    Target not found: $t"
+            Write-Warning "    Target not resolvable: $t"
             $results.Add([pscustomobject]@{ Email=$email; Name=$name; Group=$t; Result='Failed'; Message='Group not found' })
             $fail++
             continue

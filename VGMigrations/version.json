@@ -1,7 +1,16 @@
 {
-  "version": "2.9.128",
+  "version": "2.9.129",
   "releaseDate": "2026-09-08",
   "changelog": [
+    {
+      "version": "2.9.129",
+      "date": "2026-09-08",
+      "changes": [
+        "Invite-externalUsers.ps1: fixed 'InteractiveBrowserCredential authentication failed' on every group lookup (confirmed live on a 15-row WhatIf against AEP) - it was NOT a missing group. Adding Microsoft.Graph.Users/.Groups/.Identity.SignIns to the Ensure-GraphModules.ps1 pin list pulled a second copy of Microsoft.Graph.Authentication into the process; Connect-MgGraph stored its token in one copy while Get-MgGroup/Get-MgUser read an empty context in the other, so the SDK silently retried interactive auth (which can't open a window under the Electron child process). Same assembly-version class as v2.9.69/2.9.123/2.9.126",
+        "Rewrote every Graph call to go through Invoke-MgGraphRequest (raw REST, lives in Microsoft.Graph.Authentication itself and always sees the live Connect-MgGraph context). Ensure-GraphModules.ps1 is now called with -GraphModules @() so only Authentication loads - no submodules, no duplicate Authentication assembly. Group resolve (by mail / mailNickname / displayName / GUID), the existing-guest check, New-MgInvitation and New-MgGroupMember are all REST now",
+        "The old code swallowed the auth exception and printed a misleading 'Target not found' for all 15 rows. Now: target groups are resolved once up front and printed (OK / NOT FOUND per target); an auth or permission error there stops the run immediately with the real Graph message instead of marching through every row; a mid-run auth failure on the user lookup also stops cleanly and still writes the partial results CSV. After connect it prints the granted scopes and warns if Group.Read(Write).All is missing"
+      ]
+    },
     {
       "version": "2.9.128",
       "date": "2026-09-08",
