@@ -1,7 +1,18 @@
 {
-  "version": "2.9.141",
+  "version": "2.9.142",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.142",
+      "date": "2026-09-09",
+      "changes": [
+        "Added Enable-BaselineCAPolicies.ps1 + a 'Enable CA Policies' panel under Post Migration - run it after cutover to switch on the 8 Conditional Access policies that Tenant Baseline Config (Step 11) creates disabled. Connects interactively, finds the policies by name, and moves them to report-only by default (enabledForReportingButNotEnforced); tick Enforce to take them fully live. -IncludeAllDisabled widens the target set to every disabled CA policy in the tenant",
+        "Safety guards: with a break-glass UPN given, each policy is checked for that account on its Users > Exclude list before it is enforced - a policy that doesn't exclude it is left unchanged with a warning. Enforce with no break-glass account is refused outright. Both are overridable with Force. WhatIf previews every change. ShouldProcess is used for -WhatIf only (ConfirmImpact left at default so it never auto-prompts in the streamed runner)",
+        "'Also turn Security Defaults off' option (needs Enforce, or Force) - PATCHes identitySecurityDefaultsEnforcementPolicy isEnabled=false once the policies are enforcing, since Conditional Access is Security Defaults' replacement and the two can't both be on. Skipped with a warning if the policies are only report-only",
+        "Uses Ensure-GraphModules.ps1 (Graph pinned 2.33.0, WAM-safe) and only Invoke-MgGraphRequest. Scopes: Policy.Read.All, Policy.ReadWrite.ConditionalAccess (+ Policy.ReadWrite.SecurityDefaults when disabling Security Defaults). Policy name list kept in sync with Invoke-TenantBaseline.ps1 and Check-TenantBaselineStatus.ps1",
+        "Parse-checked; not yet run against a live tenant"
+      ]
+    },
     {
       "version": "2.9.141",
       "date": "2026-09-09",

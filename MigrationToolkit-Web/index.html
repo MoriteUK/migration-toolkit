@@ -174,6 +174,9 @@
             <button type="button" class="sidebar-subitem" data-view="post-migration-team-memberships">
               <span class="sidebar-sublabel">Restore Team Memberships</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="post-migration-enable-ca">
+              <span class="sidebar-sublabel">Enable CA Policies</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="misc-dl-external-senders">
               <span class="sidebar-sublabel">DL External Senders</span>
             </button>
@@ -1392,6 +1395,70 @@
         <div class="log-section hidden" id="restoreTeamMembershipsLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="restoreTeamMembershipsLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Post Migration - Enable Baseline Conditional Access Policies -->
+      <div id="postMigrationEnableCaView" class="view-container hidden">
+        <h2 class="view-title">Enable CA Policies</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Turn On the Baseline Conditional Access Policies</h3>
+          <p class="form-help">Tenant Baseline Config (Step 11) creates its 8 Conditional Access policies <strong>disabled</strong> so a half-migrated tenant is never locked down. Run this once the cutover is complete to switch them on. By default they go to <strong>report-only</strong> first — review Entra &gt; Sign-in logs for a day, then re-run with Enforce ticked. Each policy is checked for the break-glass exclusion before it is enforced. Sign in with a Global Admin / Security Admin of the DESTINATION tenant when prompted.</p>
+
+          <div class="form-group-tight">
+            <label class="form-label">Tenant ID <span style="font-weight:400;color:#6B7280">(optional — domain or GUID, only if your admin account sees more than one tenant)</span></label>
+            <input type="text" class="form-input form-input-compact" id="enableCaTenantId" placeholder="e.g. contoso.onmicrosoft.com">
+          </div>
+
+          <div class="form-group-tight" style="margin-top:8px;">
+            <label class="form-label">Break-glass account UPN <span style="font-weight:400;color:#6B7280">(strongly recommended — the same emergency-access account excluded in Step 11)</span></label>
+            <input type="text" class="form-input form-input-compact" id="enableCaBreakGlassUpn" placeholder="breakglass@contoso.onmicrosoft.com">
+          </div>
+
+          <div class="form-group" style="margin-top:10px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="enableCaEnforce">
+              <span>Enforce <span style="font-weight:400;color:#6B7280">— turn the policies fully on. Unticked = report-only (no one is blocked yet).</span></span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="enableCaDisableSecurityDefaults">
+              <span>Also turn Security Defaults off <span style="font-weight:400;color:#6B7280">— the CA policies are its replacement. Only applies with Enforce ticked (or Force).</span></span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="enableCaIncludeAllDisabled">
+              <span>Include every disabled CA policy <span style="font-weight:400;color:#6B7280">— not just the 8 baseline ones.</span></span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="enableCaForce">
+              <span>Force <span style="font-weight:400;color:#6B7280">— skip the break-glass / ordering safety checks. Only if you have confirmed another emergency-access path.</span></span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:6px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="enableCaWhatIf" checked>
+              <span>WhatIf — preview every change without applying it</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="enableCaRunBtn">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="enableCaLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="enableCaLogOutput"></div>
         </div>
       </div>
 

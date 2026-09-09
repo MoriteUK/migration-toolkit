@@ -1943,6 +1943,7 @@ function switchView(viewName) {
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-restore-proxy': 'miscRestoreProxyView',
     'post-migration-team-memberships': 'postMigrationTeamMembershipsView',
+    'post-migration-enable-ca': 'postMigrationEnableCaView',
     'migration-new-dgs': 'migrationNewDgsView',
     'migration-update-dg-domain': 'migrationUpdateDgDomainView',
     'misc-dl-external-senders': 'miscDLExternalSendersView',
@@ -3408,6 +3409,57 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         restoreTeamMembershipsRunBtn.disabled = false;
         restoreTeamMembershipsRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Post Migration - Enable Baseline Conditional Access Policies ──────────
+  const enableCaRunBtn = document.getElementById('enableCaRunBtn');
+  if (enableCaRunBtn) {
+    enableCaRunBtn.addEventListener('click', async () => {
+      const tenantId              = document.getElementById('enableCaTenantId').value.trim();
+      const breakGlassUpn         = document.getElementById('enableCaBreakGlassUpn').value.trim();
+      const enforce               = document.getElementById('enableCaEnforce').checked;
+      const disableSecurityDefs   = document.getElementById('enableCaDisableSecurityDefaults').checked;
+      const includeAllDisabled    = document.getElementById('enableCaIncludeAllDisabled').checked;
+      const force                 = document.getElementById('enableCaForce').checked;
+      const whatIf                = document.getElementById('enableCaWhatIf').checked;
+
+      if (enforce && !breakGlassUpn && !force) {
+        alert('Enforce with no break-glass account will be refused by the script. Enter a break-glass UPN, untick Enforce (report-only), or tick Force.');
+        return;
+      }
+
+      const logSection = document.getElementById('enableCaLog');
+      const logOutput  = document.getElementById('enableCaLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      enableCaRunBtn.disabled = true;
+      enableCaRunBtn.textContent = 'Running…';
+
+      const args = [];
+      if (tenantId)            args.push('-TenantId', tenantId);
+      if (breakGlassUpn)       args.push('-BreakGlassUpn', breakGlassUpn);
+      if (enforce)             args.push('-Enforce');
+      if (disableSecurityDefs) args.push('-DisableSecurityDefaults');
+      if (includeAllDisabled)  args.push('-IncludeAllDisabled');
+      if (force)               args.push('-Force');
+      if (whatIf)              args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('Enable-BaselineCAPolicies.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        enableCaRunBtn.disabled = false;
+        enableCaRunBtn.textContent = '▶ Run';
       }
     });
   }
