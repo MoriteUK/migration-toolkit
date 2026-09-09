@@ -1,7 +1,16 @@
 {
-  "version": "2.9.131",
-  "releaseDate": "2026-09-08",
+  "version": "2.9.132",
+  "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.132",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: fixed 'no PowerShell window opens' when clicking 'Invite & Add' (reported live). v2.9.131 spawned pwsh.exe with Node's detached:true expecting Windows to give it its own console window - but on Windows detached:true sets the DETACHED_PROCESS creation flag, which means the child gets NO console at all. The script ran invisibly with -NoExit (so it also never went away), and the interactive Connect-MgGraph browser sign-in it was meant to enable still had nowhere to run. spawn() didn't throw, so the panel reported success",
+        "main.js launch-script handler now goes back through 'cmd /c start' (which actually allocates a new console window via CREATE_NEW_CONSOLE), but as a plain arg array with shell:false - not the shell:true form the pre-v2.9.131 code used, which double-wrapped and mangled quoting on CSV/script paths containing spaces. An explicit quoted title token stops 'start' from mistaking a space-containing script path for the window title",
+        "Parse-checked only; not re-run against a live tenant"
+      ]
+    },
     {
       "version": "2.9.131",
       "date": "2026-09-08",

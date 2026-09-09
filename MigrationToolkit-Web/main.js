@@ -145,20 +145,26 @@ function executePowerShellScript(scriptName, args = []) {
 function registerIPCHandlers() {
   ipcMain.handle('launch-script', async (event, scriptName, args = []) => {
     try {
-      // Launch the script in its OWN new console window. Electron is a GUI-subsystem process
-      // with no console, so spawning pwsh.exe detached makes Windows allocate a fresh console
-      // window for it — which is what interactive Connect-MgGraph / Connect-ExchangeOnline
-      // browser sign-in needs (the app's streamed pwsh child has no window and that flow dies
-      // there). -NoExit keeps the window up after the script finishes so results/errors stay
-      // readable. Passing args as an array avoids all the cmd.exe "start" quoting problems with
-      // paths that contain spaces.
+      // Open the script in its OWN new console window. Electron is a GUI-subsystem process with
+      // no console of its own, and Node's `detached: true` on Windows sets the DETACHED_PROCESS
+      // creation flag — which gives the child NO console at all, not a new window (the v2.9.131
+      // assumption was wrong; the script ran invisibly and no window ever appeared). `cmd /c
+      // start` is what actually allocates a fresh console window (CREATE_NEW_CONSOLE), and that
+      // window is what interactive Connect-MgGraph / Connect-ExchangeOnline browser sign-in
+      // needs. Args are passed as an array with shell:false so Node does the CreateProcess-level
+      // quoting; an explicit quoted title token ("Migration Toolkit") stops `start` from
+      // treating a space-containing script path as the window title. -NoExit keeps the window up
+      // after the script finishes so results/errors stay readable.
       const scriptPath = path.join(PS_SCRIPT_PATH, scriptName);
-      const psArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', scriptPath];
+      const startArgs = [
+        '/c', 'start', 'Migration Toolkit',
+        'pwsh.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', scriptPath
+      ];
       if (Array.isArray(args)) {
-        for (const a of args) psArgs.push(String(a));
+        for (const a of args) startArgs.push(String(a));
       }
 
-      const child = spawn('pwsh.exe', psArgs, {
+      const child = spawn('cmd.exe', startArgs, {
         cwd: PS_SCRIPT_PATH,
         detached: true,
         stdio: 'ignore',
