@@ -144,37 +144,58 @@ function executePowerShellScript(scriptName, args = []) {
 // Register IPC Handlers
 function registerIPCHandlers() {
   ipcMain.handle('launch-script', async (event, scriptName, args = []) => {
+    const launchLog = openScriptLog(`launch_${scriptName}`);
     try {
-      // Open the script in its OWN new console window. Electron is a GUI-subsystem process with
-      // no console of its own, and Node's `detached: true` on Windows sets the DETACHED_PROCESS
-      // creation flag — which gives the child NO console at all, not a new window (the v2.9.131
-      // assumption was wrong; the script ran invisibly and no window ever appeared). `cmd /c
-      // start` is what actually allocates a fresh console window (CREATE_NEW_CONSOLE), and that
-      // window is what interactive Connect-MgGraph / Connect-ExchangeOnline browser sign-in
-      // needs. Args are passed as an array with shell:false so Node does the CreateProcess-level
-      // quoting; an explicit quoted title token ("Migration Toolkit") stops `start` from
-      // treating a space-containing script path as the window title. -NoExit keeps the window up
+      // Open the script in its OWN new, visible console window. This is harder than it looks:
+      // Electron is a GUI-subsystem process with NO console of its own, and from a console-less
+      // parent neither `spawn('pwsh.exe', …, {detached:true})` (Node's detached sets
+      // DETACHED_PROCESS — the child gets no console at all, v2.9.131's bug) nor `cmd /c start`
+      // (v2.9.132 — `start` cannot reliably allocate a console when its own parent has none)
+      // produces a window. What DOES work is PowerShell's Start-Process: we spawn one throwaway
+      // headless pwsh whose only job is to call Start-Process pwsh, and Start-Process creates a
+      // brand-new console window for the real script. That window is what interactive
+      // Connect-MgGraph / Connect-ExchangeOnline browser sign-in needs. -NoExit keeps it open
       // after the script finishes so results/errors stay readable.
       const scriptPath = path.join(PS_SCRIPT_PATH, scriptName);
-      const startArgs = [
-        '/c', 'start', 'Migration Toolkit',
-        'pwsh.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', scriptPath
-      ];
-      if (Array.isArray(args)) {
-        for (const a of args) startArgs.push(String(a));
-      }
 
-      const child = spawn('cmd.exe', startArgs, {
+      // Build the inner pwsh argument list as PowerShell single-quoted literals (only ' needs
+      // escaping — as ''), so spaces/backslashes in the script path or a CSV path pass through
+      // untouched.
+      const sq = (s) => `'${String(s).replace(/'/g, "''")}'`;
+      const innerArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', scriptPath];
+      if (Array.isArray(args)) {
+        for (const a of args) innerArgs.push(String(a));
+      }
+      const argListLiteral = innerArgs.map(sq).join(',');
+      const psCommand =
+        `Start-Process -FilePath 'pwsh.exe' -ArgumentList @(${argListLiteral}) ` +
+        `-WorkingDirectory ${sq(PS_SCRIPT_PATH)}`;
+
+      launchLog.write(`bootstrap: pwsh -NoProfile -Command <<\n${psCommand}\n>>\n`);
+
+      const child = spawn('pwsh.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCommand], {
         cwd: PS_SCRIPT_PATH,
         detached: true,
         stdio: 'ignore',
         windowsHide: false
       });
 
+      child.on('error', (err) => {
+        launchLog.write(`spawn error: ${err.message}\n`);
+        launchLog.end();
+      });
+      child.on('exit', (code) => {
+        launchLog.write(`bootstrap pwsh exited: ${code}\n`);
+        launchLog.end();
+      });
+
+      launchLog.write(`bootstrap pwsh spawned, pid=${child.pid}\n`);
       child.unref();
 
       return { success: true };
     } catch (error) {
+      launchLog.write(`handler threw: ${error.message}\n`);
+      launchLog.end();
       return { success: false, error: error.message };
     }
   });

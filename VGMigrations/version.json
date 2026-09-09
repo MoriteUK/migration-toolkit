@@ -1,13 +1,24 @@
 {
-  "version": "2.9.132",
+  "version": "2.9.133",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.133",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: still no window after v2.9.132. `cmd /c start` cannot reliably allocate a new console when its own parent process has none - and Electron's main process is a GUI-subsystem process with no console. Replaced the whole approach: launch-script now spawns one throwaway headless pwsh whose only job is to call Start-Process pwsh, and Start-Process reliably creates a brand-new visible console window for the real script regardless of the parent's console state. Inner args are built as PowerShell single-quoted literals so spaces/backslashes in the script or CSV path pass through untouched",
+        "launch-script now also writes a diagnostic log (Logs\\launch_<script>_<timestamp>.log) recording the exact bootstrap command, the spawned pid, and any spawn error / bootstrap exit code - so a future 'no window' is debuggable from the log instead of guesswork",
+        "NOTE: the Electron main process only reloads on a full app restart - if 'Invite & Add' still does nothing, quit the app completely (not just the window) and relaunch so the new main.js is loaded",
+        "Parse-checked + the Start-Process bootstrap tested in isolation; not re-run end-to-end against a live tenant"
+      ]
+    },
     {
       "version": "2.9.132",
       "date": "2026-09-09",
       "changes": [
         "Invite External Users: fixed 'no PowerShell window opens' when clicking 'Invite & Add' (reported live). v2.9.131 spawned pwsh.exe with Node's detached:true expecting Windows to give it its own console window - but on Windows detached:true sets the DETACHED_PROCESS creation flag, which means the child gets NO console at all. The script ran invisibly with -NoExit (so it also never went away), and the interactive Connect-MgGraph browser sign-in it was meant to enable still had nowhere to run. spawn() didn't throw, so the panel reported success",
         "main.js launch-script handler now goes back through 'cmd /c start' (which actually allocates a new console window via CREATE_NEW_CONSOLE), but as a plain arg array with shell:false - not the shell:true form the pre-v2.9.131 code used, which double-wrapped and mangled quoting on CSV/script paths containing spaces. An explicit quoted title token stops 'start' from mistaking a space-containing script path for the window title",
+        "Superseded by v2.9.133 - `cmd /c start` did not reliably open a window from Electron's console-less main process either",
         "Parse-checked only; not re-run against a live tenant"
       ]
     },
