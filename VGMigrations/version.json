@@ -1,7 +1,17 @@
 {
-  "version": "2.9.136",
+  "version": "2.9.137",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.137",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: sign-in works now (v2.9.136). Next: a target given as 'GRPUtentiExterniVPNAEP@mbuAEPts.onmicrosoft.com' resolved as NOT FOUND even though the group exists - it's a plain security group (no mail), so 'mail eq' misses, and the only non-mail clauses were 'mailNickname eq <bare>' and 'displayName eq <full address incl. @domain>', the latter of which can never match a real displayName",
+        "Resolve-Group now also tries 'displayName eq <bare label>' (the address with any @domain stripped), and as a last resort a $search substring match on displayName - taken automatically only if exactly one group matches, otherwise the candidates (name + id) are listed so you can pass an exact name or the object id. The NOT FOUND message now says to try the group's Entra object id",
+        "Workaround without updating: put the group's object id in the 'Target Team(s)/Group(s)' field instead of its name - the id path is a direct GET and always resolves",
+        "Parse-checked. Not re-run against a live tenant"
+      ]
+    },
     {
       "version": "2.9.136",
       "date": "2026-09-09",

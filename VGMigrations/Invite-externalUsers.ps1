@@ -268,12 +268,32 @@ function Resolve-Group {
         if ($Target -match $guidRegex) {
             $group = Invoke-Graph -Uri "$GraphBase/groups/$Target`?`$select=$grpSelect"
         } else {
+            $bare = $Target -replace '@.*', ''          # strip any @domain the caller appended
             $lit  = ConvertTo-ODataLiteral $Target
-            $nick = ConvertTo-ODataLiteral ($Target -replace '@.*', '')
-            foreach ($clause in @("mail eq '$lit'", "mailNickname eq '$nick'", "displayName eq '$lit'")) {
+            $nick = ConvertTo-ODataLiteral $bare
+            # Try the exact-match filters, both with and without the @domain, since a plain
+            # security group (no mail) is commonly referenced by the address form of its name
+            # but actually only matches on displayName / mailNickname of the bare label.
+            $clauses = @("mail eq '$lit'", "mailNickname eq '$nick'",
+                         "displayName eq '$nick'", "displayName eq '$lit'") | Select-Object -Unique
+            foreach ($clause in $clauses) {
                 $enc = $clause -replace ' ', '%20'
                 $r = Invoke-Graph -AdvancedQuery -Uri "$GraphBase/groups?`$filter=$enc&`$select=$grpSelect&`$count=true&`$top=2"
                 if ($r.value -and $r.value.Count -gt 0) { $group = $r.value[0]; break }
+            }
+            # Last resort: a substring search on displayName. Take it only if it's unambiguous;
+            # otherwise list the candidates so the caller can pass an exact name or the id.
+            if (-not $group) {
+                $sTerm = ConvertTo-ODataLiteral $bare
+                $sr = Invoke-Graph -AdvancedQuery -Uri "$GraphBase/groups?`$search=%22displayName:$sTerm%22&`$select=$grpSelect&`$count=true&`$top=5"
+                $cand = @($sr.value)
+                if ($cand.Count -eq 1) {
+                    $group = $cand[0]
+                    Write-Host "  (matched '$Target' by displayName search -> '$($group.displayName)')" -ForegroundColor DarkGray
+                } elseif ($cand.Count -gt 1) {
+                    Write-Warning "  '$Target' is ambiguous - $($cand.Count) groups match. Pass an exact displayName or the group id:"
+                    foreach ($c in $cand) { Write-Warning "      $($c.displayName)   $($c.id)" }
+                }
             }
         }
     } catch {
@@ -320,7 +340,7 @@ try {
         if ($g) {
             Write-Host "  OK  $t  ->  [$($g.Label)] $($g.Name)  ($($g.Id))" -ForegroundColor Green
         } else {
-            Write-Warning "  NOT FOUND  $t  — no group in this tenant has that mail / mailNickname / displayName / id"
+            Write-Warning "  NOT FOUND  $t  — no group in this tenant matched on mail / mailNickname / displayName (with or without @domain) / id. Try the group's object id from Entra."
             $unresolved.Add($t)
         }
     }
