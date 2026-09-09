@@ -1,7 +1,16 @@
 {
-  "version": "2.9.135",
+  "version": "2.9.136",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.136",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: v2.9.135's launcher works - the script now runs in its own PowerShell window and the window stays open. The remaining failure is the Graph sign-in: 'Signed-in account was recorded but no usable token', with NO browser window opening. Cause: Connect-MgGraph found a stale account in the shared MSAL token store, tried a silent token acquisition against it, that failed quietly, and because it thought it already had an account it never fell back to interactive - so no browser ever opened",
+        "Invite-externalUsers.ps1 now does what Check-OneDriveStatus.ps1 / Provision-OneDrives.ps1 already do (v2.9.85): Disconnect-MgGraph first to drop any recorded account, and Connect-MgGraph -ContextScope Process so the run stays off the shared token store entirely - every launch is a clean interactive browser sign-in. -TenantId, when supplied, is now passed to Connect-MgGraph (safe with a process-scoped context) instead of only being checked afterwards",
+        "Updated the 'no usable token' error guidance (it no longer says 'needs its own console window' - it has one now) and removed the throwaway launch-test.js diagnostic"
+      ]
+    },
     {
       "version": "2.9.135",
       "date": "2026-09-09",

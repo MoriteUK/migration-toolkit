@@ -186,25 +186,34 @@ $haveScopes = $ctx -and -not ($scopes | Where-Object { $_ -notin $ctx.Scopes })
 if ($haveScopes -and (Test-GraphToken)) {
     Write-Host "Reusing existing Graph session: $($ctx.Account)  (tenant $($ctx.TenantId))" -ForegroundColor Green
 } else {
-    # NOTE: no -TenantId here on purpose. Passing it alongside a shared/cached MSAL token store
-    # (a prior Connect-MgGraph to another tenant, Azure CLI, WAM) frequently breaks silent token
-    # acquisition - the cached account is for a different authority, the silent request fails,
-    # and the interactive fallback dies in the app's headless runner. The admin's UPN suffix
-    # already targets the right tenant; -TenantId is only used as a post-connect sanity check.
-    $connect = @{ Scopes = $scopes; NoWelcome = $true; ErrorAction = 'Stop' }
+    # Drop any recorded account / cached context first. Without this, Connect-MgGraph finds a
+    # stale account in the shared MSAL token store (left by an earlier run or another tool),
+    # tries a SILENT token acquisition against it, that fails quietly - and because it thinks it
+    # already has an account it never falls back to interactive, so no browser ever opens and
+    # the token probe then fails. -ContextScope Process keeps this run off the shared store
+    # entirely so every launch is a clean, interactive sign-in. This is the same pattern
+    # Check-OneDriveStatus.ps1 / Provision-OneDrives.ps1 use (v2.9.85).
+    try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
 
-    Write-Host "Connecting to Microsoft Graph — a browser sign-in window will open..." -ForegroundColor Yellow
+    $connect = @{ Scopes = $scopes; NoWelcome = $true; ErrorAction = 'Stop'; ContextScope = 'Process' }
+    # With a process-scoped context there is no shared cache for -TenantId to collide with, so
+    # honour it when given - it targets the right tenant up front instead of only being checked
+    # afterwards.
+    if ($TenantId) { $connect.TenantId = $TenantId }
+
+    Write-Host "Connecting to Microsoft Graph — a browser sign-in window will open, complete the sign-in there..." -ForegroundColor Yellow
     Connect-MgGraph @connect
 
     if (-not (Test-GraphToken)) {
         # Device-code sign-in is deliberately NOT attempted - it's blocked tenant-wide by a
         # Conditional Access 'Authentication flows' policy on the tenants this is used against.
         Write-Error @"
-Signed-in account was recorded but no usable Microsoft Graph token was obtained
-(the browser sign-in did not complete).
-  - Finish the sign-in in the browser window that opened, then run this again.
-  - If no browser window opened, this script needs its own console window: launch it from the
-    'Invite External Users' button in the app, or run it directly in a PowerShell 7 (pwsh) window.
+Signed-in account was recorded but no usable Microsoft Graph token was obtained.
+  - If a browser sign-in window opened: complete it (pick the admin account, approve any
+    consent prompt), then run this again.
+  - If NO browser opened: a stale cached sign-in is being reused. Run  Disconnect-MgGraph
+    (or just close this window and click 'Invite & Add' again), then complete the browser
+    sign-in when it appears.
 Nothing was changed.
 "@
         exit 1
