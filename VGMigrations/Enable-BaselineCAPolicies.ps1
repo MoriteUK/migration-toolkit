@@ -24,8 +24,8 @@
         "Require MFA for All Users" / "Block Access Outside Approved Countries" with
         no escape hatch can lock every admin out of the tenant.
 
-    Only the 8 baseline policies are touched unless -IncludeAllDisabled is given,
-    which widens the target set to every disabled Conditional Access policy.
+    Only the 8 named baseline policies are ever touched — no other Conditional
+    Access policy in the tenant is read or changed.
 
     -DisableSecurityDefaults additionally turns Microsoft Entra Security Defaults
     OFF. Security Defaults and Conditional Access are alternatives, not partners —
@@ -45,10 +45,6 @@
 
 .PARAMETER Enforce
     Move the policies straight to fully enabled ("on") instead of report-only.
-
-.PARAMETER IncludeAllDisabled
-    Also target every other disabled Conditional Access policy in the tenant, not
-    just the 8 named baseline ones.
 
 .PARAMETER DisableSecurityDefaults
     Also turn Microsoft Entra Security Defaults off (needs -Enforce, or -Force).
@@ -74,7 +70,6 @@ param(
     [string]$TenantId,
     [string]$BreakGlassUpn,
     [switch]$Enforce,
-    [switch]$IncludeAllDisabled,
     [switch]$DisableSecurityDefaults,
     [switch]$Force
 )
@@ -168,16 +163,15 @@ try {
     exit 1
 }
 
-# Build the target set: the named baseline policies, plus (optionally) any other disabled policy.
+# Target set = the 8 named baseline policies only. Nothing else is touched.
 $targets = [System.Collections.Generic.List[object]]::new()
 foreach ($name in $BaselineCAPolicyNames) {
     $p = $allPolicies | Where-Object { $_.displayName -eq $name } | Select-Object -First 1
     if ($p) { $targets.Add($p) } else { Write-Step "Baseline policy not found in tenant: '$name' (was Step 11 run?)." "WARN" }
 }
-if ($IncludeAllDisabled) {
-    foreach ($p in ($allPolicies | Where-Object { $_.state -eq 'disabled' })) {
-        if ($targets.displayName -notcontains $p.displayName) { $targets.Add($p) }
-    }
+
+if ($targets.Count -eq 0) {
+    Write-Step "None of the 8 baseline policies exist in this tenant — run Tenant Baseline Config (Step 11) first." "WARN"
 }
 
 $changed = 0; $skipped = 0; $blocked = 0; $failed = 0

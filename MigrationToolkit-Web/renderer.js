@@ -3421,7 +3421,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const breakGlassUpn         = document.getElementById('enableCaBreakGlassUpn').value.trim();
       const enforce               = document.getElementById('enableCaEnforce').checked;
       const disableSecurityDefs   = document.getElementById('enableCaDisableSecurityDefaults').checked;
-      const includeAllDisabled    = document.getElementById('enableCaIncludeAllDisabled').checked;
       const force                 = document.getElementById('enableCaForce').checked;
       const whatIf                = document.getElementById('enableCaWhatIf').checked;
 
@@ -3443,7 +3442,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (breakGlassUpn)       args.push('-BreakGlassUpn', breakGlassUpn);
       if (enforce)             args.push('-Enforce');
       if (disableSecurityDefs) args.push('-DisableSecurityDefaults');
-      if (includeAllDisabled)  args.push('-IncludeAllDisabled');
       if (force)               args.push('-Force');
       if (whatIf)              args.push('-WhatIf');
 

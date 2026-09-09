@@ -1,7 +1,14 @@
 {
-  "version": "2.9.142",
+  "version": "2.9.143",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.143",
+      "date": "2026-09-09",
+      "changes": [
+        "Enable-BaselineCAPolicies.ps1 / 'Enable CA Policies' panel: dropped the -IncludeAllDisabled option (and its checkbox). The script now only ever acts on the 8 named baseline policies - no other Conditional Access policy in the tenant is read or changed. Added a clear warning when none of the 8 exist yet"
+      ]
+    },
     {
       "version": "2.9.142",
       "date": "2026-09-09",
