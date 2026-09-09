@@ -146,24 +146,26 @@ function registerIPCHandlers() {
   ipcMain.handle('launch-script', async (event, scriptName, args = []) => {
     const launchLog = openScriptLog(`launch_${scriptName}`);
     try {
-      // Open the script in its OWN new, visible console window that STAYS open. Two separate
-      // problems had to be solved:
+      // Open the script in its OWN new, visible console window that STAYS open. History:
+      //   pre-2.9.131  spawn('cmd.exe', ['/c','start','pwsh.exe',...args], {detached, shell:true})
+      //               WORKED (visible window) — its only fault was cmd mangling the quoting of
+      //               args (CSV paths) that contained spaces.
+      //   v2.9.131  spawn('pwsh', {detached})                 -> no window
+      //   v2.9.132  cmd /c start pwsh, shell:false            -> no window
+      //   v2.9.133  headless pwsh -> Start-Process pwsh       -> no window (Start-Process exit 0)
+      //   v2.9.134  same via a wrapper .ps1 to survive exit   -> STILL no window
+      // So `cmd /c start` with shell:true is the form that actually produces a window here; every
+      // form that spawns pwsh / Start-Process directly does not. This restores that exact form,
+      // and sidesteps its quoting fault by pointing `start` at a generated wrapper .ps1 in %TEMP%
+      // (a path with no spaces or special chars — nothing for cmd to mangle). The real target
+      // path and args live INSIDE that wrapper as PowerShell single-quoted literals and never
+      // touch a command line.
       //
-      // 1. Getting a visible window at all. Electron's main process is a GUI-subsystem process
-      //    with NO console of its own, and from a console-less parent `spawn('pwsh', {detached})`
-      //    (v2.9.131) gives the child no console, and `cmd /c start` (v2.9.132) can't allocate
-      //    one either. A throwaway headless pwsh calling `Start-Process pwsh` (v2.9.133) is what
-      //    actually creates a new console window.
-      // 2. Keeping it open. `-NoExit` only holds the prompt when the script FINISHES NORMALLY.
-      //    Invite-externalUsers.ps1 (and others) call `exit 1` on bad input, and an explicit
-      //    `exit` terminates the whole pwsh host even under `-NoExit` — so the window just
-      //    flashed and vanished, which looked identical to "no window opened". The fix: don't
-      //    run the target script as this window's -File. Instead generate a tiny wrapper .ps1
-      //    that runs the target as a SEPARATE pwsh process (its `exit` only ends that child) and
-      //    then holds the window with a Read-Host. The wrapper lives in %TEMP% (no spaces in the
-      //    path) so its own launch needs no fragile quoting; the target path + args are baked
-      //    into the wrapper body as PowerShell single-quoted literals, which need no escaping
-      //    beyond doubling any embedded quote.
+      // The wrapper also fixes a second problem (v2.9.134): `-NoExit` only holds the prompt when
+      // the script finishes NORMALLY, but Invite-externalUsers.ps1 calls `exit 1` on bad input
+      // and an explicit `exit` kills the pwsh host even under -NoExit — so the window vanished
+      // instantly, which looked like "no window". The wrapper runs the target as a SEPARATE child
+      // pwsh (its `exit` only ends that child), then holds the window open with Read-Host.
       const fs = require('fs');
       const os = require('os');
       const scriptPath = path.join(PS_SCRIPT_PATH, scriptName);
@@ -193,36 +195,30 @@ function registerIPCHandlers() {
       );
       fs.writeFileSync(wrapperPath, wrapperBody, 'utf8');
 
-      // -PassThru + write the child pid to the log so a future "no window" is diagnosable
-      // (is there a pwsh process at all? did Start-Process itself throw?).
-      const psCommand =
-        `try { $p = Start-Process -FilePath 'pwsh.exe' -WindowStyle Normal -PassThru ` +
-        `-ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-NoExit','-File',${sq(wrapperPath)}); ` +
-        `Write-Output ('child pwsh pid=' + $p.Id) } ` +
-        `catch { Write-Error ('Start-Process failed: ' + $_.Exception.Message); exit 1 }`;
-
+      const cmdArgs = [
+        '/c', 'start', '""',
+        'pwsh.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', wrapperPath
+      ];
       launchLog.write(`wrapper: ${wrapperPath}\n${wrapperBody}\n`);
-      launchLog.write(`bootstrap: pwsh -NoProfile -Command <<\n${psCommand}\n>>\n`);
+      launchLog.write(`spawn: cmd.exe ${cmdArgs.join(' ')}  (detached, shell:true, windowsHide:false)\n`);
 
-      const child = spawn('pwsh.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCommand], {
+      const child = spawn('cmd.exe', cmdArgs, {
         cwd: PS_SCRIPT_PATH,
         detached: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: true,
         windowsHide: false
       });
 
-      child.stdout.on('data', (d) => launchLog.write(`[bootstrap stdout] ${d}`));
-      child.stderr.on('data', (d) => launchLog.write(`[bootstrap stderr] ${d}`));
       child.on('error', (err) => {
-        launchLog.write(`bootstrap spawn error: ${err.message}\n`);
+        launchLog.write(`spawn error: ${err.message}\n`);
         launchLog.end();
       });
       child.on('exit', (code) => {
-        launchLog.write(`bootstrap pwsh exited: ${code}\n`);
+        launchLog.write(`cmd/start exited: ${code}\n`);
         launchLog.end();
       });
 
-      launchLog.write(`bootstrap pwsh spawned, pid=${child.pid}\n`);
+      launchLog.write(`cmd/start spawned, pid=${child.pid}\n`);
       child.unref();
 
       return { success: true };

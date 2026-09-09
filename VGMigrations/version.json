@@ -1,7 +1,17 @@
 {
-  "version": "2.9.134",
+  "version": "2.9.135",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.135",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: v2.9.134's log showed the wrapper was written and the bootstrap spawned and exited 0 - but still no window. Every attempt since v2.9.131 that spawned pwsh.exe or Start-Process directly has failed to show a window from Electron's console-less main process; the ONE form that historically worked here (pre-v2.9.131) was 'cmd /c start' with Node's shell:true. Restored exactly that form, but pointed 'start' at the generated wrapper .ps1 in %TEMP% (a path with no spaces, so cmd can't mangle it) instead of putting the real args - which contain spaces - on the command line. The real target path and args live inside the wrapper as PowerShell single-quoted literals and never touch a command line",
+        "The wrapper (from v2.9.134) is kept: it runs the target as a separate child pwsh so the target's 'exit' can't close the window, then holds it open with Read-Host",
+        "Added MigrationToolkit-Web\\launch-test.js - a throwaway Electron diagnostic ('npx electron launch-test.js' from MigrationToolkit-Web\\) that fires seven different window-launch strategies at once so we can see which actually opens a visible window from a console-less Electron process. Delete once the launcher is confirmed working",
+        "Needs a full app restart to load the new main.js"
+      ]
+    },
     {
       "version": "2.9.134",
       "date": "2026-09-09",
