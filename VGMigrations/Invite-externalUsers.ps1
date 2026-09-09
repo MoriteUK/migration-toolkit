@@ -357,12 +357,27 @@ if ($unresolved.Count -eq $allTargets.Count) {
 
 # ── Guest resolution (invite-or-reuse), cached ────────────────────────────────
 $guestCache = @{}   # email (lower) -> Entra object id, or $null
+$script:LastGuestError = $null   # real reason the last Resolve-Guest returned $null (-> results CSV)
 
 function Resolve-Guest {
     param([string]$Email, [string]$Name, [string]$Message)
 
+    $script:LastGuestError = $null
     $key = $Email.ToLowerInvariant()
     if ($guestCache.ContainsKey($key)) { return $guestCache[$key] }
+
+    # Reject an obviously malformed address before Graph does. The 'Error_*' CSV exports seen in
+    # the field have the Email column mangled with '_' where '@' should be
+    # (e.g. luca.prada_alten.it), which fails every invite with a generic error.
+    if ($Email -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+        $hint = if ($Email -notmatch '@' -and $Email -match '_') {
+            " — looks like '@' was replaced with '_'; did you mean '$($Email -replace '_', '@')'?"
+        } else { '' }
+        $script:LastGuestError = "'$Email' is not a valid email address$hint"
+        Write-Warning "  $($script:LastGuestError)"
+        $guestCache[$key] = $null
+        return $null
+    }
 
     $lit = ConvertTo-ODataLiteral $Email
     try {
@@ -398,7 +413,8 @@ function Resolve-Guest {
         $guestCache[$key] = $inv.invitedUser.id
         return $inv.invitedUser.id
     } catch {
-        Write-Warning "  FAILED to invite ${Email}: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+        $script:LastGuestError = $_.Exception.Message.Split([Environment]::NewLine)[0]
+        Write-Warning "  FAILED to invite ${Email}: $($script:LastGuestError)"
         $guestCache[$key] = $null
         return $null
     }
@@ -463,9 +479,14 @@ foreach ($row in $rows) {
         exit 1
     }
 
-    if (-not $guestId -and -not $WhatIf) {
+    # A null guest id is a hard fail EXCEPT under WhatIf, where it's expected (no invite is made)
+    # — unless the address itself is invalid, which WhatIf should still flag rather than pretend
+    # it would work.
+    $guestBlocked = (-not $guestId) -and ((-not $WhatIf) -or $script:LastGuestError)
+    if ($guestBlocked) {
+        $why = if ($script:LastGuestError) { $script:LastGuestError } else { 'Guest invite failed' }
         foreach ($t in $rowTargets) {
-            $results.Add([pscustomobject]@{ Email=$email; Name=$name; Group=$t; Result='Failed'; Message='Guest invite failed' })
+            $results.Add([pscustomobject]@{ Email=$email; Name=$name; Group=$t; Result='Failed'; Message=$why })
         }
         $fail++
         continue

@@ -1,7 +1,17 @@
 {
-  "version": "2.9.137",
+  "version": "2.9.138",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.138",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: WhatIf passed but the live run failed every guest with a generic 'Guest invite failed'. Root cause is the input CSV, not the script: every Email value is mangled - '@' replaced with '_' (luca.prada_alten.it should be luca.prada@alten.it). New-MgInvitation rejects the invalid address. WhatIf never caught it because WhatIf does not validate the address or call the invite API",
+        "Two fixes so this is self-evident next time: (1) the results CSV now carries the REAL failure reason (the actual Graph error, or the validation message) in the Message column instead of the fixed string 'Guest invite failed'; (2) Resolve-Guest now rejects an address that isn't 'local@domain.tld' up front, and if it has '_' and no '@' it says so and suggests the '@' form - and this check fires under WhatIf too, so a bad CSV shows as Failed in the preview rather than looking fine",
+        "To run the current CSV: fix the Email column first (replace '_' with '@'). The 'Error_Microsoft 365 Groups_*.csv' export is not a valid input file as-is",
+        "Parse-checked. Not re-run against a live tenant"
+      ]
+    },
     {
       "version": "2.9.137",
       "date": "2026-09-09",
