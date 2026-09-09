@@ -1,7 +1,17 @@
 {
-  "version": "2.9.133",
+  "version": "2.9.134",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.134",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: the v2.9.133 diagnostic log confirmed the bootstrap ran and Start-Process succeeded (exit 0) - so a pwsh window WAS being created, it just vanished instantly. Cause: -NoExit only holds the prompt when the script finishes normally, but Invite-externalUsers.ps1 calls `exit 1` on bad input (CSV not found / empty / no 'Email' column / no target group), and an explicit `exit` terminates the whole pwsh host even under -NoExit. The window flashed and closed, which looked identical to 'no window opened'. The input in the repro was 'Error_Microsoft 365 Groups_*.csv' - an error export, which very likely has no 'Email' column",
+        "launch-script now generates a small wrapper .ps1 in %TEMP% and opens THAT: the wrapper runs the real target as a separate child pwsh (so the target's `exit` only ends that child), then prints the exit code and holds the window open with Read-Host. So the window now stays up regardless of how the script exits, and you can read the error",
+        "Diagnostic log (Logs\\launch_<script>_<timestamp>.log) now also captures the bootstrap's stdout/stderr and the child pwsh pid via Start-Process -PassThru, and the full generated wrapper body",
+        "Still needs a full app restart to load the new main.js. If the window now opens but the script reports a bad CSV, that's the real problem to fix - point it at a CSV with an 'Email' column (optional Name, Groups, Message)"
+      ]
+    },
     {
       "version": "2.9.133",
       "date": "2026-09-09",
