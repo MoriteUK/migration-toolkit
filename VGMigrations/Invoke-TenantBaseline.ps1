@@ -21,7 +21,14 @@
 param(
     [switch]$Restarted,
     [string]$AdminUPN,
-    [string]$LogPath
+    [string]$LogPath,
+    # Step 11 (Conditional Access). Both are optional and also promptable via the
+    # tick-box dialog the step shows. -TrustedCountries is a comma/space/semicolon
+    # separated list of ISO 3166-1 alpha-2 codes; when omitted the dialog starts
+    # with CA,US,GB,IE ticked. -BreakGlassUpn is an emergency-access account that
+    # is excluded from every Conditional Access policy this script creates.
+    [string]$TrustedCountries,
+    [string]$BreakGlassUpn
 )
 
 # Default log locations live under the app's own writable log folder (not the
@@ -158,7 +165,9 @@ if (-not $Restarted) {
 
     Write-Host "Launching a new PowerShell 7 session..." -ForegroundColor Green
     $relaunchArgs = @('-NoExit', '-File', "`"$scriptPath`"", '-Restarted', '-LogPath', "`"$LogPath`"")
-    if ($AdminUPN) { $relaunchArgs += @('-AdminUPN', "`"$AdminUPN`"") }
+    if ($AdminUPN)         { $relaunchArgs += @('-AdminUPN', "`"$AdminUPN`"") }
+    if ($BreakGlassUpn)    { $relaunchArgs += @('-BreakGlassUpn', "`"$BreakGlassUpn`"") }
+    if ($TrustedCountries) { $relaunchArgs += @('-TrustedCountries', "`"$TrustedCountries`"") }
     Start-Process pwsh -ArgumentList $relaunchArgs
     exit
 }
@@ -749,6 +758,408 @@ try {
 }
 
 # =========================================================================
+# STEP 11 helper — tick-box picker for trusted countries + break-glass account
+# =========================================================================
+# Shows a WinForms dialog: a checked-list of every ISO 3166-1 country (code +
+# name) for the "Trusted Country - <code>" named locations, plus a text box for
+# an emergency-access (break-glass) account to exclude from every CA policy.
+# Returns a hashtable @{ Countries = <string[]>; BreakGlassUpn = <string> } or
+# $null if the dialog is cancelled or WinForms can't be loaded (headless), in
+# which case the caller falls back to its defaults.
+function Show-Step11OptionsDialog {
+    param(
+        [string[]]$DefaultCountries = @('CA','US','GB','IE'),
+        [string]$BreakGlassUpn = ''
+    )
+
+    $isoData = @'
+AD=Andorra
+AE=United Arab Emirates
+AF=Afghanistan
+AG=Antigua and Barbuda
+AI=Anguilla
+AL=Albania
+AM=Armenia
+AO=Angola
+AQ=Antarctica
+AR=Argentina
+AS=American Samoa
+AT=Austria
+AU=Australia
+AW=Aruba
+AX=Aland Islands
+AZ=Azerbaijan
+BA=Bosnia and Herzegovina
+BB=Barbados
+BD=Bangladesh
+BE=Belgium
+BF=Burkina Faso
+BG=Bulgaria
+BH=Bahrain
+BI=Burundi
+BJ=Benin
+BL=Saint Barthelemy
+BM=Bermuda
+BN=Brunei Darussalam
+BO=Bolivia
+BQ=Bonaire, Sint Eustatius and Saba
+BR=Brazil
+BS=Bahamas
+BT=Bhutan
+BV=Bouvet Island
+BW=Botswana
+BY=Belarus
+BZ=Belize
+CA=Canada
+CC=Cocos (Keeling) Islands
+CD=Congo (Democratic Republic of the)
+CF=Central African Republic
+CG=Congo
+CH=Switzerland
+CI=Cote d'Ivoire
+CK=Cook Islands
+CL=Chile
+CM=Cameroon
+CN=China
+CO=Colombia
+CR=Costa Rica
+CU=Cuba
+CV=Cabo Verde
+CW=Curacao
+CX=Christmas Island
+CY=Cyprus
+CZ=Czechia
+DE=Germany
+DJ=Djibouti
+DK=Denmark
+DM=Dominica
+DO=Dominican Republic
+DZ=Algeria
+EC=Ecuador
+EE=Estonia
+EG=Egypt
+EH=Western Sahara
+ER=Eritrea
+ES=Spain
+ET=Ethiopia
+FI=Finland
+FJ=Fiji
+FK=Falkland Islands (Malvinas)
+FM=Micronesia (Federated States of)
+FO=Faroe Islands
+FR=France
+GA=Gabon
+GB=United Kingdom
+GD=Grenada
+GE=Georgia
+GF=French Guiana
+GG=Guernsey
+GH=Ghana
+GI=Gibraltar
+GL=Greenland
+GM=Gambia
+GN=Guinea
+GP=Guadeloupe
+GQ=Equatorial Guinea
+GR=Greece
+GS=South Georgia and the South Sandwich Islands
+GT=Guatemala
+GU=Guam
+GW=Guinea-Bissau
+GY=Guyana
+HK=Hong Kong
+HM=Heard Island and McDonald Islands
+HN=Honduras
+HR=Croatia
+HT=Haiti
+HU=Hungary
+ID=Indonesia
+IE=Ireland
+IL=Israel
+IM=Isle of Man
+IN=India
+IO=British Indian Ocean Territory
+IQ=Iraq
+IR=Iran
+IS=Iceland
+IT=Italy
+JE=Jersey
+JM=Jamaica
+JO=Jordan
+JP=Japan
+KE=Kenya
+KG=Kyrgyzstan
+KH=Cambodia
+KI=Kiribati
+KM=Comoros
+KN=Saint Kitts and Nevis
+KP=Korea (Democratic People's Republic of)
+KR=Korea (Republic of)
+KW=Kuwait
+KY=Cayman Islands
+KZ=Kazakhstan
+LA=Lao People's Democratic Republic
+LB=Lebanon
+LC=Saint Lucia
+LI=Liechtenstein
+LK=Sri Lanka
+LR=Liberia
+LS=Lesotho
+LT=Lithuania
+LU=Luxembourg
+LV=Latvia
+LY=Libya
+MA=Morocco
+MC=Monaco
+MD=Moldova (Republic of)
+ME=Montenegro
+MF=Saint Martin (French part)
+MG=Madagascar
+MH=Marshall Islands
+MK=North Macedonia
+ML=Mali
+MM=Myanmar
+MN=Mongolia
+MO=Macao
+MP=Northern Mariana Islands
+MQ=Martinique
+MR=Mauritania
+MS=Montserrat
+MT=Malta
+MU=Mauritius
+MV=Maldives
+MW=Malawi
+MX=Mexico
+MY=Malaysia
+MZ=Mozambique
+NA=Namibia
+NC=New Caledonia
+NE=Niger
+NF=Norfolk Island
+NG=Nigeria
+NI=Nicaragua
+NL=Netherlands
+NO=Norway
+NP=Nepal
+NR=Nauru
+NU=Niue
+NZ=New Zealand
+OM=Oman
+PA=Panama
+PE=Peru
+PF=French Polynesia
+PG=Papua New Guinea
+PH=Philippines
+PK=Pakistan
+PL=Poland
+PM=Saint Pierre and Miquelon
+PN=Pitcairn
+PR=Puerto Rico
+PS=Palestine, State of
+PT=Portugal
+PW=Palau
+PY=Paraguay
+QA=Qatar
+RE=Reunion
+RO=Romania
+RS=Serbia
+RU=Russian Federation
+RW=Rwanda
+SA=Saudi Arabia
+SB=Solomon Islands
+SC=Seychelles
+SD=Sudan
+SE=Sweden
+SG=Singapore
+SH=Saint Helena, Ascension and Tristan da Cunha
+SI=Slovenia
+SJ=Svalbard and Jan Mayen
+SK=Slovakia
+SL=Sierra Leone
+SM=San Marino
+SN=Senegal
+SO=Somalia
+SR=Suriname
+SS=South Sudan
+ST=Sao Tome and Principe
+SV=El Salvador
+SX=Sint Maarten (Dutch part)
+SY=Syrian Arab Republic
+SZ=Eswatini
+TC=Turks and Caicos Islands
+TD=Chad
+TF=French Southern Territories
+TG=Togo
+TH=Thailand
+TJ=Tajikistan
+TK=Tokelau
+TL=Timor-Leste
+TM=Turkmenistan
+TN=Tunisia
+TO=Tonga
+TR=Turkiye
+TT=Trinidad and Tobago
+TV=Tuvalu
+TW=Taiwan
+TZ=Tanzania, United Republic of
+UA=Ukraine
+UG=Uganda
+UM=United States Minor Outlying Islands
+US=United States of America
+UY=Uruguay
+UZ=Uzbekistan
+VA=Holy See
+VC=Saint Vincent and the Grenadines
+VE=Venezuela
+VG=Virgin Islands (British)
+VI=Virgin Islands (U.S.)
+VN=Viet Nam
+VU=Vanuatu
+WF=Wallis and Futuna
+WS=Samoa
+YE=Yemen
+YT=Mayotte
+ZA=South Africa
+ZM=Zambia
+ZW=Zimbabwe
+'@
+
+    $countries = foreach ($line in ($isoData -split "`n")) {
+        $t = $line.Trim()
+        if ($t -match '^([A-Za-z]{2})=(.+)$') {
+            [pscustomobject]@{ Code = $Matches[1].ToUpper(); Name = $Matches[2].Trim() }
+        }
+    }
+
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+    } catch {
+        Write-Log "[WARN] Step 11: WinForms unavailable ($($_.Exception.Message)); the country / break-glass dialog was skipped." "WARN"
+        return $null
+    }
+
+    try {
+        [System.Windows.Forms.Application]::EnableVisualStyles()
+
+        $form                 = New-Object System.Windows.Forms.Form
+        $form.Text            = 'Step 11 - Conditional Access options'
+        $form.ClientSize      = New-Object System.Drawing.Size(480, 596)
+        $form.StartPosition   = 'CenterScreen'
+        $form.FormBorderStyle = 'FixedDialog'
+        $form.MaximizeBox     = $false
+        $form.MinimizeBox     = $false
+        $form.TopMost         = $true
+
+        $bgLabel = New-Object System.Windows.Forms.Label
+        $bgLabel.Text = 'Break-glass (emergency access) account - excluded from EVERY Conditional Access policy created below so it can always sign in if a policy locks everyone else out. Leave blank for none.'
+        $bgLabel.SetBounds(12, 10, 456, 46)
+        $form.Controls.Add($bgLabel)
+
+        $bgBox = New-Object System.Windows.Forms.TextBox
+        $bgBox.SetBounds(12, 58, 456, 23)
+        $bgBox.Text = $BreakGlassUpn
+        $form.Controls.Add($bgBox)
+
+        $cLabel = New-Object System.Windows.Forms.Label
+        $cLabel.Text = 'Trusted countries - one "Trusted Country - <code>" named location is created per ticked entry, and all of them are excluded from "Block Access Outside Approved Countries".'
+        $cLabel.SetBounds(12, 92, 456, 46)
+        $form.Controls.Add($cLabel)
+
+        $filterLabel = New-Object System.Windows.Forms.Label
+        $filterLabel.Text = 'Filter:'
+        $filterLabel.SetBounds(12, 144, 44, 20)
+        $form.Controls.Add($filterLabel)
+
+        $filterBox = New-Object System.Windows.Forms.TextBox
+        $filterBox.SetBounds(56, 141, 412, 23)
+        $form.Controls.Add($filterBox)
+
+        $clb = New-Object System.Windows.Forms.CheckedListBox
+        $clb.SetBounds(12, 170, 456, 376)
+        $clb.CheckOnClick = $true
+        $clb.IntegralHeight = $false
+        $form.Controls.Add($clb)
+
+        $script:blStep11Suppress = $false
+        $checked = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($d in $DefaultCountries) { if ($d) { [void]$checked.Add(($d.Trim().ToUpper())) } }
+
+        $repop = {
+            $f = $filterBox.Text.Trim()
+            $script:blStep11Suppress = $true
+            $clb.BeginUpdate()
+            $clb.Items.Clear()
+            foreach ($c in $countries) {
+                $disp = '{0}  -  {1}' -f $c.Code, $c.Name
+                if ($f -eq '' -or $disp -like ('*{0}*' -f $f)) {
+                    $i = $clb.Items.Add($disp)
+                    if ($checked.Contains($c.Code)) { $clb.SetItemChecked($i, $true) }
+                }
+            }
+            $clb.EndUpdate()
+            $script:blStep11Suppress = $false
+        }
+
+        $clb.Add_ItemCheck({
+            param($eventSender, $e)
+            if ($script:blStep11Suppress) { return }
+            $code = ([string]$clb.Items[$e.Index]).Substring(0, 2)
+            if ($e.NewValue -eq [System.Windows.Forms.CheckState]::Checked) { [void]$checked.Add($code) }
+            else { [void]$checked.Remove($code) }
+        })
+        $filterBox.Add_TextChanged($repop)
+
+        $resetBtn = New-Object System.Windows.Forms.Button
+        $resetBtn.Text = 'Reset to default'
+        $resetBtn.SetBounds(12, 552, 110, 26)
+        $resetBtn.Add_Click({
+            $checked.Clear()
+            foreach ($d in $DefaultCountries) { if ($d) { [void]$checked.Add(($d.Trim().ToUpper())) } }
+            & $repop
+        })
+        $form.Controls.Add($resetBtn)
+
+        $clearBtn = New-Object System.Windows.Forms.Button
+        $clearBtn.Text = 'Uncheck all'
+        $clearBtn.SetBounds(128, 552, 90, 26)
+        $clearBtn.Add_Click({ $checked.Clear(); & $repop })
+        $form.Controls.Add($clearBtn)
+
+        $okBtn = New-Object System.Windows.Forms.Button
+        $okBtn.Text = 'OK'
+        $okBtn.DialogResult = [System.Windows.Forms.DialogResult]::OK
+        $okBtn.SetBounds(300, 552, 80, 26)
+        $form.Controls.Add($okBtn)
+        $form.AcceptButton = $okBtn
+
+        $cancelBtn = New-Object System.Windows.Forms.Button
+        $cancelBtn.Text = 'Cancel'
+        $cancelBtn.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+        $cancelBtn.SetBounds(388, 552, 80, 26)
+        $form.Controls.Add($cancelBtn)
+        $form.CancelButton = $cancelBtn
+
+        & $repop
+
+        $dr = $form.ShowDialog()
+        $picked = @($checked)
+        $bgVal  = $bgBox.Text.Trim()
+        $form.Dispose()
+
+        if ($dr -ne [System.Windows.Forms.DialogResult]::OK) { return $null }
+        if ($picked.Count -eq 0) {
+            Write-Log "[WARN] Step 11: No countries ticked; falling back to $($DefaultCountries -join ', ')." "WARN"
+            $picked = $DefaultCountries
+        }
+        return @{ Countries = @($picked | Sort-Object); BreakGlassUpn = $bgVal }
+    } catch {
+        Write-Log "[WARN] Step 11: Country / break-glass dialog failed ($($_.Exception.Message)); continuing with defaults." "WARN"
+        return $null
+    }
+}
+
+# =========================================================================
 # STEP 11 — Conditional Access Policies
 # =========================================================================
 Write-Host "`n=== Step 11: Deploy Conditional Access Policies ===" -ForegroundColor Cyan
@@ -756,8 +1167,39 @@ Reset-ConsoleCapture
 try {
     # GB is included for UK-based admins/users, but UK ISP traffic sometimes geolocates
     # to Dublin (IE) at the Microsoft/Azure network edge, so IE is trusted too — otherwise
-    # genuine GB sign-ins can get blocked by this policy with AADSTS53003.
-    $trustedCountries = @("CA", "US", "GB", "IE")
+    # genuine GB sign-ins can get blocked by this policy with AADSTS53003. That set is the
+    # default; the tick-box dialog lets the operator change it per tenant.
+    $defaultCountryCodes = if ($TrustedCountries) {
+        @($TrustedCountries -split '[,;\s]+' | Where-Object { $_ } | ForEach-Object { $_.ToUpper() })
+    } else {
+        @("CA", "US", "GB", "IE")
+    }
+
+    $step11Opts = Show-Step11OptionsDialog -DefaultCountries $defaultCountryCodes -BreakGlassUpn $BreakGlassUpn
+    if ($step11Opts) {
+        $trustedCountries = $step11Opts.Countries
+        $BreakGlassUpn    = $step11Opts.BreakGlassUpn
+    } else {
+        $trustedCountries = $defaultCountryCodes
+        Write-Log "[INFO] Step 11: Using default trusted countries ($($trustedCountries -join ', ')) and break-glass '$BreakGlassUpn'." "INFO"
+    }
+    Write-Log "[INFO] Step 11: Trusted countries for named locations: $($trustedCountries -join ', ')" "INFO"
+
+    # Resolve the break-glass account to an object id so it can be added to each
+    # policy's conditions.users.excludeUsers (an emergency-access bypass).
+    $breakGlassId = $null
+    if ($BreakGlassUpn) {
+        try {
+            $bgUser = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/users/{0}?`$select=id,userPrincipalName" -f [uri]::EscapeDataString($BreakGlassUpn)) -ErrorAction Stop
+            $breakGlassId = $bgUser.id
+            Write-Log "[OK] Step 11: Break-glass account '$($bgUser.userPrincipalName)' (id $breakGlassId) will be excluded from every policy created below." "OK"
+        } catch {
+            Write-Log "[ERROR] Step 11: Break-glass account '$BreakGlassUpn' not found in this tenant — policies will be created WITHOUT an emergency-access exclusion: $(Get-FullErrorMessage $_)" "ERROR"
+        }
+    } else {
+        Write-Log "[WARN] Step 11: No break-glass account given — Conditional Access policies will have no emergency-access exclusion." "WARN"
+    }
+
     $locationMap = @{}
     $existingLocations = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations").value
 
@@ -796,6 +1238,13 @@ try {
         $policyName = $policyObj.displayName
 
         if ($existingNames -contains $policyName) {
+            if ($breakGlassId) {
+                $livePol = $existingPolicies | Where-Object { $_.displayName -eq $policyName } | Select-Object -First 1
+                $liveEx  = @($livePol.conditions.users.excludeUsers)
+                if ($liveEx -notcontains $breakGlassId) {
+                    Write-Log "[WARN] Step 11: '$policyName' already exists and does NOT exclude the break-glass account '$BreakGlassUpn' — add it to that policy's excluded users by hand, or delete the policy and re-run." "WARN"
+                }
+            }
             Write-Log "[SKIP] Step 11: '$policyName' already exists." "SKIP"
             $skippedCount++
             continue
@@ -804,6 +1253,11 @@ try {
             $excludeLocationIds = @()
             foreach ($code in $trustedCountries) { if ($locationMap.ContainsKey($code)) { $excludeLocationIds += $locationMap[$code] } }
             $policyObj.conditions.locations.excludeLocations = $excludeLocationIds
+        }
+        if ($breakGlassId) {
+            # Emergency-access bypass: keep this account out of every policy so a
+            # misconfigured control can never lock every admin out of the tenant.
+            $policyObj.conditions.users | Add-Member -NotePropertyName excludeUsers -NotePropertyValue @($breakGlassId) -Force
         }
         $body = $policyObj | ConvertTo-Json -Depth 10
         Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies" -Body $body -ContentType "application/json" -ErrorAction Stop
@@ -822,10 +1276,11 @@ try {
         }
     }
 
+    $bgNote = if ($breakGlassId) { "; break-glass '$BreakGlassUpn' excluded" } elseif ($BreakGlassUpn) { "; break-glass '$BreakGlassUpn' NOT FOUND - no exclusion" } else { "; no break-glass account" }
     if ($createdCount -eq 0) {
-        Add-Summary 11 "Deploy_Conditional_Access_Policies" "Skipped (all policies already existed)"
+        Add-Summary 11 "Deploy_Conditional_Access_Policies" "Skipped (all policies already existed)$bgNote"
     } else {
-        Add-Summary 11 "Deploy_Conditional_Access_Policies" "Success ($createdCount created, $skippedCount already existed)"
+        Add-Summary 11 "Deploy_Conditional_Access_Policies" "Success ($createdCount created, $skippedCount already existed; countries: $($trustedCountries -join ','))$bgNote"
     }
 } catch {
     Write-Log "[ERROR] Step 11 failed: $(Get-FullErrorMessage $_)" "ERROR"

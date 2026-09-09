@@ -3205,9 +3205,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Tenant Baseline Config ────────────────────────────────────────────────
-  const baselineRunBtn   = document.getElementById('baselineRunBtn');
-  const baselineAdminUpn = document.getElementById('baselineAdminUpn');
-  const baselineLogPre   = document.getElementById('baselineLogPre');
+  const baselineRunBtn       = document.getElementById('baselineRunBtn');
+  const baselineAdminUpn      = document.getElementById('baselineAdminUpn');
+  const baselineBreakGlassUpn = document.getElementById('baselineBreakGlassUpn');
+  const baselineLogPre        = document.getElementById('baselineLogPre');
 
   function appendBaselineLog(text) {
     if (!baselineLogPre) return;
@@ -3227,6 +3228,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // -Restarted skips the script's self-relaunch/process-kill logic so it
       // runs inline in this already-clean pwsh child process and streams here.
       const args = ['-Restarted', '-AdminUPN', adminUpn];
+      const breakGlassUpn = baselineBreakGlassUpn?.value?.trim();
+      if (breakGlassUpn) args.push('-BreakGlassUpn', breakGlassUpn);
 
       window.electronAPI.onPsOutput(appendBaselineLog);
       try {

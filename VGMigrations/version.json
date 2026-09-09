@@ -1,7 +1,17 @@
 {
-  "version": "2.9.140",
+  "version": "2.9.141",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.141",
+      "date": "2026-09-09",
+      "changes": [
+        "Invoke-TenantBaseline.ps1 Step 11 (Conditional Access): the trusted-country list for the 'Trusted Country - <code>' named locations is no longer hard-coded to CA/US/GB/IE. Step 11 now shows a WinForms tick-box dialog listing every ISO 3166-1 country as '<code>  -  <name>' with a type-to-filter box, Reset to default / Uncheck all buttons, and CA/US/GB/IE pre-ticked. The ticked codes drive both the named-location creation and the exclusions on 'Block Access Outside Approved Countries'. If the dialog is cancelled, or WinForms can't load (headless), it falls back to the default set and logs that",
+        "Step 11 also takes an optional break-glass (emergency-access) account: entered in the same dialog (or the new 'Break-glass account UPN' field on the Tenant Baseline Config panel, or -BreakGlassUpn). The account is resolved to its object id and added to conditions.users.excludeUsers on every CA policy the script creates, so a misconfigured control can't lock every admin out. A policy that already exists is left as-is but a WARN is logged if it doesn't already exclude that account. If the UPN isn't found in the tenant, policies are still created (without the exclusion) and an ERROR is logged",
+        "New optional parameters on Invoke-TenantBaseline.ps1: -TrustedCountries (comma/space/semicolon separated alpha-2 codes, pre-ticks the dialog) and -BreakGlassUpn; both are forwarded through the script's self-relaunch. The Step 11 run summary line now records the countries used and the break-glass status",
+        "Parse-checked; excludeUsers JSON injection and the ISO list parsing were unit-tested in isolation. The WinForms dialog and the live Graph calls were not exercised against a tenant"
+      ]
+    },
     {
       "version": "2.9.140",
       "date": "2026-09-09",

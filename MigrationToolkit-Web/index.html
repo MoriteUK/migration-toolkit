@@ -921,6 +921,12 @@
             <small class="form-help">Required — used for the Exchange Online sign-in prompt (steps 12-13).</small>
           </div>
 
+          <div class="form-group-tight">
+            <label class="form-label">Break-glass account UPN <span style="font-weight:400;">(optional)</span></label>
+            <input type="text" class="form-input form-input-compact" id="baselineBreakGlassUpn" placeholder="breakglass@contoso.onmicrosoft.com">
+            <small class="form-help">Step 11 — excluded from every Conditional Access policy created, so this account can always sign in if a policy locks everyone else out. Leave blank for none. Step 11 also shows a tick-box list to choose the trusted countries (defaults to CA, US, GB, IE).</small>
+          </div>
+
           <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
             <button type="button" class="btn btn-success btn-xs" id="baselineRunBtn">
               ▶ Run Baseline Config
