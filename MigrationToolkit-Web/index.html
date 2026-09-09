@@ -1163,13 +1163,13 @@
               <input type="text" class="form-input form-input-compact" id="inviteExternalCsvFile" placeholder="C:\external-users.csv" readonly>
               <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv">Browse</button>
             </div>
-            <small class="form-help">Column <code>Email</code> required. Optional: <code>Name</code>, <code>Groups</code> (per-row targets, ";"-separated), <code>Message</code>.</small>
+            <small class="form-help">Either a simple list (<code>Email</code> required; optional <code>Name</code>, <code>Groups</code> per-row targets ";"-separated, <code>Message</code>) — <em>or</em> an AvePoint Fly <strong>M365 Group objects migration report</strong> (auto-detected). From a Fly report it re-adds every failed external member to its group; internal / <code>*.onmicrosoft.com</code> accounts and non-"not found" errors are skipped.</small>
           </div>
 
           <div class="form-group-tight">
             <label class="form-label">Target Team(s) / Group(s)</label>
             <input type="text" class="form-input form-input-compact" id="inviteExternalTargetGroups" placeholder="team-mail@domain.com; another-group@domain.com">
-            <small class="form-help">Mail address, mailNickname or object id. Used for every CSV row without its own <code>Groups</code> value. Leave blank only if every row carries <code>Groups</code>.</small>
+            <small class="form-help">Mail address, mailNickname or object id. Used for every CSV row without its own <code>Groups</code> value. Leave blank when every row carries <code>Groups</code>, or when using a Fly report (each row already has its group).</small>
           </div>
 
           <div class="form-group-tight">

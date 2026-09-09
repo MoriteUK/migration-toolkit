@@ -30,12 +30,27 @@
     "group not found" for every row.
 
 .PARAMETER CsvFile
-    Path to the input CSV. Columns:
+    Path to the input CSV. Two formats are accepted and auto-detected:
+
+    1. Simple list:
       Email   (required) — the external person's email address
       Name    (optional) — display name for the guest invitation
       Groups  (optional) — per-row target group(s); ';'-separated. Overrides -TargetGroups for
                            that row. Use this when different people go to different groups.
       Message (optional) — per-row custom invitation message body
+
+    2. An AvePoint Fly "M365 Group objects" migration report (columns include Title, Type,
+      Source, Status, Error code). The failed 'CO-UserOrGroupNotFound' member rows are the
+      external people who need a guest account created and adding to that group in the
+      destination. 'Title' is the member's email; the group is the part of 'Source' before the
+      first '/'. Rows on an @*.onmicrosoft.com / destination-tenant address (internal accounts)
+      and non-membership rows are skipped. -TargetGroups is not needed with this format — each
+      row already carries its own group.
+
+.PARAMETER IncludeAllErrorCodes
+    (Fly report format only) Also process rows whose Error code is something other than
+    CO-UserOrGroupNotFound (e.g. CO-MatchMultipleUser). Off by default — those usually need a
+    user mapping in the migration policy, not a guest invite.
 
 .PARAMETER TargetGroups
     Default target group(s) applied to every CSV row that has no own 'Groups' value. One or
@@ -97,6 +112,8 @@ param(
 
     [string]$ResultsCsv = '',
 
+    [switch]$IncludeAllErrorCodes,
+
     [switch]$WhatIf
 )
 
@@ -143,8 +160,76 @@ if ($rows.Count -eq 0) { Write-Error "CSV is empty."; exit 1 }
 
 $cols = @($rows[0].PSObject.Properties.Name)
 Write-Host "Columns     : $($cols -join ', ')"
+
+# Rows the Fly-report parser decides upfront it will not attempt (internal accounts, wrong
+# error code) - folded into the results CSV at the end so nothing silently disappears.
+$flyPrescreen = [System.Collections.Generic.List[object]]::new()
+
+# ── AvePoint Fly "M365 Group objects" migration report? ───────────────────────
+# Export columns: Migration start time, Sub job ID, Title, Type, Source, Destination, Size,
+# Status, Migration action, Comment, Error code.
+#   Title  = the member's email address
+#   Type   = Member | Owner
+#   Source = "<group mail-or-name>/<member>"   (group id = everything before the first '/')
+#   Status / Error code = why the member failed to migrate
+# The failed CO-UserOrGroupNotFound rows are exactly the external people who need a guest
+# account created and adding to that group in the destination. Normalise them into the same
+# per-row { Email; Groups } shape the rest of the script already handles.
+$isFlyReport = ($cols -contains 'Title') -and ($cols -contains 'Source') -and ($cols -contains 'Type')
+if ($isFlyReport) {
+    Write-Host "Detected an AvePoint Fly M365 Group migration report — extracting members to re-add..." -ForegroundColor Cyan
+
+    # An @*.onmicrosoft.com address, or one on the tenant given in -TenantId, is an internal /
+    # unmigrated account, never an external guest.
+    $skipDomainRx = '(?i)\.onmicrosoft\.com$'
+    if ($TenantId -and $TenantId -notmatch '^[0-9a-fA-F-]{36}$') {
+        $skipDomainRx = "(?i)(\.onmicrosoft\.com|@$([regex]::Escape($TenantId)))$"
+    }
+
+    $seen = [System.Collections.Generic.HashSet[string]]::new()
+    $norm = [System.Collections.Generic.List[object]]::new()
+    foreach ($r in $rows) {
+        $src = ("" + $r.Source).Trim()
+        if ($src -notmatch '/') { continue }                       # group-level row, not a membership row
+        $slash = $src.IndexOf('/')
+        $group = $src.Substring(0, $slash).Trim()
+        $email = ("" + $r.Title).Trim()
+        if (-not $email) { $email = $src.Substring($slash + 1).Trim() }
+        if (-not $email -or -not $group) { continue }
+
+        $stat = ("" + $r.Status).Trim()
+        if ($stat -and $stat -notmatch '(?i)error|fail') { continue }   # a member that migrated fine needs nothing
+
+        $key = ($email + '|' + $group).ToLowerInvariant()
+        if (-not $seen.Add($key)) { continue }                     # de-dupe retried sub-jobs
+
+        $role = ("" + $r.Type).Trim()
+        $code = ("" + $r.'Error code').Trim()
+
+        if ($email -match $skipDomainRx) {
+            $flyPrescreen.Add([pscustomobject]@{ Email=$email; Name=''; Group=$group; Result='Skipped'; Message='Internal / tenant account — not an external guest' })
+            continue
+        }
+        if ($code -and $code -ne 'CO-UserOrGroupNotFound' -and -not $IncludeAllErrorCodes) {
+            $flyPrescreen.Add([pscustomobject]@{ Email=$email; Name=''; Group=$group; Result='Skipped'; Message="Fly error '$code' — needs a user mapping in the migration policy, not a guest invite (use -IncludeAllErrorCodes to override)" })
+            continue
+        }
+
+        $norm.Add([pscustomobject]@{ Email=$email; Name=''; Groups=$group; Message=''; SourceRole=$role })
+    }
+
+    if ($norm.Count -eq 0) {
+        Write-Error "No re-addable external members found in the Fly report (after removing internal accounts, non-membership rows and non-'not found' errors)."
+        if ($flyPrescreen.Count) { $flyPrescreen | Export-Csv -Path $ResultsCsv -NoTypeInformation -Encoding UTF8; Write-Host "Skipped rows written to $ResultsCsv" -ForegroundColor Yellow }
+        exit 1
+    }
+    Write-Host ("  {0} unique (member, group) pair(s) to process  |  {1} row(s) pre-skipped" -f $norm.Count, $flyPrescreen.Count) -ForegroundColor Cyan
+    $rows = $norm.ToArray()
+    $cols = @('Email', 'Name', 'Groups', 'Message')
+}
+
 if ($cols -notcontains 'Email') {
-    Write-Error "CSV must have an 'Email' column. Optional: Name, Groups, Message. Found: $($cols -join ', ')"
+    Write-Error "CSV must have an 'Email' column, or be an AvePoint Fly M365 Group migration report. Optional: Name, Groups, Message. Found: $($cols -join ', ')"
     exit 1
 }
 
@@ -443,6 +528,10 @@ $ok = 0; $fail = 0; $skip = 0
 $total = $rows.Count
 $i = 0
 
+# Carry through the rows the Fly-report parser already decided to skip.
+foreach ($p in $flyPrescreen) { $results.Add($p); $skip++ }
+if ($flyPrescreen.Count) { Write-Host "$($flyPrescreen.Count) row(s) pre-skipped from the Fly report (see results CSV)" -ForegroundColor DarkGray }
+
 foreach ($row in $rows) {
     $i++
     $email = ("" + $row.Email).Trim()
@@ -468,7 +557,11 @@ foreach ($row in $rows) {
         continue
     }
 
-    Write-Host "[$i/$total] $email" -ForegroundColor Cyan
+    $srcRole = if ($row.PSObject.Properties['SourceRole']) { ("" + $row.SourceRole).Trim() } else { '' }
+    Write-Host "[$i/$total] $email$(if ($srcRole) { "  (was $srcRole in source)" })" -ForegroundColor Cyan
+    if ($srcRole -eq 'Owner') {
+        Write-Host "    note: guests can't be group owners — re-adding as a Member" -ForegroundColor DarkYellow
+    }
     try {
         $guestId = Resolve-Guest -Email $email -Name $name -Message $msg
     } catch {

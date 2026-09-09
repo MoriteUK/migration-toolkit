@@ -1,7 +1,17 @@
 {
-  "version": "2.9.138",
+  "version": "2.9.139",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.139",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: now accepts an AvePoint Fly 'M365 Group objects' migration report CSV directly (auto-detected by its Title/Type/Source/Error code columns) - no need to hand-build a per-group list. It reads the failed member rows, takes the member email from 'Title' and the group from the part of 'Source' before the first '/', de-dupes retried sub-jobs, and re-invites + re-adds each external person to their group. -TargetGroups isn't needed with this format - every row carries its own group",
+        "Safeguards on the Fly-report path: rows on an @*.onmicrosoft.com address or the -TenantId domain (internal / unmigrated accounts, not guests) are skipped; rows whose Error code isn't CO-UserOrGroupNotFound (e.g. CO-MatchMultipleUser, which needs a user mapping in the migration policy) are skipped unless -IncludeAllErrorCodes is set; successful and group-level rows are ignored. Every skipped row is still written to the results CSV with the reason. Members that were Owners in the source are re-added as Members (guests can't be group owners) with a note",
+        "The simple Email/Name/Groups/Message CSV format still works exactly as before. UI help text updated to mention both formats",
+        "Parse-checked; Fly-report parsing verified against a representative sample (dedupe, onmicrosoft skip, error-code skip, Owner capture, Source split). Not re-run end-to-end against a live tenant"
+      ]
+    },
     {
       "version": "2.9.138",
       "date": "2026-09-09",
