@@ -25,7 +25,7 @@
 .NOTES
     Dependency : lib.ps1 (colours, fonts, header/footer helpers), PnP.PowerShell module
                  (auto-installed to CurrentUser scope if missing)
-    Log file   : %APPDATA%\FlyMigration\Logs\search-onedrive-files-<timestamp>.log
+    Log file   : C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs\search-onedrive-files-<timestamp>.log
 
     IMPORTANT — access granted, not revoked: this script adds the signed-in admin as a site
     collection administrator on the target OneDrive via Set-PnPTenantSite so it can enumerate
@@ -41,7 +41,7 @@
 
 $libPath = Join-Path $PSScriptRoot 'lib.ps1'
 
-$_logDir = Join-Path $env:APPDATA 'FlyMigration\Logs'
+$_logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Force | Out-Null }
 $script:LogFile = Join-Path $_logDir "search-onedrive-files-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 

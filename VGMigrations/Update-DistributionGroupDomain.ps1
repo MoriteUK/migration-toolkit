@@ -60,7 +60,7 @@ if (-not (Test-Path $_logDir)) { New-Item -ItemType Directory -Path $_logDir -Fo
 $logFile = Join-Path $_logDir "update-dg-domain-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 function Log { param([string]$m) $ts = Get-Date -Format 'HH:mm:ss'; "$ts $m" | Tee-Object -FilePath $logFile -Append | Write-Host }
 
-$_reportsDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Reports'
+$_reportsDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 if (-not (Test-Path $_reportsDir)) { New-Item -ItemType Directory -Path $_reportsDir -Force | Out-Null }
 $resultsCsv = Join-Path $_reportsDir "UpdateDistributionGroupDomain-$CustomerPrefix-$(Get-Date -Format 'yyyyMMdd-HHmmss').csv"
 

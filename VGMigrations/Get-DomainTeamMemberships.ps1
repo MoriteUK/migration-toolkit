@@ -76,7 +76,7 @@ function Log { param([string]$m) $ts = Get-Date -Format 'HH:mm:ss'; "$ts $m" | T
 $_csvName = "DomainTeamMemberships-$Domain-$(Get-Date -Format 'yyyyMMdd-HHmmss').csv"
 if (-not $OutputCsv) {
     # Default alongside the rest of the toolkit's output, not the (possibly read-only) script folder.
-    $OutputCsv = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Reports'
+    $OutputCsv = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
 }
 # Accept either a folder (UI "Browse" picks one) or a full file path.
 if ((Test-Path $OutputCsv -PathType Container) -or ($OutputCsv -notmatch '\.csv$')) {

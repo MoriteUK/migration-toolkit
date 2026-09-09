@@ -3760,7 +3760,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (result?.success) {
           appendInviteExternalLog('A PowerShell window has opened for Invite External Users.\n');
           appendInviteExternalLog('Complete the sign-in and watch the run there — output is not mirrored here.\n');
-          appendInviteExternalLog(`Results CSV is written to %APPDATA%\\FlyMigration\\Logs\\InviteExternalUsers-*.csv\n`);
+          appendInviteExternalLog(`Results CSV is written to ...\\OneDrive - Andy White\\Contracts\\Jolera\\Migrations\\Logs\\InviteExternalUsers-*.csv\n`);
         } else {
           appendInviteExternalLog(`\n✗ Could not open the window: ${result?.error || 'unknown error'}\n`);
         }

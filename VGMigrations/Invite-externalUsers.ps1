@@ -74,7 +74,7 @@
 
 .PARAMETER ResultsCsv
     Path for the per-row outcome CSV. Defaults to
-    %APPDATA%\FlyMigration\Logs\InviteExternalUsers-<timestamp>.csv
+    C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs\InviteExternalUsers-<timestamp>.csv
 
 .PARAMETER WhatIf
     Preview every action (guest invite, group add) without making any changes. Target groups
@@ -139,7 +139,7 @@ function Test-IsAuthError {
 
 # ── Results CSV location ─────────────────────────────────────────────────────────
 if (-not $ResultsCsv) {
-    $logDir = Join-Path $env:APPDATA 'FlyMigration\Logs'
+    $logDir = 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs'
     if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
     $ResultsCsv = Join-Path $logDir "InviteExternalUsers-$(Get-Date -Format 'yyyyMMdd-HHmmss').csv"
 } else {

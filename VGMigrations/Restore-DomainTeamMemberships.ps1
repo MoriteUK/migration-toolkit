@@ -121,7 +121,7 @@ $logFile = Join-Path $_logDir "restore-team-memberships-$(Get-Date -Format 'yyyy
 function Log { param([string]$m) $ts = Get-Date -Format 'HH:mm:ss'; "$ts $m" | Tee-Object -FilePath $logFile -Append | Write-Host }
 
 if (-not $ResultsCsv) {
-    $ResultsCsv = Join-Path 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Reports' `
+    $ResultsCsv = Join-Path 'C:\Users\andyw\OneDrive - Andy White\Contracts\Jolera\Migrations\Logs' `
         "RestoreTeamMemberships-$Domain-$(Get-Date -Format 'yyyyMMdd-HHmmss').csv"
 }
 $resultsDir = Split-Path -Parent $ResultsCsv

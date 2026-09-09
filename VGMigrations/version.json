@@ -1,7 +1,16 @@
 {
-  "version": "2.9.139",
+  "version": "2.9.140",
   "releaseDate": "2026-09-09",
   "changelog": [
+    {
+      "version": "2.9.140",
+      "date": "2026-09-09",
+      "changes": [
+        "All script output now lands in one folder: C:\\Users\\andyw\\OneDrive - Andy White\\Contracts\\Jolera\\Migrations\\Logs. Previously two scripts wrote to %APPDATA%\\FlyMigration\\Logs (Roaming, per-machine, not synced) and four wrote their result CSVs to a separate Migrations\\Reports folder",
+        "Moved to Migrations\\Logs: Invite-externalUsers.ps1 (results CSV) and Search-OneDriveFiles.ps1 (run log) - were in %APPDATA%\\FlyMigration\\Logs; New-DistributionGroups.ps1, Update-DistributionGroupDomain.ps1, Get-DomainTeamMemberships.ps1 and Restore-DomainTeamMemberships.ps1 default result CSVs - were in Migrations\\Reports. The Invite External Users panel's 'results CSV is written to...' message updated to match",
+        "Unchanged (deliberately separate destinations, not the toolkit's own log area): Check-DomainMigrationReadiness.ps1 (writes to the shared GRP Data Security migration folder), the Discovery/Assessment output folder, and the Fly API report downloads shown in the Reports viewer. %LOCALAPPDATA%\\FlyMigration caches and %TEMP% bootstrap files are not output and are also unchanged"
+      ]
+    },
     {
       "version": "2.9.139",
       "date": "2026-09-09",
