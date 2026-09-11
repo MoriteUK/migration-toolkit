@@ -1,7 +1,16 @@
 {
-  "version": "2.9.147",
+  "version": "2.9.148",
   "releaseDate": "2026-09-11",
   "changelog": [
+    {
+      "version": "2.9.148",
+      "date": "2026-09-11",
+      "changes": [
+        "Found the real cause of the 155/164 NotFound results (v2.9.147's error-visibility fix made this diagnosable): confirmed live against AEP's actual Discovery folder that 'DG AEP BES' genuinely exists in the destination tenant - but under Alias 'DGAEPBES', not 'bes'. This Discovery folder's 03b_DistributionGroup_Members.csv is the LEGACY search-domain.ps1 schema (GroupEmail/MemberEmail only, no alias column at all), so Add-DistributionGroupMembers.ps1 was deriving each group's identity by guessing the local-part of GroupEmail ('bes@aep-italia.it' -> 'bes') - wrong whenever the real Exchange Alias differs from the SMTP address's local-part, which is common and was true for the large majority of AEP's 164 groups",
+        "Fixed: now loads 03_DistributionGroups.csv (if present) as an authoritative Alias lookup, joined by PrimarySmtpAddress - the exact same Alias column New-DistributionGroups.ps1 used to create each group and Update-DistributionGroupDomain.ps1 already looks it up by, so all three scripts now agree on group identity. Verified against AEP's real Discovery folder: all 164 groups resolve via the join (zero fall back to guessing), and 'bes@aep-italia.it' correctly resolves to 'DGAEPBES'. The guess-from-email-local-part path is kept only as a last-resort fallback for a group missing from 03_DistributionGroups.csv entirely",
+        "New-DistributionGroups.ps1 and Update-DistributionGroupDomain.ps1 were never affected by this - both already read Alias directly from 03_DistributionGroups.csv's own column, no guessing involved"
+      ]
+    },
     {
       "version": "2.9.147",
       "date": "2026-09-11",

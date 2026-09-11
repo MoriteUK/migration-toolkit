@@ -105,6 +105,31 @@ if ($memberRows.Count -eq 0) {
     exit 0
 }
 
+# ── Load 03_DistributionGroups.csv as the authoritative Alias source, if present ──────
+# This is the exact same Alias that New-DistributionGroups.ps1 (Create Target DLs) used to
+# create each group in the destination tenant, and that Update-DistributionGroupDomain.ps1
+# looks it up by. 03b's own alias-ish columns are NOT guaranteed to match: the current engine's
+# GroupAlias column does (written from the same object as 03), but the legacy search-domain.ps1
+# schema has no alias column at all, forcing a guess from the email's local-part - and an
+# Exchange Alias routinely differs from its PrimarySmtpAddress local-part (e.g. Alias
+# 'DGAEPBES' but address 'bes@domain.com'). Joining on PrimarySmtpAddress against this
+# authoritative file fixes that mismatch, which otherwise makes a group with a customised alias
+# falsely report NOT FOUND even though it was created and exists in the destination tenant.
+$aliasByEmail = @{}
+$dgCsvPath = Join-Path $discFolder '03_DistributionGroups.csv'
+if (-not $legacyFallback -and (Test-Path $dgCsvPath)) {
+    try {
+        foreach ($r in (Import-Csv -Path $dgCsvPath -Encoding UTF8)) {
+            if ($r.PrimarySmtpAddress -and $r.Alias) {
+                $aliasByEmail["$($r.PrimarySmtpAddress)".ToLowerInvariant()] = $r.Alias
+            }
+        }
+        Log "Loaded $($aliasByEmail.Count) group alias(es) from 03_DistributionGroups.csv for authoritative matching"
+    } catch {
+        Log "WARNING: Could not read 03_DistributionGroups.csv for alias matching: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+    }
+}
+
 # ── Flatten to one entry per group: Alias, DisplayName, Members[] ─────────────────
 # Handles both the current engine's 03b schema (GroupAlias/GroupPrimarySmtpAddress/
 # MemberAddress) and the legacy search-domain.ps1 schema (GroupEmail/MemberEmail, plus a
@@ -126,12 +151,19 @@ if ($legacyFallback) {
         $memberAddr = if ($r.PSObject.Properties['MemberAddress']) { "$($r.MemberAddress)" } else { "$($r.MemberEmail)" }
         if (-not $memberAddr) { continue }
 
-        $alias = if ($hasGroupAlias -and $r.GroupAlias) {
-            "$($r.GroupAlias)"
-        } else {
-            $groupAddr = if ($r.PSObject.Properties['GroupPrimarySmtpAddress']) { "$($r.GroupPrimarySmtpAddress)" } else { "$($r.GroupEmail)" }
-            if ("$groupAddr" -match '^([^@]+)@') { $Matches[1] } else { $null }
-        }
+        $groupAddr = if ($r.PSObject.Properties['GroupPrimarySmtpAddress']) { "$($r.GroupPrimarySmtpAddress)" } else { "$($r.GroupEmail)" }
+        $groupAddr = "$groupAddr"
+
+        $alias =
+            if ($groupAddr -and $aliasByEmail.ContainsKey($groupAddr.ToLowerInvariant())) {
+                $aliasByEmail[$groupAddr.ToLowerInvariant()]
+            } elseif ($hasGroupAlias -and $r.GroupAlias) {
+                "$($r.GroupAlias)"
+            } elseif ($groupAddr -match '^([^@]+)@') {
+                $Matches[1]
+            } else {
+                $null
+            }
         if (-not $alias) { continue }
 
         if (-not $byGroup.Contains($alias)) {
