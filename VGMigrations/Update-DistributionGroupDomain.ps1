@@ -130,6 +130,33 @@ try {
 $results = [System.Collections.Generic.List[object]]::new()
 $ok = 0; $alreadyDone = 0; $notFound = 0; $failed = 0
 
+# ── Throttling/session-hiccup-aware retry wrapper ──────────────────────────────────
+# EXO's REST-backed cmdlets can return a transient error (or, worse, just no result) under
+# sustained back-to-back single-item calls like this script makes - retries a few times with
+# backoff before giving up, and always surfaces the real error message via $script:lastExoError
+# rather than a silent 'catch {}' that made a throttling hiccup indistinguishable from a
+# genuinely-missing group.
+$script:lastExoError = $null
+function Invoke-ExoRetry {
+    param([scriptblock]$Script, [int]$MaxAttempts = 3)
+    $script:lastExoError = $null
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            return & $Script
+        } catch {
+            $msg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+            $script:lastExoError = $msg
+            $transient = $msg -match 'throttl|too many|try again|temporarily|timed? ?out|timeout|session|connection|server was not found|service unavailable|50[0-9]\b|429'
+            if ($transient -and $attempt -lt $MaxAttempts) {
+                Start-Sleep -Seconds ([math]::Pow(2, $attempt))
+                continue
+            }
+            return $null
+        }
+    }
+    return $null
+}
+
 foreach ($row in $rows) {
     $alias         = $row.Alias
     $displayName   = if ($row.DisplayName) { $row.DisplayName } else { $alias }
@@ -138,25 +165,31 @@ foreach ($row in $rows) {
 
     Log "--- $displayName [$alias] ---"
 
+    # A short pacing gap between groups - EXO's per-item Get-DistributionGroup/Get-Recipient
+    # cmdlets throttle hard under a tight back-to-back loop like this one.
+    Start-Sleep -Milliseconds 300
+
     # Exact -Identity lookups only (Alias, then the temporary tenant address) - never a -Filter
     # wildcard. A loose '-like *alias@*' filter (the form this used to use) matches ANY
     # EmailAddresses entry containing that substring anywhere - including X500/legacyDN entries
     # - so a short/common alias like 'ict' or 'bes' could silently match an unrelated recipient
     # instead of reporting not-found, and this script would then update the WRONG group's
     # address.
-    $dg = $null
-    try { $dg = Get-DistributionGroup -Identity $alias -ErrorAction Stop } catch { }
+    $dg = Invoke-ExoRetry { Get-DistributionGroup -Identity $alias -ErrorAction Stop }
+    $lookupErr = $script:lastExoError
     if (-not $dg) {
-        try { $dg = Get-DistributionGroup -Identity $tenantAddress -ErrorAction Stop } catch { }
+        $dg = Invoke-ExoRetry { Get-DistributionGroup -Identity $tenantAddress -ErrorAction Stop }
+        if ($script:lastExoError) { $lookupErr = $script:lastExoError }
     }
     if (-not $dg) {
-        try { $dg = Get-Recipient -Identity $alias -ErrorAction Stop } catch { }
+        $dg = Invoke-ExoRetry { Get-Recipient -Identity $alias -ErrorAction Stop }
+        if ($script:lastExoError) { $lookupErr = $script:lastExoError }
     }
 
     if (-not $dg) {
-        Log "  NOT FOUND in destination tenant — skipped"
+        Log "  NOT FOUND in destination tenant — skipped$(if ($lookupErr) { " [last error: $lookupErr]" })"
         $notFound++
-        $results.Add([pscustomobject]@{ DisplayName = $displayName; Alias = $alias; Result = 'NotFound'; TargetAddress = $targetAddress; Message = '' })
+        $results.Add([pscustomobject]@{ DisplayName = $displayName; Alias = $alias; Result = 'NotFound'; TargetAddress = $targetAddress; Message = $lookupErr })
         continue
     }
 

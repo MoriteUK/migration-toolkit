@@ -1,7 +1,16 @@
 {
-  "version": "2.9.146",
+  "version": "2.9.147",
   "releaseDate": "2026-09-11",
   "changelog": [
+    {
+      "version": "2.9.147",
+      "date": "2026-09-11",
+      "changes": [
+        "v2.9.146's exact-Identity fix (confirmed live) now correctly reports 155/164 AEP groups as NotFound instead of falsely matching - but the user confirmed at least one of them ('bes') genuinely DOES exist in the destination tenant. Root cause: all three DL lookups (Get-DistributionGroup x2 + Get-Recipient) were wrapped in bare 'try { } catch { }' with no logging, so a real error - or EXO's REST-backed cmdlets simply returning nothing under sustained back-to-back single-item throttling, which doesn't even throw - was indistinguishable from a genuine miss. The pattern in both failed runs (a handful of successes scattered among long runs of consecutive failures) matches known EXO throttling behaviour on tight per-item Get-DistributionGroup/Get-Recipient loops, not 164 groups genuinely missing",
+        "Added a shared Invoke-ExoRetry/Invoke-ExoRetryThrowing wrapper (3 attempts, exponential backoff, retries only on transient-looking errors - throttl/too many/timeout/session/connection/50x/429) to Add-DistributionGroupMembers.ps1, New-DistributionGroups.ps1 and Update-DistributionGroupDomain.ps1's group lookups and member add/list calls. A lookup that still fails after retries now logs the real captured error alongside 'NOT FOUND' (and it's written to the results CSV's Message column) instead of a silent guess, and a 300ms pacing gap was added between groups in all three to reduce how often the throttling is hit in the first place",
+        "Not yet re-run against a live tenant - re-run Add DL Members for AEP; the NOT FOUND count and any [last error: ...] text will now show whether this was throttling (should drop sharply, or show retryable-looking messages) or something else entirely"
+      ]
+    },
     {
       "version": "2.9.146",
       "date": "2026-09-11",

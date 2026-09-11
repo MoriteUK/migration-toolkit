@@ -153,6 +153,52 @@ function Resolve-NewAddress {
     return $null
 }
 
+# ── Throttling/session-hiccup-aware retry wrapper ──────────────────────────────────
+# EXO's REST-backed cmdlets can return a transient error (or, worse, just no result) under
+# sustained back-to-back single-item calls like this script makes - retries a few times with
+# backoff before giving up, and always surfaces the real error message via $script:lastExoError
+# rather than a silent 'catch {}' that made a throttling hiccup indistinguishable from a
+# genuinely-missing group.
+$script:lastExoError = $null
+function Invoke-ExoRetry {
+    param([scriptblock]$Script, [int]$MaxAttempts = 3)
+    $script:lastExoError = $null
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            return & $Script
+        } catch {
+            $msg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+            $script:lastExoError = $msg
+            $transient = $msg -match 'throttl|too many|try again|temporarily|timed? ?out|timeout|session|connection|server was not found|service unavailable|50[0-9]\b|429'
+            if ($transient -and $attempt -lt $MaxAttempts) {
+                Start-Sleep -Seconds ([math]::Pow(2, $attempt))
+                continue
+            }
+            return $null
+        }
+    }
+    return $null
+}
+
+# Same retry-on-transient behaviour, but rethrows the final error instead of swallowing it -
+# for calls whose caller needs to distinguish specific real errors (e.g. 'already a member').
+function Invoke-ExoRetryThrowing {
+    param([scriptblock]$Script, [int]$MaxAttempts = 3)
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            return & $Script
+        } catch {
+            $msg = $_.Exception.Message.Split([Environment]::NewLine)[0]
+            $transient = $msg -match 'throttl|too many|try again|temporarily|timed? ?out|timeout|session|connection|server was not found|service unavailable|50[0-9]\b|429'
+            if ($transient -and $attempt -lt $MaxAttempts) {
+                Start-Sleep -Seconds ([math]::Pow(2, $attempt))
+                continue
+            }
+            throw
+        }
+    }
+}
+
 # ── Connect to Exchange Online (destination tenant) ────────────────────────────────
 $mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
 if (-not $mod) {
@@ -189,19 +235,25 @@ foreach ($row in $rows) {
 
     Log "--- $displayName [$alias] ---"
 
+    # A short pacing gap between groups - EXO's per-item Get-DistributionGroup/Get-Recipient
+    # cmdlets throttle hard under a tight back-to-back loop like this one.
+    Start-Sleep -Milliseconds 300
+
     # ── Find or create ──────────────────────────────────────────────────────────
     # Exact -Identity lookups only (Alias, then the temporary tenant address) - never a -Filter
     # wildcard. A loose '-like *alias@*' filter (the form this used to use) matches ANY
     # EmailAddresses entry containing that substring anywhere - including X500/legacyDN entries
     # - so a short/common alias like 'ict' or 'bes' could silently match an unrelated recipient
     # and get reported as 'Already exists', when the real group was never actually created.
-    $dg = $null
-    try { $dg = Get-DistributionGroup -Identity $alias -ErrorAction Stop } catch { }
+    $dg = Invoke-ExoRetry { Get-DistributionGroup -Identity $alias -ErrorAction Stop }
+    $lookupErr = $script:lastExoError
     if (-not $dg) {
-        try { $dg = Get-DistributionGroup -Identity "$alias@$tenantDomain" -ErrorAction Stop } catch { }
+        $dg = Invoke-ExoRetry { Get-DistributionGroup -Identity "$alias@$tenantDomain" -ErrorAction Stop }
+        if ($script:lastExoError) { $lookupErr = $script:lastExoError }
     }
     if (-not $dg) {
-        try { $dg = Get-Recipient -Identity $alias -ErrorAction Stop } catch { }
+        $dg = Invoke-ExoRetry { Get-Recipient -Identity $alias -ErrorAction Stop }
+        if ($script:lastExoError) { $lookupErr = $script:lastExoError }
     }
 
     if ($dg) {
@@ -258,10 +310,12 @@ foreach ($row in $rows) {
 
     $currentMemberAddrs = @()
     if ($dg -and -not $WhatIf) {
-        try {
-            $currentMemberAddrs = @(Get-DistributionGroupMember -Identity $dgIdentity -ResultSize Unlimited -ErrorAction Stop |
-                ForEach-Object { "$($_.PrimarySmtpAddress)".ToLowerInvariant() } | Where-Object { $_ })
-        } catch { }
+        $memberResult = Invoke-ExoRetry { Get-DistributionGroupMember -Identity $dgIdentity -ResultSize Unlimited -ErrorAction Stop }
+        if ($memberResult) {
+            $currentMemberAddrs = @($memberResult | ForEach-Object { "$($_.PrimarySmtpAddress)".ToLowerInvariant() } | Where-Object { $_ })
+        } elseif ($script:lastExoError) {
+            Log "    WARNING: could not read current membership ($($script:lastExoError)) - existing members may be re-added (harmless, EXO treats it as a no-op)"
+        }
     }
 
     foreach ($oldAddr in $members) {
@@ -284,7 +338,7 @@ foreach ($row in $rows) {
         }
 
         try {
-            Add-DistributionGroupMember -Identity $dgIdentity -Member $newAddr -ErrorAction Stop
+            Invoke-ExoRetryThrowing { Add-DistributionGroupMember -Identity $dgIdentity -Member $newAddr -ErrorAction Stop } | Out-Null
             Log "    member added: $newAddr"
             $membersAdded++
         } catch {
