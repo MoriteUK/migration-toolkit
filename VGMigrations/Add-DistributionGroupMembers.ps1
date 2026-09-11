@@ -5,12 +5,16 @@
     tenant from Discovery's captured membership, without creating any groups.
 
 .DESCRIPTION
-    Reads 03_DistributionGroups.csv (written by every Run-Assessment.ps1 assessment, or the
-    older search-domain.ps1) and, for each row whose group already exists in the DESTINATION
-    tenant, adds every member captured in Discovery's Members column — resolving each one's
-    NEW (destination-tenant) address the same way New-DistributionGroups.ps1 and
-    Restore-ProxyAddresses.ps1 do, via -MappingCsv (the Fly exchange mapping file, authoritative)
-    or -CustomerPrefix (derives <local-part>@<tenant domain> as a fallback).
+    Reads 03b_DistributionGroup_Members.csv (one row per group+member, written by every
+    Run-Assessment.ps1 assessment, or the older search-domain.ps1) and, for each group that
+    already exists in the DESTINATION tenant, adds every member captured in Discovery —
+    resolving each one's NEW (destination-tenant) address the same way New-DistributionGroups.ps1
+    and Restore-ProxyAddresses.ps1 do, via -MappingCsv (the Fly exchange mapping file,
+    authoritative) or -CustomerPrefix (derives <local-part>@<tenant domain> as a fallback).
+
+    Falls back to 03_DistributionGroups.csv's pipe-delimited Members column when
+    03b_DistributionGroup_Members.csv isn't present (an older Discovery folder) — same source
+    data, just not yet flattened to one-row-per-member.
 
     This is the standalone version of the membership step in New-DistributionGroups.ps1 — use
     it when the groups already exist (created earlier, or by other means) and you just need to
@@ -83,20 +87,64 @@ $candidate  = Join-Path $discFolder 'Discovery'
 if ((Split-Path $discFolder -Leaf) -ne 'Discovery' -and (Test-Path $candidate)) {
     $discFolder = $candidate
 }
-$csvPath = Join-Path $discFolder '03_DistributionGroups.csv'
+$csvPath = Join-Path $discFolder '03b_DistributionGroup_Members.csv'
+$legacyFallback = $false
 if (-not (Test-Path $csvPath)) {
-    Log "ERROR: 03_DistributionGroups.csv not found in: $discFolder"
-    exit 1
+    Log "03b_DistributionGroup_Members.csv not found in: $discFolder — falling back to 03_DistributionGroups.csv's Members column (older Discovery folder)"
+    $csvPath = Join-Path $discFolder '03_DistributionGroups.csv'
+    $legacyFallback = $true
+    if (-not (Test-Path $csvPath)) {
+        Log "ERROR: Neither 03b_DistributionGroup_Members.csv nor 03_DistributionGroups.csv found in: $discFolder"
+        exit 1
+    }
 }
-$rows = @(Import-Csv -Path $csvPath -Encoding UTF8 | Where-Object { $_.Alias })
-Log "Loaded $($rows.Count) group(s) from 03_DistributionGroups.csv"
-if ($rows.Count -eq 0) {
+$memberRows = @(Import-Csv -Path $csvPath -Encoding UTF8)
+Log "Loaded $($memberRows.Count) row(s) from $(Split-Path $csvPath -Leaf)"
+if ($memberRows.Count -eq 0) {
     Log "Nothing to sync."
     exit 0
 }
-if (-not $rows[0].PSObject.Properties['Members']) {
-    Log "ERROR: This CSV has no 'Members' column - it was generated before Discovery captured DL membership. Re-run Discovery, then re-run this script."
-    exit 1
+
+# ── Flatten to one entry per group: Alias, DisplayName, Members[] ─────────────────
+# Handles both the current engine's 03b schema (GroupAlias/GroupPrimarySmtpAddress/
+# MemberAddress) and the legacy search-domain.ps1 schema (GroupEmail/MemberEmail, plus a
+# '(no members)' placeholder row per empty group — skipped here via the blank-address check).
+$groups = [System.Collections.Generic.List[object]]::new()
+if ($legacyFallback) {
+    if (-not $memberRows[0].PSObject.Properties['Members']) {
+        Log "ERROR: 03_DistributionGroups.csv has no 'Members' column either - re-run Discovery so it captures DL membership."
+        exit 1
+    }
+    foreach ($row in ($memberRows | Where-Object { $_.Alias })) {
+        $members = @($row.Members -split '\|' | Where-Object { $_ })
+        $groups.Add([pscustomobject]@{ Alias = $row.Alias; DisplayName = if ($row.DisplayName) { $row.DisplayName } else { $row.Alias }; Members = $members })
+    }
+} else {
+    $hasGroupAlias = $null -ne $memberRows[0].PSObject.Properties['GroupAlias']
+    $byGroup = [ordered]@{}
+    foreach ($r in $memberRows) {
+        $memberAddr = if ($r.PSObject.Properties['MemberAddress']) { "$($r.MemberAddress)" } else { "$($r.MemberEmail)" }
+        if (-not $memberAddr) { continue }
+
+        $alias = if ($hasGroupAlias -and $r.GroupAlias) {
+            "$($r.GroupAlias)"
+        } else {
+            $groupAddr = if ($r.PSObject.Properties['GroupPrimarySmtpAddress']) { "$($r.GroupPrimarySmtpAddress)" } else { "$($r.GroupEmail)" }
+            if ("$groupAddr" -match '^([^@]+)@') { $Matches[1] } else { $null }
+        }
+        if (-not $alias) { continue }
+
+        if (-not $byGroup.Contains($alias)) {
+            $byGroup[$alias] = [pscustomobject]@{ Alias = $alias; DisplayName = "$($r.GroupDisplayName)"; Members = [System.Collections.Generic.List[string]]::new() }
+        }
+        $byGroup[$alias].Members.Add($memberAddr)
+    }
+    foreach ($key in $byGroup.Keys) { $groups.Add($byGroup[$key]) }
+}
+Log "Grouped into $($groups.Count) distribution group(s) with members captured"
+if ($groups.Count -eq 0) {
+    Log "Nothing to sync."
+    exit 0
 }
 
 # ── Resolve the destination tenant's onmicrosoft.com domain ───────────────────────
@@ -178,10 +226,10 @@ $results = [System.Collections.Generic.List[object]]::new()
 $groupsNotFound = 0; $groupsSkippedNoMembers = 0
 $membersAdded = 0; $membersSkipped = 0; $membersFailed = 0
 
-foreach ($row in $rows) {
-    $alias       = $row.Alias
-    $displayName = if ($row.DisplayName) { $row.DisplayName } else { $alias }
-    $members     = @($row.Members -split '\|' | Where-Object { $_ })
+foreach ($grp in $groups) {
+    $alias       = $grp.Alias
+    $displayName = if ($grp.DisplayName) { $grp.DisplayName } else { $alias }
+    $members     = @($grp.Members)
 
     Log "--- $displayName [$alias] ---"
 

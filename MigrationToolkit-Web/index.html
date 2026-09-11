@@ -1126,12 +1126,12 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Sync Distribution Group Members from Discovery</h3>
-          <p class="form-help">Reads 03_DistributionGroups.csv's Members column from Discovery and adds any missing members to the matching group in the destination tenant — resolving each member's new address the same way Create Target DLs does. Only syncs membership on groups that already exist in the destination tenant; it never creates a group. Use this to top up membership after Create Target DLs has already run (e.g. new starters were added to the source-tenant group afterwards) or for groups that already existed independently of this migration toolkit. Safe to re-run — existing members are left alone. Sign in with the DESTINATION tenant admin account when prompted.</p>
+          <p class="form-help">Reads 03b_DistributionGroup_Members.csv from Discovery (falls back to 03_DistributionGroups.csv's Members column on an older Discovery folder) and adds any missing members to the matching group in the destination tenant — resolving each member's new address the same way Create Target DLs does. Only syncs membership on groups that already exist in the destination tenant; it never creates a group. Use this to top up membership after Create Target DLs has already run (e.g. new starters were added to the source-tenant group afterwards) or for groups that already existed independently of this migration toolkit. Safe to re-run — existing members are left alone. Sign in with the DESTINATION tenant admin account when prompted.</p>
 
           <div class="form-group">
             <label class="form-label">Discovery Folder</label>
             <div class="input-with-button">
-              <input type="text" class="form-input form-input-compact" id="addDgMembersDiscoveryFolder" placeholder="Folder containing 03_DistributionGroups.csv...">
+              <input type="text" class="form-input form-input-compact" id="addDgMembersDiscoveryFolder" placeholder="Folder containing 03b_DistributionGroup_Members.csv...">
               <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
             </div>
           </div>

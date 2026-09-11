@@ -1,7 +1,15 @@
 {
-  "version": "2.9.144",
+  "version": "2.9.145",
   "releaseDate": "2026-09-11",
   "changelog": [
+    {
+      "version": "2.9.145",
+      "date": "2026-09-11",
+      "changes": [
+        "Add-DistributionGroupMembers.ps1 (Misc Scripts > Add DL Members, added in v2.9.144) now reads 03b_DistributionGroup_Members.csv - the one-row-per-group-member file Discovery already writes - instead of 03_DistributionGroups.csv's pipe-delimited Members column. Groups rows by GroupAlias (falls back to the local-part of GroupPrimarySmtpAddress/GroupEmail if a Discovery folder predates the GroupAlias column) into one member list per DL. Falls back to the old 03_DistributionGroups.csv Members column when 03b_DistributionGroup_Members.csv isn't present (an older Discovery folder), so nothing already-migrated breaks",
+        "Also copes with the older search-domain.ps1 engine's 03b schema (GroupEmail/MemberEmail instead of GroupPrimarySmtpAddress/MemberAddress, plus a '(no members)' placeholder row per empty group) by skipping any row with a blank member address"
+      ]
+    },
     {
       "version": "2.9.144",
       "date": "2026-09-11",
