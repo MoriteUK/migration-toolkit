@@ -1,7 +1,16 @@
 {
-  "version": "2.9.145",
+  "version": "2.9.146",
   "releaseDate": "2026-09-11",
   "changelog": [
+    {
+      "version": "2.9.146",
+      "date": "2026-09-11",
+      "changes": [
+        "Fixed a live bug (confirmed on a real AEP run: 780 of 816 member-adds failed) shared by Add-DistributionGroupMembers.ps1, New-DistributionGroups.ps1 and Update-DistributionGroupDomain.ps1 - each fell back to 'Get-Recipient -Filter \"EmailAddresses -like *alias@*\"' whenever an exact Get-DistributionGroup -Identity lookup missed. That wildcard matches ANY EmailAddresses entry containing the alias as a substring anywhere - including X500/legacyDN entries, which routinely embed unrelated text - so a short/common alias (ict, bes, wel, sysmon...) silently matched the WRONG recipient instead of correctly reporting not-found. The group was then addressed by the original (wrong) alias in later calls, which genuinely couldn't find any object by that identity - surfacing as 'The operation couldn't be performed because object ... couldn't be found' on nearly every member add, even though the run's own summary said every group was found",
+        "Replaced the wildcard fallback in all three scripts with exact -Identity attempts only (Alias, then the temporary tenant address, then Get-Recipient -Identity as a last resort) - a genuine miss now correctly reports NotFound/GroupNotFound instead of a false match. Every script also now addresses the group by the GUID actually resolved (or, in New-DistributionGroups.ps1, just created) rather than the raw CSV alias, so a case/character mismatch can't misdirect the later Add-DistributionGroupMember/Set-DistributionGroup call",
+        "Likely explains why so many AEP groups showed as not-existing when Add DL Members ran: New-DistributionGroups.ps1 (Create Target DLs) has the identical fallback in its exists-check, so it could have silently reported 'AlreadyExists' for a group that was never actually created, because the wildcard matched some unrelated recipient instead. Re-run Create Target DLs for AEP after updating to confirm which groups are genuinely missing and create them for real, then re-run Add DL Members"
+      ]
+    },
     {
       "version": "2.9.145",
       "date": "2026-09-11",

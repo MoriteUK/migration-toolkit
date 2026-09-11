@@ -190,12 +190,18 @@ foreach ($row in $rows) {
     Log "--- $displayName [$alias] ---"
 
     # ── Find or create ──────────────────────────────────────────────────────────
+    # Exact -Identity lookups only (Alias, then the temporary tenant address) - never a -Filter
+    # wildcard. A loose '-like *alias@*' filter (the form this used to use) matches ANY
+    # EmailAddresses entry containing that substring anywhere - including X500/legacyDN entries
+    # - so a short/common alias like 'ict' or 'bes' could silently match an unrelated recipient
+    # and get reported as 'Already exists', when the real group was never actually created.
     $dg = $null
     try { $dg = Get-DistributionGroup -Identity $alias -ErrorAction Stop } catch { }
     if (-not $dg) {
-        try {
-            $dg = Get-Recipient -Filter "EmailAddresses -like '*$alias@*'" -ErrorAction Stop | Select-Object -First 1
-        } catch { }
+        try { $dg = Get-DistributionGroup -Identity "$alias@$tenantDomain" -ErrorAction Stop } catch { }
+    }
+    if (-not $dg) {
+        try { $dg = Get-Recipient -Identity $alias -ErrorAction Stop } catch { }
     }
 
     if ($dg) {
@@ -235,6 +241,10 @@ foreach ($row in $rows) {
 
     # ── Members ──────────────────────────────────────────────────────────────────
     if (-not $dg -and -not $WhatIf) { continue }
+    # Address the group by the GUID actually resolved/created above - not the raw CSV $alias -
+    # so a case/character mismatch between the CSV and the real object can't send
+    # Add-DistributionGroupMember looking for an identity that doesn't exist.
+    $dgIdentity = if ($dg) { $dg.Guid } else { $null }
     if (-not $row.PSObject.Properties['Members']) {
         Log "    No 'Members' column in this CSV - it was generated before Discovery captured DL membership. Re-run Discovery, then re-run this script (it's safe to re-run - existing groups/members are left alone)."
         $rowsWithNoMembersColumn++
@@ -249,7 +259,7 @@ foreach ($row in $rows) {
     $currentMemberAddrs = @()
     if ($dg -and -not $WhatIf) {
         try {
-            $currentMemberAddrs = @(Get-DistributionGroupMember -Identity $alias -ResultSize Unlimited -ErrorAction Stop |
+            $currentMemberAddrs = @(Get-DistributionGroupMember -Identity $dgIdentity -ResultSize Unlimited -ErrorAction Stop |
                 ForEach-Object { "$($_.PrimarySmtpAddress)".ToLowerInvariant() } | Where-Object { $_ })
         } catch { }
     }
@@ -274,7 +284,7 @@ foreach ($row in $rows) {
         }
 
         try {
-            Add-DistributionGroupMember -Identity $alias -Member $newAddr -ErrorAction Stop
+            Add-DistributionGroupMember -Identity $dgIdentity -Member $newAddr -ErrorAction Stop
             Log "    member added: $newAddr"
             $membersAdded++
         } catch {

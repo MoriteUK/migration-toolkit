@@ -138,10 +138,19 @@ foreach ($row in $rows) {
 
     Log "--- $displayName [$alias] ---"
 
+    # Exact -Identity lookups only (Alias, then the temporary tenant address) - never a -Filter
+    # wildcard. A loose '-like *alias@*' filter (the form this used to use) matches ANY
+    # EmailAddresses entry containing that substring anywhere - including X500/legacyDN entries
+    # - so a short/common alias like 'ict' or 'bes' could silently match an unrelated recipient
+    # instead of reporting not-found, and this script would then update the WRONG group's
+    # address.
     $dg = $null
     try { $dg = Get-DistributionGroup -Identity $alias -ErrorAction Stop } catch { }
     if (-not $dg) {
-        try { $dg = Get-Recipient -Filter "EmailAddresses -like '*$alias@*'" -ErrorAction Stop | Select-Object -First 1 } catch { }
+        try { $dg = Get-DistributionGroup -Identity $tenantAddress -ErrorAction Stop } catch { }
+    }
+    if (-not $dg) {
+        try { $dg = Get-Recipient -Identity $alias -ErrorAction Stop } catch { }
     }
 
     if (-not $dg) {
@@ -189,7 +198,7 @@ foreach ($row in $rows) {
             $updated.Add("smtp:$tenantAddress")
         }
 
-        Set-DistributionGroup -Identity $alias -EmailAddresses $updated -ErrorAction Stop
+        Set-DistributionGroup -Identity $dg.Guid -EmailAddresses $updated -ErrorAction Stop
         Log "  UPDATED: $currentPrimary -> $targetAddress (kept as secondary: $tenantAddress)"
         $ok++
         $results.Add([pscustomobject]@{ DisplayName = $displayName; Alias = $alias; Result = 'Updated'; TargetAddress = $targetAddress; Message = "was $currentPrimary" })

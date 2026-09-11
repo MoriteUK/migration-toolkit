@@ -239,10 +239,21 @@ foreach ($grp in $groups) {
         continue
     }
 
+    # Tried as exact -Identity lookups only (Alias, then the temporary tenant address) - never
+    # a -Filter wildcard. A loose '-like *alias@*' filter (the form this used to use) matches
+    # ANY EmailAddresses entry containing that substring anywhere - including X500/legacyDN
+    # entries - so a short/common alias like 'ict' or 'bes' silently matches an unrelated
+    # recipient instead of reporting not-found. That produced a confusing failure later (adding
+    # a member against the WRONG group's real identity, since $alias itself was never that
+    # object's actual identity) and, in New-DistributionGroups.ps1's identical lookup, could
+    # have caused it to think a group "already exists" when it never was actually created.
     $dg = $null
     try { $dg = Get-DistributionGroup -Identity $alias -ErrorAction Stop } catch { }
     if (-not $dg) {
-        try { $dg = Get-Recipient -Filter "EmailAddresses -like '*$alias@*'" -ErrorAction Stop | Select-Object -First 1 } catch { }
+        try { $dg = Get-DistributionGroup -Identity "$alias@$tenantDomain" -ErrorAction Stop } catch { }
+    }
+    if (-not $dg) {
+        try { $dg = Get-Recipient -Identity $alias -ErrorAction Stop } catch { }
     }
 
     if (-not $dg) {
@@ -252,10 +263,15 @@ foreach ($grp in $groups) {
         continue
     }
 
+    # From here on, address the group by the GUID actually resolved above - not the raw CSV
+    # $alias - so a case/character mismatch between the CSV and the real object can't send
+    # Add-DistributionGroupMember looking for an identity that doesn't exist.
+    $dgIdentity = $dg.Guid
+
     $currentMemberAddrs = @()
     if (-not $WhatIf) {
         try {
-            $currentMemberAddrs = @(Get-DistributionGroupMember -Identity $alias -ResultSize Unlimited -ErrorAction Stop |
+            $currentMemberAddrs = @(Get-DistributionGroupMember -Identity $dgIdentity -ResultSize Unlimited -ErrorAction Stop |
                 ForEach-Object { "$($_.PrimarySmtpAddress)".ToLowerInvariant() } | Where-Object { $_ })
         } catch { }
     }
@@ -283,7 +299,7 @@ foreach ($grp in $groups) {
         }
 
         try {
-            Add-DistributionGroupMember -Identity $alias -Member $newAddr -ErrorAction Stop
+            Add-DistributionGroupMember -Identity $dgIdentity -Member $newAddr -ErrorAction Stop
             Log "    member added: $newAddr"
             $membersAdded++
             $results.Add([pscustomobject]@{ DisplayName = $displayName; Alias = $alias; Member = $newAddr; Result = 'Added'; Message = "was $oldAddr" })
