@@ -1,7 +1,16 @@
 {
-  "version": "2.9.143",
-  "releaseDate": "2026-09-09",
+  "version": "2.9.144",
+  "releaseDate": "2026-09-11",
   "changelog": [
+    {
+      "version": "2.9.144",
+      "date": "2026-09-11",
+      "changes": [
+        "Added Add-DistributionGroupMembers.ps1 + an 'Add DL Members' panel under Misc Scripts: reads 03_DistributionGroups.csv's Members column from Discovery and adds any missing members to the matching group in the destination tenant, resolving each member's new address via -MappingCsv (Fly exchange mapping file) or -CustomerPrefix, same pattern as Create Target DLs. Unlike Create Target DLs it never creates a group - a group not already present in the destination tenant is logged and skipped. Use it to top up membership after Create Target DLs already ran (e.g. new starters were added to the source group afterwards), or for groups that exist independently of this toolkit. Idempotent - safe to re-run. WhatIf previews every add",
+        "Update Target DL Domain (Update-DistributionGroupDomain.ps1) was already fully wired up under Post Migration from an earlier change - no change needed there, just confirmed it's the script already flipping DL primary addresses from the temporary tenant.onmicrosoft.com address to the real domain post-cutover",
+        "Not yet exercised against a live tenant - parse-checked only; run with WhatIf first and read the results CSV before trusting a live run"
+      ]
+    },
     {
       "version": "2.9.143",
       "date": "2026-09-09",

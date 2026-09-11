@@ -1946,6 +1946,7 @@ function switchView(viewName) {
     'post-migration-enable-ca': 'postMigrationEnableCaView',
     'migration-new-dgs': 'migrationNewDgsView',
     'migration-update-dg-domain': 'migrationUpdateDgDomainView',
+    'misc-add-dg-members': 'miscAddDgMembersView',
     'misc-dl-external-senders': 'miscDLExternalSendersView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
@@ -1987,6 +1988,8 @@ function switchView(viewName) {
         loadCustomerDropdownInto('newDgsCustomerPrefix', 'Select customer...');
       } else if (viewName === 'migration-update-dg-domain') {
         loadCustomerDropdownInto('updateDgDomainCustomerPrefix', 'Select customer...');
+      } else if (viewName === 'misc-add-dg-members') {
+        loadCustomerDropdownInto('addDgMembersCustomerPrefix', 'Select customer...');
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
@@ -3684,6 +3687,47 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         updateDgDomainRunBtn.disabled = false;
         updateDgDomainRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Misc Scripts - Add DL Members ───────────────────────────────────────────
+  const addDgMembersRunBtn = document.getElementById('addDgMembersRunBtn');
+  if (addDgMembersRunBtn) {
+    addDgMembersRunBtn.addEventListener('click', async () => {
+      const folder         = document.getElementById('addDgMembersDiscoveryFolder').value.trim();
+      const customerPrefix = document.getElementById('addDgMembersCustomerPrefix').value.trim();
+      const mappingCsv     = document.getElementById('addDgMembersMappingCsv').value.trim();
+      const whatIf          = document.getElementById('addDgMembersWhatIf').checked;
+
+      if (!folder)         { alert('Please select the discovery folder.'); return; }
+      if (!customerPrefix) { alert('Please select a customer.'); return; }
+
+      const logSection = document.getElementById('addDgMembersLog');
+      const logOutput  = document.getElementById('addDgMembersLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      addDgMembersRunBtn.disabled = true;
+      addDgMembersRunBtn.textContent = 'Running…';
+
+      const args = ['-DiscoveryFolder', folder, '-CustomerPrefix', customerPrefix];
+      if (mappingCsv) args.push('-MappingCsv', mappingCsv);
+      if (whatIf)     args.push('-WhatIf');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('Add-DistributionGroupMembers.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        addDgMembersRunBtn.disabled = false;
+        addDgMembersRunBtn.textContent = '▶ Run';
       }
     });
   }

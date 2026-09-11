@@ -197,6 +197,9 @@
             <button type="button" class="sidebar-subitem" data-view="discovery-cache">
               <span class="sidebar-sublabel">Refresh Discovery Cache</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-add-dg-members">
+              <span class="sidebar-sublabel">Add DL Members</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="misc-teams">
               <span class="sidebar-sublabel">Set Teams Owners</span>
             </button>
@@ -1114,6 +1117,55 @@
         <div class="log-section hidden" id="updateDgDomainLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="updateDgDomainLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Add DL Members -->
+      <div id="miscAddDgMembersView" class="view-container hidden">
+        <h2 class="view-title">Add DL Members</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Sync Distribution Group Members from Discovery</h3>
+          <p class="form-help">Reads 03_DistributionGroups.csv's Members column from Discovery and adds any missing members to the matching group in the destination tenant — resolving each member's new address the same way Create Target DLs does. Only syncs membership on groups that already exist in the destination tenant; it never creates a group. Use this to top up membership after Create Target DLs has already run (e.g. new starters were added to the source-tenant group afterwards) or for groups that already existed independently of this migration toolkit. Safe to re-run — existing members are left alone. Sign in with the DESTINATION tenant admin account when prompted.</p>
+
+          <div class="form-group">
+            <label class="form-label">Discovery Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="addDgMembersDiscoveryFolder" placeholder="Folder containing 03_DistributionGroups.csv...">
+              <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Customer <span style="font-weight:400;color:#6B7280">(from Settings > Customers — fallback tenant.onmicrosoft.com address for members not in the mapping file)</span></label>
+            <select class="form-input form-input-compact" id="addDgMembersCustomerPrefix">
+              <option value="">Select customer...</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Mapping File <span style="font-weight:400;color:#6B7280">(optional — Fly exchange mapping file; the authoritative source for each member's new address)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="addDgMembersMappingCsv" placeholder="e.g. mapping exchange.xlsx">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx,csv">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="addDgMembersWhatIf" checked>
+              <span>WhatIf — preview which members would be added without making changes</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="addDgMembersRunBtn">▶ Run</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="addDgMembersLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="addDgMembersLogOutput"></div>
         </div>
       </div>
 
