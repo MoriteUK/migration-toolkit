@@ -258,13 +258,17 @@ function Show-MainMenu {
     $cardW = 305; $cardH = 110
     $card1 = MkCard $margin $y $cardW $cardH 'App Registration' 'Register Entra ID app and grant API permissions'
     $card2 = MkCard ($margin + $cardW + $gap) $y $cardW $cardH 'AOS Setup' 'Configure AvePoint Online Services tenant'
-    $card3 = MkCard ($margin + ($cardW + $gap) * 2) $y $cardW $cardH 'Connections' 'Manage connections and mappings'
+    $card3 = MkCard ($margin + ($cardW + $gap) * 2) $y $cardW $cardH 'Mapping Files' 'Generate Fly import mappings from a Discovery workbook'
     $y += $cardH + $gap
 
-    # Row 2
-    $card4 = MkCard $margin $y $cardW $cardH 'Reports' 'View migration results and status'
-    $card5 = MkCard ($margin + $cardW + $gap) $y $cardW $cardH 'Monitor' 'Live project monitoring and tracking'
-    $card6 = MkCard ($margin + ($cardW + $gap) * 2) $y $cardW $cardH 'Documentation' 'View guides and best practices'
+    # Row 2 - Migrate sits directly under Mapping Files (row 1, same column)
+    $card4 = MkCard $margin $y $cardW $cardH 'Migrate' 'Manage connections and mappings'
+    $card5 = MkCard ($margin + $cardW + $gap) $y $cardW $cardH 'Reports' 'View migration results and status'
+    $card6 = MkCard ($margin + ($cardW + $gap) * 2) $y $cardW $cardH 'Monitor' 'Live project monitoring and tracking'
+    $y += $cardH + $gap
+
+    # Row 3
+    $card7 = MkCard $margin $y $cardW $cardH 'Documentation' 'View guides and best practices'
 
     $footer = New-Object System.Windows.Forms.Panel
     $footer.Height = 56; $footer.Dock = [System.Windows.Forms.DockStyle]::Bottom
@@ -290,11 +294,39 @@ function Show-MainMenu {
     $footer.Controls.Add($btnClose)
     $footer.Add_SizeChanged({ $btnClose.Left = $footer.Width - 106 }.GetNewClosure())
 
+    $assessScript = Join-Path $PSScriptRoot 'Assessment\Run-Assessment.ps1'
     $card1.Add_Click({ Show-AppRegistrationForm })
     $card2.Add_Click({ Show-AosSetupForm })
-    $card3.Add_Click({ Show-MigrationRunnerForm })
-    $card4.Add_Click({ Show-ReportingForm })
-    $card5.Add_Click({
+    $card3.Add_Click({
+        if (-not (Test-Path $assessScript)) {
+            [System.Windows.Forms.MessageBox]::Show("Script not found:`n$assessScript", 'Not Found', 'OK', 'Error') | Out-Null
+            return
+        }
+        # Run-Assessment.ps1 is interactive in this build - no parameters (see menu.ps1's
+        # 'Migrate' card / discovery-menu.ps1 for the same pattern). Launch it in its own
+        # visible console; the operator arrow-keys to "Generate Mapping Files" and answers
+        # the workbook/tenant/folder prompts there. A reminder is echoed into that window first.
+        $escS = $assessScript -replace "'", "''"
+        $reminder = 'Use the arrow keys to select "Generate Mapping Files", press Enter, then follow the prompts (workbook, target tenant domain, destination SPO URL, Fly Templates folder, and the folder to create the FLY folder in).'
+        $escReminder = $reminder -replace "'", "''"
+        $cmd = "Write-Host '$escReminder' -ForegroundColor Cyan; Write-Host ''; & '$escS'"
+        $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($cmd))
+
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName        = 'pwsh.exe'
+        $psi.Arguments       = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow  = $false
+        $psi.WindowStyle     = [System.Diagnostics.ProcessWindowStyle]::Normal
+        try {
+            [System.Diagnostics.Process]::Start($psi) | Out-Null
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show("Failed to launch:`n$($_.Exception.Message)", 'Launch Error', 'OK', 'Error') | Out-Null
+        }
+    }.GetNewClosure())
+    $card4.Add_Click({ Show-MigrationRunnerForm })
+    $card5.Add_Click({ Show-ReportingForm })
+    $card6.Add_Click({
         if ($script:MonitorFormInstance -and
             -not $script:MonitorFormInstance.IsDisposed -and
             $script:MonitorFormInstance.Visible) {
@@ -304,7 +336,7 @@ function Show-MainMenu {
             Show-ProjectMonitorForm
         }
     })
-    $card6.Add_Click({
+    $card7.Add_Click({
         Start-Process 'https://github.com/MoriteUK/AvepointFlyUtility/wiki'
     })
     $btnClose.Add_Click({ $MenuForm.Close() }.GetNewClosure())

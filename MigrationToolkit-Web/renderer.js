@@ -1930,6 +1930,7 @@ function switchView(viewName) {
     // AvePoint Fly sub-views
     'avepoint-appreg': 'avepointAppRegView',
     'avepoint-aos': 'avepointAosView',
+    'avepoint-mappingfiles': 'avepointMappingFilesView',
     'avepoint-connections': 'avepointConnectionsView',
     'avepoint-reports': 'avepointReportsView',
     'avepoint-monitor': 'avepointMonitorView',
@@ -2489,6 +2490,55 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   itemOverlay?.addEventListener('click', (e) => {
     if (e.target === itemOverlay) itemOverlay.classList.add('hidden');
+  });
+});
+
+// ── AvePoint Fly - Mapping Files (Generate-FlyMappingFiles.ps1) ──────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const mfGenerateBtn = document.getElementById('mfGenerateBtn');
+  if (!mfGenerateBtn) return;
+
+  mfGenerateBtn.addEventListener('click', async () => {
+    const workbookPath    = document.getElementById('mfWorkbookPath').value.trim();
+    const destDomain      = document.getElementById('mfDestDomain').value.trim();
+    const destSpoUrl      = document.getElementById('mfDestSpoUrl').value.trim();
+    const templatesFolder = document.getElementById('mfTemplatesFolder').value.trim();
+    const outputFolder    = document.getElementById('mfOutputFolder').value.trim();
+
+    if (!workbookPath) { alert('Please browse for the assessment workbook.'); return; }
+    if (!destDomain)   { alert('Please enter the destination domain.'); return; }
+    if (!destSpoUrl)   { alert('Please enter the destination SPO base URL.'); return; }
+    if (!outputFolder) { alert('Please browse for the folder to create the FLY folder in.'); return; }
+
+    const logSection = document.getElementById('mfGenerateLog');
+    const logOutput  = document.getElementById('mfGenerateLogPre');
+    logSection.classList.remove('hidden');
+    logOutput.textContent = '';
+
+    mfGenerateBtn.disabled = true;
+    mfGenerateBtn.textContent = 'Generating…';
+
+    window.electronAPI.onPsOutput((text) => {
+      logOutput.textContent += text;
+      logOutput.scrollTop = logOutput.scrollHeight;
+    });
+    try {
+      const args = [
+        '-WorkbookPath', workbookPath,
+        '-DestDomain',   destDomain,
+        '-DestSpoUrl',   destSpoUrl,
+        '-OutputFolder', outputFolder
+      ];
+      if (templatesFolder) { args.push('-FlyTemplatesFolder', templatesFolder); }
+      const result = await runStreamingScript('Generate-FlyMappingFiles.ps1', args);
+      logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+    } catch (err) {
+      logOutput.textContent += `\nError: ${err.message || err}\n`;
+    } finally {
+      window.electronAPI.offPsOutput();
+      mfGenerateBtn.disabled = false;
+      mfGenerateBtn.textContent = '⚙ Generate Mapping Files';
+    }
   });
 });
 

@@ -1,7 +1,41 @@
 {
-  "version": "2.9.148",
-  "releaseDate": "2026-09-11",
+  "version": "2.9.152",
+  "releaseDate": "2026-09-14",
   "changelog": [
+    {
+      "version": "2.9.152",
+      "date": "2026-09-14",
+      "changes": [
+        "The v2.9.151 dashboard change below was made in the wrong app - menu.ps1 is a legacy WinForms tool the user doesn't actually run (confirmed via their taskbar shortcut, which launches MigrationToolkit-Web/Electron instead). Left the menu.ps1 changes in place (harmless, unused) and made the real change in MigrationToolkit-Web: added a 'Mapping Files' sidebar item under Avepoint Steps, directly above 'Project' (renamed to 'Migrate', sidebar label and view heading both), wired to a new view with workbook/domain/SPO-URL/templates-folder/output-folder fields and a streamed-log Generate button, matching the existing Refresh Discovery Cache screen's layout and JS pattern exactly",
+        "Added VGMigrations\\Generate-FlyMappingFiles.ps1 - a non-interactive wrapper around Invoke-MappingFileGeneration for this new screen to call (Electron spawns pwsh.exe with no console, so Read-Host isn't available - confirmed by testing: an unset Fly Templates folder parameter hit the Read-Host fallback and failed with 'PowerShell is in NonInteractive mode'). Invoke-MappingFileGeneration's five inputs are now all optional parameters that fall back to the original prompts only when omitted, so Run-Assessment.ps1's interactive console mode is unchanged. Verified end-to-end against a synthetic assessment workbook (all 7 sheets, mixed Migrate Yes/No rows) with no parameters omitted - all 7 templates generated correctly, no prompts hit",
+        "Also caught and reverted a bad decision from earlier in this session before it caused real harm: v2.9.149 had deleted Update-DistributionGroupsCache.ps1/Update-SharePointSitesCache.ps1/Update-TeamsChannelsCache.ps1 as 'orphaned', but MigrationToolkit-Web's Misc Scripts > Refresh Discovery Cache screen calls all three by name - they were never orphaned, just broken (see v2.9.149's entry for the real, still-open bug). Restored via git checkout before anything was committed"
+      ]
+    },
+    {
+      "version": "2.9.151",
+      "date": "2026-09-14",
+      "changes": [
+        "AvePoint Fly dashboard (menu.ps1): renamed the 'Connections' card to 'Migrate' (unchanged behaviour - still opens the Migration Mappings/connections form), and added a new 'Mapping Files' card directly above it that launches Assessment\\Run-Assessment.ps1 in its own visible console pre-loaded with a reminder to select 'Generate Mapping Files' from its mode menu - the same launch-a-visible-console-with-a-reminder pattern discovery-menu.ps1 already uses for Run-Assessment.ps1, since that script takes no parameters and needs a real console for its arrow-key menu and prompts. Dashboard is now 3 rows of cards (was 2) to fit the new tile"
+      ]
+    },
+    {
+      "version": "2.9.150",
+      "date": "2026-09-14",
+      "changes": [
+        "Mapping File Generation (Assessment\\Modules\\MappingFiles.psm1, Invoke-MappingFileGeneration) now writes into copies of the actual 7 official AvePoint Fly Templates instead of generating fresh generic xlsx files - preserves each template's column widths, conditional formatting, and (for the SharePoint template) its 12 pre-seeded 'Site collection'/'Merge' rows, which are now filled in place rather than pushed below a duplicate header. Output goes to a new FLY\\ folder under a folder the user now picks via a folder-browser dialog, instead of an auto-timestamped MappingFiles\\ folder next to the workbook. New prompts: target tenant domain (was 'Destination domain'), and the Fly Templates source folder (defaults to the shared OneDrive location, overridable per run)",
+        "Added the 7th, previously entirely unsupported, mapping type: Fly_Import_User_Mapping_Template.xlsx (Source user/group -> Destination user/group), covering the same in-scope AD-user set as the existing Teams Chat mapping",
+        "Fixed a bug in the existing code (predates this change, found while touching this function): Teams Chat mappings silently read zero rows because the sheet name looked up was 'Users', but Workbook.psm1 has always written it as 'AD Users' - Import-WorkbookSheet caught the resulting Import-Excel error and returned an empty array with only a yellow warning, so every past run's Teams Chat mapping file was empty (or not written) without an obvious failure. Corrected to 'AD Users'; the new User mapping reads the same corrected sheet",
+        "Found and fixed a PowerShell/EPPlus gotcha while implementing the in-place template writer: $ws.Cells[$r, $c + 1] (unparenthesized arithmetic inside a variable-indexed .NET indexer) silently misparses as an array-concat expression instead of a two-argument indexer call, returning a plain System.Object[] rather than a cell reference - assigning .Value on it then fails. Fixed by parenthesizing to $ws.Cells[$r, ($c + 1)]. Verified against real copies of all 7 templates (including the SharePoint template's pre-seeded rows, both under- and over-filled, and templates with header columns the generated rows don't populate) before treating this as done"
+      ]
+    },
+    {
+      "version": "2.9.149",
+      "date": "2026-09-14",
+      "changes": [
+        "CORRECTED BELOW: this version briefly deleted Update-DistributionGroupsCache.ps1, Update-SharePointSitesCache.ps1 and Update-TeamsChannelsCache.ps1, wrongly believing them orphaned by v2.9.128's revert of the caching layer. That was based on searching the VGMigrations repo only - the live app is actually the separate MigrationToolkit-Web Electron app (sibling folder, not checked at the time), whose Misc Scripts > 'Refresh Discovery Cache' panel calls all three of these by name. Restored before anything was committed, so no functional change ships from this version",
+        "The real underlying bug is still open: Get-DiscoveryCacheFolder, Test-DiscoveryCachePrereqs and the per-workload CacheFile writers were dropped from Common.psm1/Exchange.psm1/SharePoint.psm1 by v2.9.128's revert, so all three cache-refresh scripts still fail immediately with 'term not recognized' errors when run from the Electron panel - needs Get-DiscoveryCacheFolder (and the writer functions) re-implemented, not just the scripts left in place"
+      ]
+    },
     {
       "version": "2.9.148",
       "date": "2026-09-11",

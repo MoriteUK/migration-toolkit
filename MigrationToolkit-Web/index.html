@@ -111,8 +111,11 @@
             <button type="button" class="sidebar-subitem" data-view="avepoint-aos">
               <span class="sidebar-sublabel">AOS Setup</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="avepoint-mappingfiles">
+              <span class="sidebar-sublabel">Mapping Files</span>
+            </button>
             <button type="button" class="sidebar-subitem" data-view="avepoint-connections">
-              <span class="sidebar-sublabel">Project</span>
+              <span class="sidebar-sublabel">Migrate</span>
             </button>
           </div>
 
@@ -692,9 +695,70 @@
         </div>
       </div>
 
+      <!-- AvePoint Fly - Mapping Files -->
+      <div id="avepointMappingFilesView" class="view-container hidden">
+        <h2 class="view-title">Mapping Files</h2>
+        <p class="form-help" style="margin-bottom:16px;">
+          Fills copies of the 7 official AvePoint Fly Templates (Exchange, User, M365 Groups,
+          Teams, Teams Chat, OneDrive, SharePoint) from an assessment workbook's rows marked
+          <strong>Migrate = Yes</strong>, rewriting each Source identity onto the destination
+          tenant, and writes them to a new <strong>FLY</strong> folder under the folder you pick.
+        </p>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Source</h3>
+          <div class="form-group-tight">
+            <label class="form-label">Assessment Workbook</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="mfWorkbookPath" placeholder="Contoso-Assessment.xlsx" readonly>
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="xlsx" title="Browse for the assessment workbook">Browse</button>
+            </div>
+          </div>
+
+          <h3 class="form-card-title" style="margin-top:12px;">Target Tenant</h3>
+          <div class="form-row">
+            <div class="form-group-tight flex-1">
+              <label class="form-label">Destination Domain</label>
+              <input type="text" class="form-input form-input-compact" id="mfDestDomain" placeholder="newtenant.com">
+            </div>
+            <div class="form-group-tight flex-1">
+              <label class="form-label">Destination SPO Base URL</label>
+              <input type="text" class="form-input form-input-compact" id="mfDestSpoUrl" placeholder="https://newtenant.sharepoint.com">
+            </div>
+          </div>
+
+          <h3 class="form-card-title" style="margin-top:12px;">Output</h3>
+          <div class="form-group-tight">
+            <label class="form-label">Fly Templates Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="mfTemplatesFolder"
+                     value="C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Fly Templates">
+              <button type="button" class="btn btn-secondary btn-compact" data-folder="true" title="Browse for the folder containing the 7 official Fly Templates">Browse</button>
+            </div>
+          </div>
+          <div class="form-group-tight">
+            <label class="form-label">Folder to create FLY\ in</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="mfOutputFolder" placeholder="e.g. the tenant's Discovery folder" readonly>
+              <button type="button" class="btn btn-secondary btn-compact" data-folder="true" title="Browse for the folder to create the FLY output folder in">Browse</button>
+            </div>
+          </div>
+
+          <div class="form-actions" style="margin-top:8px;">
+            <button type="button" class="btn btn-primary btn-xs" id="mfGenerateBtn">
+              ⚙ Generate Mapping Files
+            </button>
+          </div>
+
+          <div id="mfGenerateLog" class="hidden" style="margin-top:12px;">
+            <pre id="mfGenerateLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
+        </div>
+      </div>
+
       <!-- AvePoint Fly - Connections -->
       <div id="avepointConnectionsView" class="view-container hidden">
-        <h2 class="view-title">Project</h2>
+        <h2 class="view-title">Migrate</h2>
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">PowerShell Migration (Recommended)</h3>

@@ -3,6 +3,10 @@
 Import-Module (Join-Path $PSScriptRoot 'Common.psm1') -DisableNameChecking -Force -Global
 Import-Module ImportExcel -DisableNameChecking -ErrorAction Stop
 
+# Fallback Fly Templates folder, used to pre-fill the prompt - override per-run if a
+# tenant's templates live elsewhere.
+$script:DefaultFlyTemplatesFolder = 'C:\Users\andyw\OneDrive - Volaris Group\GRP Data Security (Volaris Consolidated) - 3. Execution\M365 Migrations\Fly Templates'
+
 # -----------------------------------------------------------------------
 # Private functions
 # -----------------------------------------------------------------------
@@ -17,6 +21,20 @@ function Select-AssessmentWorkbook {
     $dialog.Filter = 'Excel files (*.xlsx)|*.xlsx'
     $dialog.Title  = 'Select assessment workbook'
     if ($dialog.ShowDialog() -eq 'OK') { return $dialog.FileName }
+    return $null
+}
+
+<#
+.SYNOPSIS
+    Shows a folder browser dialog for picking the folder the FLY output folder is created in.
+#>
+function Select-FlyOutputFolder {
+    param([string]$InitialFolder)
+    Add-Type -AssemblyName System.Windows.Forms
+    $dialog             = [System.Windows.Forms.FolderBrowserDialog]::new()
+    $dialog.Description = 'Select the tenant folder to create the FLY folder in'
+    if ($InitialFolder -and (Test-Path $InitialFolder)) { $dialog.SelectedPath = $InitialFolder }
+    if ($dialog.ShowDialog() -eq 'OK') { return $dialog.SelectedPath }
     return $null
 }
 
@@ -81,23 +99,69 @@ function Test-MigrateFlag {
 
 <#
 .SYNOPSIS
-    Writes mapping rows to a plain xlsx with a 'Migration mappings' sheet and prints the record count; skips the file when there are no rows.
+    Copies an official Fly template into the output folder and writes rows into its 'Migration
+    mappings' sheet, matching each row's properties to the template's own header row.
+.DESCRIPTION
+    Writing into a copy of the real template (rather than generating a fresh generic xlsx) keeps
+    the template's column widths, conditional formatting, and any pre-seeded rows intact - notably
+    the SharePoint template's default 'Site collection'/'Merge' rows, which this fills in place
+    rather than pushing below a duplicate header. Skips (and does not create) the file when there
+    are no source rows.
 #>
-function Write-MappingFile {
+function Write-FlyTemplateFile {
     param(
-        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$TemplatePath,
+        [Parameter(Mandatory)][string]$OutputPath,
         [AllowNull()][object[]]$Rows,
         [Parameter(Mandatory)][string]$Label
     )
 
     $count = if ($null -ne $Rows) { @($Rows).Count } else { 0 }
-    if ($count -gt 0) {
-        # Plain output - no formatting flags, header row then data rows only
-        @($Rows) | Export-Excel -Path $Path -WorksheetName 'Migration mappings'
+
+    if (-not (Test-Path $TemplatePath)) {
+        Write-Host ($PREFIX_WARN + "$Label - template not found: $TemplatePath") -ForegroundColor Yellow
+        return
     }
-    else {
+    if ($count -eq 0) {
         Write-Host ($PREFIX_WARN + "$Label - no source rows, file not written") -ForegroundColor Yellow
+        Write-ProgressLine -Label $Label -Count 0
+        return
     }
+
+    Copy-Item -Path $TemplatePath -Destination $OutputPath -Force
+
+    $pkg = Open-ExcelPackage -Path $OutputPath
+    try {
+        $ws = $pkg.Workbook.Worksheets['Migration mappings']
+
+        $headers = [System.Collections.Generic.List[string]]::new()
+        $col = 1
+        $headerCell = $ws.Cells[1, $col]
+        while ($headerCell.Value) {
+            $headers.Add([string]$headerCell.Value)
+            $col++
+            $headerCell = $ws.Cells[1, $col]
+        }
+
+        $r = 2
+        foreach ($row in @($Rows)) {
+            for ($c = 0; $c -lt $headers.Count; $c++) {
+                # $ws.Cells[$r, $c + 1] (unparenthesized) misparses as ($r, $c) + 1 - an array
+                # concat, not the two-arg indexer call - and then silently returns a
+                # System.Object[] instead of an ExcelRange. Parenthesize the column expression.
+                $cell = $ws.Cells[$r, ($c + 1)]
+                $cell.Value = $row.($headers[$c])
+            }
+            $r++
+        }
+
+        Close-ExcelPackage $pkg
+    }
+    catch {
+        Close-ExcelPackage $pkg -NoSave
+        throw
+    }
+
     Write-ProgressLine -Label $Label -Count $count
 }
 
@@ -107,35 +171,88 @@ function Write-MappingFile {
 
 <#
 .SYNOPSIS
-    Generates the six AvePoint Fly import files from an existing assessment workbook.
+    Generates the seven AvePoint Fly import files from an existing assessment workbook, filling
+    copies of the official Fly Templates.
 .DESCRIPTION
-    Prompts for the workbook (file dialog), destination domain, and destination SPO base
-    URL, then reads the source sheets with Import-Excel and writes the teams, m365groups,
-    sharepoint, onedrive, teamschat, and exchange mapping files to a timestamped folder
-    adjacent to the workbook. Reads only the workbook - no live services are queried.
+    Every parameter is optional and, when omitted, is collected interactively (file/folder
+    dialog or Read-Host) exactly as before - this is what Run-Assessment.ps1's console "Generate
+    Mapping Files" mode still uses. Passing all five lets a non-interactive caller (the
+    MigrationToolkit-Web Electron app's own file/folder pickers, via Generate-FlyMappingFiles.ps1)
+    drive this with no prompts at all.
+
+    Reads the source sheets with Import-Excel, keeps only rows flagged Migrate = Yes, rewrites
+    each Source identity onto the destination domain/URL, and writes the exchange, user,
+    m365groups, teams, teamschat, onedrive, and sharepoint mapping files into copies of their
+    official templates under <OutputFolder>\FLY\. Reads only the workbook - no live services are
+    queried.
+.PARAMETER WorkbookPath
+    Path to the assessment workbook. Prompted via file dialog when omitted.
+.PARAMETER DestDomain
+    Target tenant's destination email domain, e.g. newtenant.com. Prompted via Read-Host when omitted.
+.PARAMETER DestSpoUrl
+    Destination SPO base URL, e.g. https://newtenant.sharepoint.com. Prompted via Read-Host when omitted.
+.PARAMETER FlyTemplatesFolder
+    Folder containing the 7 official Fly Templates. Prompted via Read-Host (defaulting to the
+    shared OneDrive location) when omitted.
+.PARAMETER OutputFolder
+    Folder to create the FLY\ output folder in. Prompted via folder dialog when omitted.
 #>
 function Invoke-MappingFileGeneration {
     [CmdletBinding()]
-    param()
+    param(
+        [string]$WorkbookPath,
+        [string]$DestDomain,
+        [string]$DestSpoUrl,
+        [string]$FlyTemplatesFolder,
+        [string]$OutputFolder
+    )
 
     Write-SectionHeader 'Mapping File Generation'
 
     # --- Inputs ---
-    Write-Host ($PREFIX_INFO + 'Select the assessment workbook...') -ForegroundColor DarkGray
-    $workbookPath = Select-AssessmentWorkbook
+    $workbookPath = $WorkbookPath
     if (-not $workbookPath) {
-        Write-Host ($PREFIX_SKIP + 'No workbook selected - mapping file generation cancelled') -ForegroundColor Yellow
+        Write-Host ($PREFIX_INFO + 'Select the assessment workbook...') -ForegroundColor DarkGray
+        $workbookPath = Select-AssessmentWorkbook
+        if (-not $workbookPath) {
+            Write-Host ($PREFIX_SKIP + 'No workbook selected - mapping file generation cancelled') -ForegroundColor Yellow
+            return
+        }
+    } elseif (-not (Test-Path $workbookPath)) {
+        Write-Host ($PREFIX_FAIL + "Workbook not found: $workbookPath") -ForegroundColor Red
         return
     }
     Write-Host ($PREFIX_OK + "Workbook: $workbookPath") -ForegroundColor Green
 
-    $destDomain = (Read-Host 'Destination domain        (e.g. newtenant.com)').Trim()
-    $destSpoUrl = (Read-Host 'Destination SPO base URL  (e.g. https://newtenant.sharepoint.com)').Trim()
+    $destDomain = if ($DestDomain) { $DestDomain.Trim() } else { (Read-Host 'Target tenant domain (destination)   (e.g. newtenant.com)').Trim() }
+    $destSpoUrl = if ($DestSpoUrl) { $DestSpoUrl.Trim() } else { (Read-Host 'Destination SPO base URL              (e.g. https://newtenant.sharepoint.com)').Trim() }
 
-    # --- Output folder - adjacent to the workbook ---
-    $vbuName   = [IO.Path]::GetFileNameWithoutExtension($workbookPath) -replace '-Assessment$', ''
-    $timestamp = Get-Date -Format 'yyyyMMdd-HHmm'
-    $outFolder = Join-Path (Split-Path $workbookPath -Parent) 'MappingFiles' "$vbuName-$timestamp"
+    if ($FlyTemplatesFolder) {
+        $flyTemplatesFolder = $FlyTemplatesFolder.Trim()
+    } else {
+        $templatesInput     = (Read-Host "Fly Templates folder [$script:DefaultFlyTemplatesFolder]").Trim()
+        $flyTemplatesFolder = if ($templatesInput) { $templatesInput } else { $script:DefaultFlyTemplatesFolder }
+    }
+    if (-not (Test-Path $flyTemplatesFolder)) {
+        Write-Host ($PREFIX_FAIL + "Fly Templates folder not found: $flyTemplatesFolder") -ForegroundColor Red
+        return
+    }
+
+    $selectedFolder = $OutputFolder
+    if (-not $selectedFolder) {
+        Write-Host ($PREFIX_INFO + 'Select the folder to create the FLY folder in...') -ForegroundColor DarkGray
+        $selectedFolder = Select-FlyOutputFolder -InitialFolder (Split-Path $workbookPath -Parent)
+        if (-not $selectedFolder) {
+            Write-Host ($PREFIX_SKIP + 'No folder selected - mapping file generation cancelled') -ForegroundColor Yellow
+            return
+        }
+    } elseif (-not (Test-Path $selectedFolder)) {
+        Write-Host ($PREFIX_FAIL + "Output folder not found: $selectedFolder") -ForegroundColor Red
+        return
+    }
+
+    # --- Output folder ---
+    $outFolder = Join-Path $selectedFolder 'FLY'
     New-Item -ItemType Directory -Path $outFolder -Force | Out-Null
     Write-Host ($PREFIX_OK + "Output folder: $outFolder") -ForegroundColor Green
 
@@ -144,12 +261,26 @@ function Invoke-MappingFileGeneration {
     $vbuNameValue = ($summarySheet | Where-Object { $_.Section -eq 'VBU Name' } | Select-Object -First 1 -ExpandProperty Value)
     $safeName     = ("$vbuNameValue" -replace '[^\w\-]', '')
 
-    $teamsFileName      = "$safeName-teams-mapping.xlsx"
-    $m365GroupsFileName = "$safeName-m365groups-mapping.xlsx"
-    $sharepointFileName = "$safeName-sharepoint-mapping.xlsx"
-    $onedriveFileName   = "$safeName-onedrive-mapping.xlsx"
-    $teamschatFileName  = "$safeName-teamschat-mapping.xlsx"
-    $exchangeFileName   = "$safeName-exchange-mapping.xlsx"
+    # Official template filenames, as shipped by AvePoint - must match exactly
+    $templateFiles = @{
+        Exchange   = 'Fly_Exchange_Online_Import_Mapping_Template.xlsx'
+        User       = 'Fly_Import_User_Mapping_Template.xlsx'
+        M365Groups = 'Fly_Microsoft_365_Groups_Import_Mapping_Template.xlsx'
+        Teams      = 'Fly_Microsoft_Teams_Add_Mapping.xlsx'
+        TeamsChat  = 'Fly_Microsoft_Teams_Chat_Import_Mapping_Template.xlsx'
+        OneDrive   = 'Fly_OneDrive_Import_Mapping_Template.xlsx'
+        SharePoint = 'Fly_SharePoint_Online_Import_Mapping_Template.xlsx'
+    }
+
+    $outputFiles = @{
+        Exchange   = "$safeName-exchange-mapping.xlsx"
+        User       = "$safeName-user-mapping.xlsx"
+        M365Groups = "$safeName-m365groups-mapping.xlsx"
+        Teams      = "$safeName-teams-mapping.xlsx"
+        TeamsChat  = "$safeName-teamschat-mapping.xlsx"
+        OneDrive   = "$safeName-onedrive-mapping.xlsx"
+        SharePoint = "$safeName-sharepoint-mapping.xlsx"
+    }
 
     # --- Read source sheets ---
     Write-Host ($PREFIX_INFO + 'Reading workbook sheets...') -ForegroundColor DarkGray
@@ -157,7 +288,7 @@ function Invoke-MappingFileGeneration {
     $m365Groups      = Import-WorkbookSheet -Path $workbookPath -SheetName 'M365 Groups'
     $spoSites        = Import-WorkbookSheet -Path $workbookPath -SheetName 'SharePoint Sites'
     $oneDrives       = Import-WorkbookSheet -Path $workbookPath -SheetName 'OneDrives'
-    $adUsers         = Import-WorkbookSheet -Path $workbookPath -SheetName 'Users'
+    $adUsers         = Import-WorkbookSheet -Path $workbookPath -SheetName 'AD Users'
     $userMailboxes   = Import-WorkbookSheet -Path $workbookPath -SheetName 'User Mailboxes'
     $sharedMailboxes = Import-WorkbookSheet -Path $workbookPath -SheetName 'Shared Mailboxes'
 
@@ -226,6 +357,16 @@ function Invoke-MappingFileGeneration {
             }
         })
 
+    # --- User (identity mapping) - same in-scope AD user set as Teams Chat ---
+    $userRows = @($adUsers |
+        Where-Object { $_.PSObject.Properties['UserPrincipalName'] -and $_.UserPrincipalName -and (Test-MigrateFlag -Row $_) } |
+        ForEach-Object {
+            [PSCustomObject]@{
+                'Source user/group'      = $_.UserPrincipalName
+                'Destination user/group' = Convert-EmailToDestination -Address $_.UserPrincipalName -DestinationDomain $destDomain
+            }
+        })
+
     # --- Exchange - User Mailboxes first, then Shared Mailboxes ---
     $exchangeRows = [System.Collections.Generic.List[PSCustomObject]]::new()
     foreach ($mb in ($userMailboxes | Where-Object { $_.PSObject.Properties['PrimarySmtpAddress'] -and $_.PrimarySmtpAddress -and (Test-MigrateFlag -Row $_) })) {
@@ -247,12 +388,13 @@ function Invoke-MappingFileGeneration {
 
     # --- Write files and summary ---
     Write-SectionHeader 'Mapping Files'
-    Write-MappingFile -Path (Join-Path $outFolder $teamsFileName)      -Rows $teamRows               -Label 'Teams mappings'
-    Write-MappingFile -Path (Join-Path $outFolder $m365GroupsFileName) -Rows $groupRows              -Label 'M365 Group mappings'
-    Write-MappingFile -Path (Join-Path $outFolder $sharepointFileName) -Rows $spoRows                -Label 'SharePoint mappings'
-    Write-MappingFile -Path (Join-Path $outFolder $onedriveFileName)   -Rows $oneDriveRows           -Label 'OneDrive mappings'
-    Write-MappingFile -Path (Join-Path $outFolder $teamschatFileName)  -Rows $teamsChatRows          -Label 'Teams Chat mappings'
-    Write-MappingFile -Path (Join-Path $outFolder $exchangeFileName)   -Rows $exchangeRows.ToArray() -Label 'Exchange mappings'
+    Write-FlyTemplateFile -TemplatePath (Join-Path $flyTemplatesFolder $templateFiles.Exchange)   -OutputPath (Join-Path $outFolder $outputFiles.Exchange)   -Rows $exchangeRows.ToArray() -Label 'Exchange mappings'
+    Write-FlyTemplateFile -TemplatePath (Join-Path $flyTemplatesFolder $templateFiles.User)       -OutputPath (Join-Path $outFolder $outputFiles.User)       -Rows $userRows               -Label 'User mappings'
+    Write-FlyTemplateFile -TemplatePath (Join-Path $flyTemplatesFolder $templateFiles.M365Groups) -OutputPath (Join-Path $outFolder $outputFiles.M365Groups) -Rows $groupRows              -Label 'M365 Group mappings'
+    Write-FlyTemplateFile -TemplatePath (Join-Path $flyTemplatesFolder $templateFiles.Teams)      -OutputPath (Join-Path $outFolder $outputFiles.Teams)      -Rows $teamRows               -Label 'Teams mappings'
+    Write-FlyTemplateFile -TemplatePath (Join-Path $flyTemplatesFolder $templateFiles.TeamsChat)  -OutputPath (Join-Path $outFolder $outputFiles.TeamsChat)  -Rows $teamsChatRows          -Label 'Teams Chat mappings'
+    Write-FlyTemplateFile -TemplatePath (Join-Path $flyTemplatesFolder $templateFiles.OneDrive)   -OutputPath (Join-Path $outFolder $outputFiles.OneDrive)   -Rows $oneDriveRows           -Label 'OneDrive mappings'
+    Write-FlyTemplateFile -TemplatePath (Join-Path $flyTemplatesFolder $templateFiles.SharePoint) -OutputPath (Join-Path $outFolder $outputFiles.SharePoint) -Rows $spoRows                -Label 'SharePoint mappings'
 
     Write-Host ''
     Write-Host ($PREFIX_OK + 'Mapping file generation complete') -ForegroundColor Green
