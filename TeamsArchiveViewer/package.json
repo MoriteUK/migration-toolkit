@@ -1,0 +1,15 @@
+{
+  "name": "teams-archive-viewer",
+  "version": "1.0.0",
+  "description": "Offline viewer for archived Microsoft Teams chat exports (AvePoint Fly Chat_Archived HTML files) - standalone, not connected to Microsoft Teams",
+  "main": "main.js",
+  "author": "Morite UK",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}

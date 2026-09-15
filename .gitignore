@@ -3,6 +3,8 @@ node_modules/
 
 # Electron build output
 MigrationToolkit-Web/dist/
+TeamsArchiveViewer/dist/
+TeamsArchiveViewer/*.zip
 
 # Log files
 *.log
