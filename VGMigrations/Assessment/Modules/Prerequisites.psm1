@@ -30,7 +30,22 @@ function Install-Prerequisites {
     foreach ($name in $ModuleNames) {
         Write-Host ($PREFIX_INFO + "Installing $name...") -ForegroundColor DarkGray
         try {
-            Install-Module -Name $name -Scope CurrentUser -Force -AllowClobber -Repository PSGallery -ErrorAction Stop
+            if ($name -eq 'Microsoft.Online.SharePoint.PowerShell') {
+                # WinPS-only module, loaded elsewhere via -UseWindowsPowerShell, which proxies
+                # through a SEPARATE real Windows PowerShell 5.1 process with its own
+                # $env:PSModulePath. Installing it from pwsh7 with -Scope CurrentUser puts it
+                # under Documents\PowerShell\Modules, a path that WinPS 5.1 process never scans -
+                # Get-Module -ListAvailable in THIS (pwsh7) session still finds it fine, so the
+                # prerequisite check above reports "present" right before the real import fails.
+                # Installing it from an actual powershell.exe puts it under
+                # Documents\WindowsPowerShell\Modules instead, which the compat shim does scan.
+                $installCmd = "if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue)) { Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser | Out-Null }; Install-Module -Name '$name' -Scope CurrentUser -Force -AllowClobber -Repository PSGallery -ErrorAction Stop"
+                powershell.exe -NoProfile -NonInteractive -Command $installCmd
+                if ($LASTEXITCODE -ne 0) { throw "powershell.exe install of $name exited with code $LASTEXITCODE" }
+            }
+            else {
+                Install-Module -Name $name -Scope CurrentUser -Force -AllowClobber -Repository PSGallery -ErrorAction Stop
+            }
             Write-Host ($PREFIX_OK + "$name installed") -ForegroundColor Green
         }
         catch {
@@ -99,8 +114,21 @@ function Test-Prerequisites {
     }
 
     # --- Microsoft.Online.SharePoint.PowerShell ---
-    # Install failure is non-fatal - sets SkipSharePoint on the context
-    if (-not (Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell')) {
+    # Install failure is non-fatal - sets SkipSharePoint on the context.
+    # Checked via a real powershell.exe (WinPS 5.1), not Get-Module -ListAvailable in this pwsh7
+    # session - SharePoint.psm1 loads this module through -UseWindowsPowerShell, which proxies
+    # through a separate WinPS 5.1 process with its own $env:PSModulePath. pwsh7's own
+    # Get-Module -ListAvailable can find a module that process can't see at all (e.g. one
+    # installed under Documents\PowerShell\Modules), reporting a false "present" here right
+    # before the real import fails.
+    $spoVisibleToWinPS = $false
+    try {
+        $spoCheck = powershell.exe -NoProfile -NonInteractive -Command `
+            "if (Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell') { 'FOUND' }"
+        $spoVisibleToWinPS = ($spoCheck -match 'FOUND')
+    } catch { $spoVisibleToWinPS = $false }
+
+    if (-not $spoVisibleToWinPS) {
         Write-Host ($PREFIX_WARN + 'Microsoft.Online.SharePoint.PowerShell not found - installing...') -ForegroundColor Yellow
         try {
             Install-Prerequisites -ModuleNames @('Microsoft.Online.SharePoint.PowerShell')

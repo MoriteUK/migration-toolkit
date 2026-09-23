@@ -3,30 +3,25 @@
 .SYNOPSIS
     Batch wrapper for Run-Assessment.ps1 - opens one assessment per domain, sequentially.
 .DESCRIPTION
-    Run-Assessment.ps1 is interactive (mode menu + VBU Domain / Search Term / VBU ID / SPO
-    Admin URL prompts + a final "delete Raw JSON?" prompt). It has no parameters, so this
-    wrapper cannot feed answers in - instead it launches Run-Assessment.ps1 in its own new
-    console window per domain and waits for that window to close before starting the next.
-    Sign in and answer the prompts in each window as it opens.
-
-    The -Domains list is only used to tell you which domain to enter at each window's prompt;
-    every other value (Search Term, VBU ID, SPO Admin URL, skip choices) is entered by hand in
-    the window itself.
+    Run-Assessment.ps1 now accepts -VbuDomain/-VbuSearchTerm/-VbuId/-SharePointAdminUrl/
+    -OutputPath, so this wrapper feeds those in directly per domain instead of just echoing a
+    reminder for the operator to retype at each window's prompts. VBU ID is looked up from
+    domains.json by domain (same source the discovery-menu.ps1 GUI's single-domain picker
+    uses); VBU Search Term defaults to the domain's first label (e.g. "contoso" from
+    "contoso.com"). A sign-in window will still appear per domain for Exchange/Graph/SPO auth.
 .PARAMETER Domains
-    Domain names to assess, one window per domain, in order. Shown as a reminder before each
-    window opens.
+    Domain names to assess, one window per domain, in order.
 .PARAMETER ContinueOnError
     Continue to the next domain if one window exits with a non-zero code, instead of stopping.
 .PARAMETER SharePointAdminUrl
-    Accepted for backward compatibility with existing callers; no longer used (entered in the
-    Run-Assessment.ps1 window instead).
+    Passed through to each Run-Assessment.ps1 invocation as -SharePointAdminUrl.
 .PARAMETER SkipPowerPlatform
     Accepted for backward compatibility; no longer used (this build of Run-Assessment.ps1 has
     no Power Platform stage).
 .PARAMETER SkipTeamMemberships
     Accepted for backward compatibility; no longer used (this build has no Team Memberships stage).
 .PARAMETER OutputPath
-    Accepted for backward compatibility; no longer used (Run-Assessment.ps1 writes next to itself).
+    Passed through to each Run-Assessment.ps1 invocation as -OutputPath.
 #>
 
 [CmdletBinding()]
@@ -42,6 +37,21 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $runAssessmentPath = Join-Path $PSScriptRoot 'Run-Assessment.ps1'
+
+# Same domains.json lookup the discovery-menu.ps1 GUI uses to auto-fill VBU ID for a
+# single-domain run - applied here per-domain so batch runs get it too.
+$domainVbuMap    = @{}
+$domainsJsonPath = Join-Path $PSScriptRoot '..\domains.json'
+if (Test-Path $domainsJsonPath) {
+    try {
+        foreach ($e in @(Get-Content $domainsJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json)) {
+            if ($e.PSObject.Properties['domain'] -and $e.domain) {
+                $domainVbuMap[([string]$e.domain).ToLower()] = if ($e.PSObject.Properties['vbuId']) { [string]$e.vbuId } else { '' }
+            }
+        }
+    } catch { Write-Host "Could not load domains.json: $($_.Exception.Message)" -ForegroundColor Yellow }
+}
+
 if (-not (Test-Path $runAssessmentPath)) {
     Write-Host "Run-Assessment.ps1 not found at: $runAssessmentPath" -ForegroundColor Red
     return
@@ -59,13 +69,25 @@ foreach ($domain in $Domains) {
     $domain = $domain.Trim().ToLower().TrimStart('@')
     if (-not $domain) { continue }
 
+    $vbuId      = $domainVbuMap[$domain]
+    $searchTerm = ($domain -split '\.')[0]
+
     Write-Host ''
     Write-Host "=== $domain ===" -ForegroundColor Cyan
-    Write-Host "Enter '$domain' at the 'VBU Domain' prompt in the window that opens." -ForegroundColor Yellow
+    Write-Host "VBU Search Term='$searchTerm'  VBU ID='$vbuId'" -ForegroundColor DarkGray
+
+    $argList = @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $runAssessmentPath,
+        '-VbuDomain', $domain,
+        '-VbuSearchTerm', $searchTerm
+    )
+    if ($vbuId)             { $argList += @('-VbuId', $vbuId) }
+    if ($SharePointAdminUrl) { $argList += @('-SharePointAdminUrl', $SharePointAdminUrl) }
+    if ($OutputPath)        { $argList += @('-OutputPath', $OutputPath) }
 
     try {
         $proc = Start-Process -FilePath 'pwsh.exe' `
-            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $runAssessmentPath) `
+            -ArgumentList $argList `
             -WorkingDirectory $PSScriptRoot -Wait -PassThru
 
         if ($proc.ExitCode -eq 0) {

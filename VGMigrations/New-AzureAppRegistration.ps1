@@ -136,9 +136,14 @@ try {
     Write-Output ""
     Write-Output "--------------------------------------------------------"
 
-    # Save credentials to a file and signal Electron to open it
+    # Save credentials to a file and signal Electron to open it.
+    # Use the shell's actual Desktop folder rather than assuming
+    # $env:USERPROFILE\Desktop - that path doesn't exist when Desktop has
+    # been redirected (e.g. OneDrive Known Folder Move), which silently
+    # failed the Set-Content below and left the secret only in the console.
+    $desktopPath = [Environment]::GetFolderPath('Desktop')
     $safeTenantName = $tenantName -replace '[\\/:*?"<>|]', '_'
-    $notepadPath = Join-Path $env:USERPROFILE "Desktop\AppReg_${safeTenantName}_$($app.AppId.Substring(0,8)).txt"
+    $notepadPath = Join-Path $desktopPath "AppReg_${safeTenantName}_$($app.AppId.Substring(0,8)).txt"
     $notepadContent = @"
 AvePoint Fly App Registration Credentials
 Created: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')

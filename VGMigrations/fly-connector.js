@@ -232,38 +232,44 @@ async function navigateToConnectionsPage(page) {
     return;
   }
 
-  // 4. Click the Settings menu item to expand its sub-items.
-  //    Fluent UI v9 nav uses <button aria-label="Settings">.
+  // 4-5. Click the Connection sub-item. If Settings' sub-items are already
+  //    expanded (e.g. on a retry/renavigation within the same session), the
+  //    sub-item is already visible - clicking Settings again would TOGGLE it
+  //    closed and hide "Connections", so only click it when the sub-item
+  //    isn't visible yet. Sub-item typically renders as
+  //    <button aria-label="Connection"> or as an <a href="#/settings/connection">.
   logStep('clicking Settings menu (button[aria-label="Settings"])');
   const settingsBtn = page.locator('button[aria-label="Settings"]').first();
   await settingsBtn.waitFor({ state: 'visible', timeout: 10_000 });
-  await settingsBtn.click();
-  await page.waitForTimeout(300); // submenu animation
 
-  // 5. Click the Connection sub-item. After expanding Settings the sub-item
-  //    typically renders as <button aria-label="Connection"> or as an <a>
-  //    with href="#/settings/connection". Try both.
-  logStep('clicking Connection sub-item');
   const connectionTargets = [
     'button[aria-label="Connection"]',
     'button[aria-label="Connections"]',
     'a[href$="#/settings/connection"]',
     'a[href="#/settings/connection"]'
   ];
-  let clicked = false;
-  for (const sel of connectionTargets) {
-    const loc = page.locator(sel).first();
-    if (await loc.isVisible({ timeout: 1500 }).catch(() => false)) {
-      logStep(`Connection sub-item found via "${sel}"`);
-      await loc.click();
-      clicked = true;
-      break;
+  const findVisibleConnectionTarget = async () => {
+    for (const sel of connectionTargets) {
+      if (await page.locator(sel).first().isVisible().catch(() => false)) return sel;
     }
+    return null;
+  };
+
+  logStep('clicking Connection sub-item');
+  let matchedSel = await findVisibleConnectionTarget();
+  if (!matchedSel) {
+    await settingsBtn.click();
+    await page.waitForTimeout(300); // submenu animation
+    matchedSel = await findVisibleConnectionTarget();
   }
-  if (!clicked) {
-    // Last resort: any element whose accessible name is exactly "Connection"
+
+  if (matchedSel) {
+    logStep(`Connection sub-item found via "${matchedSel}"`);
+    await page.locator(matchedSel).first().click();
+  } else {
+    // Last resort: any element whose accessible name is "Connection(s)"
     logStep('Connection sub-item: fallback to role-based match');
-    await page.getByRole('button', { name: /^Connection$/, exact: true }).first()
+    await page.getByRole('button', { name: /^Connections?$/i }).first()
               .click({ timeout: 10_000 });
   }
 
@@ -556,12 +562,22 @@ async function createOneConnection(page, task) {
   // --- Service account authentication: pick Modern authentication ---
   // This field is absent for Teams Chat Destination (and any other flow that
   // uses delegated app auth only). Skip gracefully when not present.
-  const authLabel = page.locator(
-    'xpath=//label[starts-with(normalize-space(.), "Service account authentication")]'
-  ).first();
+  // AOS has since renamed this label from "Service account authentication"
+  // to "Service account or delegated app authentication" - match both so the
+  // dropdown is still found and switched to Modern auth (which is what makes
+  // the "Microsoft delegated app profile" field below appear; on "Legacy
+  // authentication" - the current default - that field never renders).
+  const authLabelXpath = 'xpath=//label[' +
+    'starts-with(normalize-space(.), "Service account authentication") or ' +
+    'starts-with(normalize-space(.), "Service account or delegated")' +
+    ']';
+  const authLabel = page.locator(authLabelXpath).first();
   if (await authLabel.isVisible({ timeout: 2_000 }).catch(() => false)) {
     logStep(`${task.id} open Service account authentication dropdown`);
-    await openDropdownAfterLabel(page, 'Service account authentication');
+    const authDropdown = page.locator(`${authLabelXpath}/following::*[@role="combobox"][1]`).first();
+    await authDropdown.waitFor({ state: 'visible', timeout: 10_000 });
+    await authDropdown.click();
+    await page.waitForTimeout(300);
     logStep(`${task.id} pick "Modern authentication"`);
     await pickDropdownOptionContaining(page, 'Modern authentication');
     await page.waitForTimeout(600); // wait for auth menu to close + downstream list to refresh
@@ -570,10 +586,22 @@ async function createOneConnection(page, task) {
   }
 
   // --- Microsoft delegated app profile: pick first available option automatically ---
-  logStep(`${task.id} open Microsoft delegated app profile dropdown`);
-  await openDropdownAfterLabel(page, 'Microsoft delegated app profile');
-  const selectedDelegatedProfile = await pickFirstNonNoneOption(page);
-  logStep(`${task.id} Delegated app profile selected: "${selectedDelegatedProfile}"`);
+  // Only present once Modern authentication is selected above (or on flows
+  // that use delegated app auth exclusively, e.g. Teams Chat Destination).
+  // Guard with a visibility check instead of a hard waitFor so a further AOS
+  // relabel/relayout logs a clear skip instead of crashing the whole task.
+  const delegatedLabel = page.locator(
+    'xpath=//label[starts-with(normalize-space(.), "Microsoft delegated app profile")]'
+  ).first();
+  let selectedDelegatedProfile = '';
+  if (await delegatedLabel.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    logStep(`${task.id} open Microsoft delegated app profile dropdown`);
+    await openDropdownAfterLabel(page, 'Microsoft delegated app profile');
+    selectedDelegatedProfile = await pickFirstNonNoneOption(page);
+    logStep(`${task.id} Delegated app profile selected: "${selectedDelegatedProfile}"`);
+  } else {
+    logStep(`${task.id} Microsoft delegated app profile field not present - skipping`);
+  }
 
   // --- Placeholder account (Teams Chat Destination): derive from selected app profile ---
   // The email is extracted from the selected profile text, e.g.
@@ -604,6 +632,19 @@ async function createOneConnection(page, task) {
   logStep(`${task.id} click Save`);
   const saveBtn = page.getByRole('button', { name: /^\s*save\s*$/i }).first();
   await saveBtn.click({ timeout: 10_000 });
+
+  // Fail fast on client-side validation errors (e.g. "Select at least one
+  // authentication method to proceed." when no App profile / delegated app
+  // profile could be resolved). AOS renders these as
+  // <span class="error-message__...">...</span> inside the still-open
+  // drawer instead of closing it, so without this check we'd otherwise sit
+  // through the full drawer-close + list-settle timeouts below (~90s) only
+  // to fail anyway with a far less informative message.
+  const validationError = page.locator('[class^="error-message__"]').first();
+  if (await validationError.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    const errorText = (await validationError.innerText().catch(() => '')).trim();
+    throw new Error(`Connection form validation failed: "${errorText}"`);
+  }
 
   // Robust "form closed" detection:
   //   1. Drawer/dialog disappears (the form container, not just one input)

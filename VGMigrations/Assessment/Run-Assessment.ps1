@@ -1,5 +1,19 @@
 #Requires -Version 7.0
 
+param(
+    [string]$VbuDomain,
+    [string]$VbuSearchTerm,
+    [string]$VbuId,
+    [string]$SharePointAdminUrl,
+    [string]$OutputPath,
+    [switch]$DeleteRawJson
+)
+
+# When the caller (e.g. the discovery-menu.ps1 GUI) supplies -VbuDomain, run fully
+# non-interactively using the supplied parameters instead of prompting - the GUI's own
+# Domain/VBU ID/Output folder boxes are the source of truth in that case, not console input.
+$NonInteractive = $PSBoundParameters.ContainsKey('VbuDomain')
+
 # Define module root before any imports
 $moduleRoot = Join-Path $PSScriptRoot 'Modules'
 
@@ -33,7 +47,9 @@ function Get-SafeCount {
 }
 
 function Show-ModeMenu {
-    $options  = @('Run Assessment', 'Generate Mapping Files')
+    # 'Generate Mapping Files' removed from the menu per operator request - the mode and its
+    # Invoke-MappingFileGeneration code path below are left in place, just not offered here.
+    $options  = @('Run Assessment')
     $selected = 0
 
     Write-Host 'Select mode (arrow keys, Enter to confirm):' -ForegroundColor Cyan
@@ -70,7 +86,7 @@ Write-Host ''
 # -----------------------------------------------------------------------
 # Mode selection
 # -----------------------------------------------------------------------
-$mode = Show-ModeMenu
+$mode = if ($NonInteractive) { 'Run Assessment' } else { Show-ModeMenu }
 Write-Host ''
 
 if ($mode -eq 'Generate Mapping Files') {
@@ -117,12 +133,13 @@ Import-Module (Join-Path $moduleRoot 'SharePoint.psm1')    -Force -DisableNameCh
 Import-Module (Join-Path $moduleRoot 'Workbook.psm1')      -Force -DisableNameChecking -Global
 
 # -----------------------------------------------------------------------
-# User inputs
+# User inputs - taken from parameters when supplied (GUI-driven run), otherwise prompted
+# (manual/standalone run)
 # -----------------------------------------------------------------------
-$vbuDomain     = (Read-Host 'VBU Domain       (e.g. contoso.com)').Trim()
-$vbuSearchTerm = (Read-Host 'VBU Search Term  (e.g. Contoso)').Trim()
-$vbuId         = (Read-Host 'VBU ID           (extensionAttribute7 exact value)').Trim()
-$spoInput      = (Read-Host 'SPO Admin URL    [https://ourvolaris-admin.sharepoint.com]').Trim()
+$vbuDomain     = if ($NonInteractive) { $VbuDomain }     else { (Read-Host 'VBU Domain       (e.g. contoso.com)').Trim() }
+$vbuSearchTerm = if ($VbuSearchTerm)  { $VbuSearchTerm } else { (Read-Host 'VBU Search Term  (e.g. Contoso)').Trim() }
+$vbuId         = if ($PSBoundParameters.ContainsKey('VbuId')) { $VbuId } else { (Read-Host 'VBU ID           (extensionAttribute7 exact value)').Trim() }
+$spoInput      = if ($SharePointAdminUrl) { $SharePointAdminUrl } else { (Read-Host 'SPO Admin URL    [https://ourvolaris-admin.sharepoint.com]').Trim() }
 $spoAdminUrl   = if ($spoInput) { $spoInput } else { 'https://ourvolaris-admin.sharepoint.com' }
 
 # -----------------------------------------------------------------------
@@ -131,7 +148,8 @@ $spoAdminUrl   = if ($spoInput) { $spoInput } else { 'https://ourvolaris-admin.s
 # Temporary context call to derive VBUName via the shared TLD-strip logic in Common.psm1
 $vbuName      = (New-AssessmentContext -VBUDomain $vbuDomain -VBUId $vbuId -VBUSearchTerm $vbuSearchTerm -RawPath 'TEMP').VBUName
 $timestamp    = Get-Date -Format 'yyyyMMdd-HHmm'
-$assessFolder = Join-Path $PSScriptRoot "$vbuName-$timestamp"
+$outputBase   = if ($OutputPath) { $OutputPath } else { $PSScriptRoot }
+$assessFolder = Join-Path $outputBase "$vbuName-$timestamp"
 $rawPath      = Join-Path $assessFolder 'Raw'
 $xlsxPath     = Join-Path $assessFolder "$vbuName-Assessment.xlsx"
 
@@ -286,8 +304,12 @@ finally {
 # Raw JSON cleanup - always runs regardless of assessment outcome
 # -----------------------------------------------------------------------
 Write-Host ''
-$cleanInput = (Read-Host "Delete Raw JSON files from '$rawPath'? [Y/N]").Trim().ToUpper()
-if ($cleanInput -eq 'Y') {
+$deleteRaw = if ($NonInteractive) {
+    $DeleteRawJson.IsPresent
+} else {
+    (Read-Host "Delete Raw JSON files from '$rawPath'? [Y/N]").Trim().ToUpper() -eq 'Y'
+}
+if ($deleteRaw) {
     Get-ChildItem -Path $rawPath -Filter '*.json' | Remove-Item -Force
     Write-Host ($PREFIX_OK + 'Raw JSON files deleted') -ForegroundColor Green
 }
