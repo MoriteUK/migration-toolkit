@@ -1,7 +1,18 @@
 {
-  "version": "2.9.152",
-  "releaseDate": "2026-09-14",
+  "version": "2.9.153",
+  "releaseDate": "2026-09-23",
   "changelog": [
+    {
+      "version": "2.9.153",
+      "date": "2026-09-23",
+      "changes": [
+        "Discovery engine: reverted discovery-menu.ps1 to the pre-v2.9.98 version (launches search-domain.ps1 / run-multiple-domains.ps1, restored to the VGMigrations root from _Legacy/ where they were left untouched) - deliberate, explicitly requested revert. Live server run of the v2.9.128 modular engine hit two separate failures in the same session: Connect-SPOService not recognized (Microsoft.Online.SharePoint.PowerShell installed via pwsh7's Install-Module -Scope CurrentUser lands under Documents\\PowerShell\\Modules, a path the separate Windows PowerShell 5.1 process that SharePoint.psm1's -UseWindowsPowerShell proxies through never scans - Get-Module -ListAvailable in the pwsh7 session itself still found it fine, so the prerequisite check falsely reported 'present'), and a Graph connection crash ('Method not found: ...BaseAbstractApplicationBuilder.WithLogging...', an MSAL/Identity.Client assembly-version conflict against ExchangeOnlineManagement, which had already connected successfully in the same process moments earlier). search-domain.ps1 avoids both: it imports the SPO module directly under pwsh7 (no WinPS proxy) and runs its SPO connection in an isolated child process, and separately pins Microsoft.Graph.Authentication to 2.33.0 with Exchange -DisableWAM",
+        "Also fixed the same SPO WinPS-visibility false-positive in the (now unused by the GUI, but left in place) modular engine's Assessment/Modules/Prerequisites.psm1 - both the presence check and the install now go through a real powershell.exe instead of trusting the pwsh7 session's own Get-Module -ListAvailable",
+        "Assessment/Run-Assessment.ps1 and Run-MultiAssessment.ps1 (not currently launched by discovery-menu.ps1, but kept working for anyone invoking them directly) now accept -VbuDomain/-VbuSearchTerm/-VbuId/-SharePointAdminUrl/-OutputPath instead of only prompting interactively; 'Generate Mapping Files' removed from Run-Assessment.ps1's mode menu (Invoke-MappingFileGeneration and its branch left in place, just unreachable from the menu)",
+        "fly-connector.js (AvePoint Fly connection automation): fixed a ReferenceError crashing Microsoft Teams Chat connection creation (a block-scoped variable was read outside the block it was declared in), fixed the Connections-page navigation retry logic that was toggling the Settings nav menu closed instead of leaving it open on a retry (hiding the Connections item and guaranteeing the fallback selector ran - which itself only matched the literal text 'Connection', never the real 'Connections' label, also fixed), and added a fast-fail check for Fly's own 'Select at least one authentication method to proceed' validation error immediately after clicking Save instead of sitting through a 90-second timeout chain before failing anyway",
+        "New-AzureAppRegistration.ps1: fixed the credentials text-file save assuming $env:USERPROFILE\\Desktop, which doesn't exist when Desktop is OneDrive-redirected (Known Folder Move) - now resolves the real Desktop path via [Environment]::GetFolderPath('Desktop')"
+      ]
+    },
     {
       "version": "2.9.152",
       "date": "2026-09-14",
