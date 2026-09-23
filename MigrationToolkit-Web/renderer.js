@@ -356,9 +356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     startDiscoveryBtn.addEventListener('click', async () => {
       const domainMode = document.querySelector('input[name="domainMode"]:checked')?.value || 'single';
       const vbuId = document.getElementById('discoveryVbuId').value.trim();
-      const searchTerm = document.getElementById('discoverySearchTerm').value.trim();
       const skipPP = document.getElementById('skipPowerPlatform').checked;
-      const skipTM = document.getElementById('skipTeamMemberships').checked;
       const continueOnError = document.getElementById('continueOnError').checked;
       const outputFolder = document.getElementById('outputFolder').value.trim() || 'E:\\Work\\Jolera\\Volaris\\Discovery';
 
@@ -378,46 +376,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       const logOutput = document.getElementById('discoveryLogOutput');
       logSection.classList.remove('hidden');
       logOutput.textContent = `Starting discovery for: ${domainsToRun.join(', ')}\n`;
-      if (domainsToRun.length === 1) {
-        if (vbuId) logOutput.textContent += `VBU ID: ${vbuId}\n`;
-        if (searchTerm) logOutput.textContent += `VBU Search Term: ${searchTerm}\n`;
-      } else {
-        logOutput.textContent += `VBU ID / Search Term: derived per-domain from Settings (domains.json) / domain prefix\n`;
-      }
-      logOutput.textContent += `Options: SkipPP=${skipPP}  SkipTeamMemberships=${skipTM}\n`;
+      if (vbuId) logOutput.textContent += `VBU ID: ${vbuId}\n`;
+      logOutput.textContent += `Options: SkipPP=${skipPP}\n`;
       logOutput.textContent += `Output: ${outputFolder}\n\n`;
 
       startDiscoveryBtn.disabled = true;
-      startDiscoveryBtn.textContent = 'Opening…';
+      startDiscoveryBtn.textContent = 'Running…';
 
-      // Run-Assessment.ps1 is interactive in this build (mode menu + VBU Domain / Search Term /
-      // VBU ID / SPO Admin URL prompts + a final "delete Raw JSON?" prompt) and takes no
-      // parameters, so it can't be streamed into this panel — it's launched in its own visible
-      // PowerShell window instead. The form values below are shown here only as a reminder of
-      // what to type into that window.
+      // search-domain.ps1 (VGMigrations root, restored from _Legacy/) streams its own output
+      // directly - one run per domain, in this same panel, same pattern as every other
+      // streamed script below. The same -BusinessUnitId value is used for every domain in a
+      // multi-domain batch (search-domain.ps1 has no per-domain lookup of its own).
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+
       try {
-        const script = domainsToRun.length === 1
-          ? 'Assessment/Run-Assessment.ps1'
-          : 'Assessment/Run-MultiAssessment.ps1';
-        const result = await window.electronAPI.launchScript(script);
-
-        if (result?.success) {
-          logOutput.textContent += `A PowerShell window has opened for ${script.split('/').pop()}.\n`;
-          logOutput.textContent += `Pick "Run Assessment" on the menu, then enter these at the prompts:\n`;
-          if (domainsToRun.length === 1) {
-            logOutput.textContent += `  VBU Domain      : ${domainsToRun[0]}\n`;
-            if (searchTerm) logOutput.textContent += `  VBU Search Term : ${searchTerm}\n`;
-            if (vbuId)      logOutput.textContent += `  VBU ID          : ${vbuId}\n`;
-          } else {
-            logOutput.textContent += `  One window opens per domain (in order): ${domainsToRun.join(', ')}\n`;
-          }
-          logOutput.textContent += `\nOutput is only visible in that window — nothing streams back here.\n`;
-        } else {
-          logOutput.textContent += `\n✗ Could not open the window: ${result?.error || 'unknown error'}\n`;
+        let lastResult;
+        for (const domain of domainsToRun) {
+          if (domainsToRun.length > 1) logOutput.textContent += `\n=== ${domain} ===\n`;
+          const args = ['-Domain', domain, '-OutputPath', outputFolder];
+          if (vbuId) args.push('-BusinessUnitId', vbuId);
+          if (skipPP) args.push('-SkipPowerPlatform');
+          lastResult = await runStreamingScript('search-domain.ps1', args);
+          if (!lastResult?.success && !continueOnError) break;
         }
+        logOutput.textContent += lastResult?.success ? '\n✓ Discovery complete\n' : `\n✗ Failed (exit ${lastResult?.code})\n`;
       } catch (err) {
         logOutput.textContent += `\n✗ Error: ${err.message}\n`;
       } finally {
+        window.electronAPI.offPsOutput();
         startDiscoveryBtn.disabled = false;
         startDiscoveryBtn.textContent = 'Start Discovery';
       }

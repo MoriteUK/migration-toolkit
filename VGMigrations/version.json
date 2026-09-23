@@ -1,7 +1,15 @@
 {
-  "version": "2.9.153",
+  "version": "2.9.154",
   "releaseDate": "2026-09-23",
   "changelog": [
+    {
+      "version": "2.9.154",
+      "date": "2026-09-23",
+      "changes": [
+        "v2.9.153's discovery-engine revert only fixed discovery-menu.ps1 (a standalone WinForms tool) - the Electron app's own Discovery panel independently hardcodes its launch target in MigrationToolkit-Web/renderer.js and was untouched, so Discovery still launched Assessment/Run-Assessment.ps1 in its own window there, same as before. This is the exact 'wrong app' mistake called out in v2.9.152's changelog, this time caught before it shipped for more than one version",
+        "renderer.js's Discovery panel now streams search-domain.ps1 directly into the panel (window.electronAPI.onPsOutput / runStreamingScript, the same pattern every other panel here already uses) instead of opening Run-Assessment.ps1 in a separate window with a typed-prompt reminder - one run per domain via -Domain/-OutputPath/-BusinessUnitId/-SkipPowerPlatform, looping client-side for a multi-domain batch exactly as it did before v2.9.98. The VBU Search Term field and Skip Team Memberships checkbox are no longer read here - search-domain.ps1 has no equivalent parameters for either"
+      ]
+    },
     {
       "version": "2.9.153",
       "date": "2026-09-23",
