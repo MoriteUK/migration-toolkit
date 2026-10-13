@@ -1434,15 +1434,15 @@ catch {
         $ppAns = 'Y'
     }
     if ($ppAns -match '^[Yy]') {
-        if (-not (Ensure-Module -Name 'Microsoft.PowerApps.Administration.PowerShell' -Optional)) {
-            Write-Log "Skipping upfront Power Platform scan." -Level WARN
-        } else {
-            Write-Log "Launching Power Platform scan upfront."
-            Write-Log "An interactive sign-in window will appear. Sign in with a Power Platform admin account."
+        # The Power Platform module ships its own copy of Microsoft.Identity.Client.dll which
+        # conflicts with the version Microsoft.Graph already loaded into this session.
+        # Workaround: spawn a clean child pwsh.exe process that has no Graph SDK in it.
+        Write-Log "Launching Power Platform scan upfront in isolated child process..."
+        Write-Log "An interactive sign-in window will appear. Sign in with a Power Platform admin account."
 
-            $ppCsvPath = Join-Path $DiscoveryFolder '16_PowerPlatform.csv'
-            $ppLogPath = Join-Path $OutputFolder ("_PowerPlatform_" + (Get-Date -Format 'yyyyMMdd_HHmmss') + ".log")
-            $ppScript  = Join-Path $OutputFolder "_PowerPlatform_scan.ps1"
+        $ppCsvPath = Join-Path $DiscoveryFolder '16_PowerPlatform.csv'
+        $ppLogPath = Join-Path $OutputFolder ("_PowerPlatform_" + (Get-Date -Format 'yyyyMMdd_HHmmss') + ".log")
+        $ppScript  = Join-Path $OutputFolder "_PowerPlatform_scan.ps1"
 
             @'
 param(
@@ -1557,7 +1557,6 @@ catch {
             } finally {
                 if (Test-Path $ppScript) { Remove-Item $ppScript -Force -ErrorAction SilentlyContinue }
             }
-        }
     } else {
         Write-Log "User declined Power Platform scan. Section 16 will be skipped."
         $Script:RunPowerPlatform = $false
@@ -3462,17 +3461,14 @@ try {
     }
 
     if (-not $ppDoneUpfront) {
-        if (-not (Ensure-Module -Name 'Microsoft.PowerApps.Administration.PowerShell' -Optional)) {
-            Write-Log "Skipping mid-run Power Platform scan." -Level WARN
-        } else {
-            # The Power Platform module ships its own copy of Microsoft.Identity.Client.dll which
-            # conflicts with the version Microsoft.Graph already loaded into this session.
-            # Workaround: spawn a clean child pwsh.exe process that has no Graph SDK in it.
-            Write-Log "Spawning isolated PowerShell child process to avoid Microsoft.Identity.Client conflict..."
-            Write-Log "An interactive sign-in prompt may appear in a new window — sign in with a Power Platform admin account."
-            Write-Log "  (Note: section timer below includes the interactive sign-in wait time.)"
+        # The Power Platform module ships its own copy of Microsoft.Identity.Client.dll which
+        # conflicts with the version Microsoft.Graph already loaded into this session.
+        # Workaround: spawn a clean child pwsh.exe process that has no Graph SDK in it.
+        Write-Log "Spawning isolated PowerShell child process to avoid Microsoft.Identity.Client conflict..."
+        Write-Log "An interactive sign-in prompt may appear in a new window — sign in with a Power Platform admin account."
+        Write-Log "  (Note: section timer below includes the interactive sign-in wait time.)"
 
-            $ppCsvPath  = Join-Path $DiscoveryFolder '16_PowerPlatform.csv'
+        $ppCsvPath  = Join-Path $DiscoveryFolder '16_PowerPlatform.csv'
         $ppLogPath  = Join-Path $OutputFolder ("_PowerPlatform_" + (Get-Date -Format 'yyyyMMdd_HHmmss') + ".log")
         $ppScript   = Join-Path $OutputFolder "_PowerPlatform_scan.ps1"
 
@@ -3597,7 +3593,6 @@ catch {
         } finally {
             # Clean up the temp script file
             if (Test-Path $ppScript) { Remove-Item $ppScript -Force -ErrorAction SilentlyContinue }
-        }
         }
     }
 } catch { Write-Log "Error: $($_.Exception.Message.Split("`n")[0])" -Level ERROR }
