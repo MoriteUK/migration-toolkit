@@ -1,7 +1,14 @@
 {
-  "version": "2.9.155",
+  "version": "2.9.156",
   "releaseDate": "2026-10-13",
   "changelog": [
+    {
+      "version": "2.9.156",
+      "date": "2026-10-13",
+      "changes": [
+        "Electron app Discovery sidebar: Added 'Run Assessment' menu item between 'M365 Discovery' and 'Refresh Discovery Cache' that launches Assessment/Run-Assessment.ps1 directly in a new PowerShell window with its interactive workflow - gives quick access to the modern assessment engine from the main app sidebar"
+      ]
+    },
     {
       "version": "2.9.155",
       "date": "2026-10-13",
