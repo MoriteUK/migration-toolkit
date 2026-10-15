@@ -1,7 +1,14 @@
 {
-  "version": "2.9.160",
+  "version": "2.9.161",
   "releaseDate": "2026-10-15",
   "changelog": [
+    {
+      "version": "2.9.161",
+      "date": "2026-10-15",
+      "changes": [
+        "Rename Domain Objects: Added cmdlet availability check for Remove-AcceptedDomain - now provides helpful error message and manual removal instructions via M365 Admin Center instead of cryptic 'cmdlet not recognized' error when Exchange Administrator role is missing"
+      ]
+    },
     {
       "version": "2.9.160",
       "date": "2026-10-15",
