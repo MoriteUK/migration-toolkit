@@ -1,7 +1,14 @@
 {
-  "version": "2.9.159",
+  "version": "2.9.160",
   "releaseDate": "2026-10-15",
   "changelog": [
+    {
+      "version": "2.9.160",
+      "date": "2026-10-15",
+      "changes": [
+        "Settings dialog: Removed confirmation alert and added automatic page reload after clicking Save All - settings now apply immediately with a cleaner UX"
+      ]
+    },
     {
       "version": "2.9.159",
       "date": "2026-10-15",
