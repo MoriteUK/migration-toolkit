@@ -3255,11 +3255,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
         const selectedDir = result.filePaths[0];
         const mapFile = onedriveMappingFile?.value?.trim() || '';
-        const baseName = mapFile
-          ? require('path').basename(mapFile, require('path').extname(mapFile))
-          : 'mapping';
-        const fileName = `${baseName}_provisioned.csv`;
-        const fullPath = require('path').join(selectedDir, fileName);
+
+        // Extract base filename without extension
+        let baseName = 'mapping';
+        if (mapFile) {
+          const fileName = mapFile.split(/[\\/]/).pop(); // Get filename from path
+          const nameWithoutExt = fileName.replace(/\.[^.]+$/, ''); // Remove extension
+          if (nameWithoutExt) baseName = nameWithoutExt;
+        }
+
+        const exportFileName = `${baseName}_provisioned.csv`;
+        const fullPath = selectedDir.endsWith('\\')
+          ? `${selectedDir}${exportFileName}`
+          : `${selectedDir}\\${exportFileName}`;
+
         onedriveExportClean.value = fullPath;
       }
     });
