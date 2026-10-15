@@ -1,0 +1,40 @@
+{
+  "version": "2.9.156",
+  "releaseDate": "2026-10-13",
+  "changelog": [
+    {
+      "version": "2.9.156",
+      "date": "2026-10-13",
+      "changes": [
+        "Electron app Discovery sidebar: Added 'Run Assessment' menu item between 'M365 Discovery' and 'Refresh Discovery Cache' that launches Assessment/Run-Assessment.ps1 directly in a new PowerShell window with its interactive workflow - gives quick access to the modern assessment engine from the main app sidebar"
+      ]
+    },
+    {
+      "version": "2.9.155",
+      "date": "2026-10-13",
+      "changes": [
+        "Discovery menu (discovery-menu.ps1): Added a third scan scope option 'Run Assessment (new)' alongside Single domain and Multiple domains - launches the modern Run-Assessment.ps1 workflow directly in a clean PowerShell window with its interactive mode menu and prompts, giving users direct access to the new assessment engine without needing domain/search-term pre-entry. Domain-specific options (VBU ID, Search Term, Output folder, SPO Admin URL, Skip checkboxes) are hidden when this mode is selected since the script handles all inputs interactively",
+        "Fixed Power Platform module loading conflict in discovery (search-domain.ps1): Removed Ensure-Module pre-check from both upfront and mid-run Power Platform scans that was trying to import Microsoft.PowerApps.Administration.PowerShell in the main session (where Microsoft.Graph is already loaded), causing Microsoft.Identity.Client assembly version conflicts. Both scans now spawn the isolated child pwsh.exe process directly without the pre-check, so the Power Platform module imports cleanly in its own session with no Graph SDK present"
+      ]
+    },
+    {
+      "version": "2.9.154",
+      "date": "2026-09-23",
+      "changes": [
+        "v2.9.153's discovery-engine revert only fixed discovery-menu.ps1 (a standalone WinForms tool) - the Electron app's own Discovery panel independently hardcodes its launch target in MigrationToolkit-Web/renderer.js and was untouched, so Discovery still launched Assessment/Run-Assessment.ps1 in its own window there, same as before. This is the exact 'wrong app' mistake called out in v2.9.152's changelog, this time caught before it shipped for more than one version",
+        "renderer.js's Discovery panel now streams search-domain.ps1 directly into the panel (window.electronAPI.onPsOutput / runStreamingScript, the same pattern every other panel here already uses) instead of opening Run-Assessment.ps1 in a separate window with a typed-prompt reminder - one run per domain via -Domain/-OutputPath/-BusinessUnitId/-SkipPowerPlatform, looping client-side for a multi-domain batch exactly as it did before v2.9.98. The VBU Search Term field and Skip Team Memberships checkbox are no longer read here - search-domain.ps1 has no equivalent parameters for either"
+      ]
+    },
+    {
+      "version": "2.9.153",
+      "date": "2026-09-23",
+      "changes": [
+        "Discovery engine: reverted discovery-menu.ps1 to the pre-v2.9.98 version (launches search-domain.ps1 / run-multiple-domains.ps1, restored to the VGMigrations root from _Legacy/ where they were left untouched) - deliberate, explicitly requested revert. Live server run of the v2.9.128 modular engine hit two separate failures in the same session: Connect-SPOService not recognized (Microsoft.Online.SharePoint.PowerShell installed via pwsh7's Install-Module -Scope CurrentUser lands under Documents\\PowerShell\\Modules, a path the separate Windows PowerShell 5.1 process that SharePoint.psm1's -UseWindowsPowerShell proxies through never scans - Get-Module -ListAvailable in the pwsh7 session itself still found it fine, so the prerequisite check falsely reported 'present'), and a Graph connection crash ('Method not found: ...BaseAbstractApplicationBuilder.WithLogging...', an MSAL/Identity.Client assembly-version conflict against ExchangeOnlineManagement, which had already connected successfully in the same process moments earlier). search-domain.ps1 avoids both: it imports the SPO module directly under pwsh7 (no WinPS proxy) and runs its SPO connection in an isolated child process, and separately pins Microsoft.Graph.Authentication to 2.33.0 with Exchange -DisableWAM",
+        "Also fixed the same SPO WinPS-visibility false-positive in the (now unused by the GUI, but left in place) modular engine's Assessment/Modules/Prerequisites.psm1 - both the presence check and the install now go through a real powershell.exe instead of trusting the pwsh7 session's own Get-Module -ListAvailable",
+        "Assessment/Run-Assessment.ps1 and Run-MultiAssessment.ps1 (not currently launched by discovery-menu.ps1, but kept working for anyone invoking them directly) now accept -VbuDomain/-VbuSearchTerm/-VbuId/-SharePointAdminUrl/-OutputPath instead of only prompting interactively; 'Generate Mapping Files' removed from Run-Assessment.ps1's mode menu (Invoke-MappingFileGeneration and its branch left in place, just unreachable from the menu)",
+        "fly-connector.js (AvePoint Fly connection automation): fixed a ReferenceError crashing Microsoft Teams Chat connection creation (a block-scoped variable was read outside the block it was declared in), fixed the Connections-page navigation retry logic that was toggling the Settings nav menu closed instead of leaving it open on a retry (hiding the Connections item and guaranteeing the fallback selector ran - which itself only matched the literal text 'Connection', never the real 'Connections' label, also fixed), and added a fast-fail check for Fly's own 'Select at least one authentication method to proceed' validation error immediately after clicking Save instead of sitting through a 90-second timeout chain before failing anyway",
+        "New-AzureAppRegistration.ps1: fixed the credentials text-file save assuming $env:USERPROFILE\\Desktop, which doesn't exist when Desktop is OneDrive-redirected (Known Folder Move) - now resolves the real Desktop path via [Environment]::GetFolderPath('Desktop')"
+      ]
+    }
+  ]
+}

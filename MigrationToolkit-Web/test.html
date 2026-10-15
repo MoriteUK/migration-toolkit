@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 40px;
+      background: #f5f7fa;
+    }
+    button {
+      padding: 20px 40px;
+      font-size: 16px;
+      background: #0064b4;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    button:hover {
+      background: #004e98;
+    }
+    .status {
+      margin: 20px 0;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      border: 2px solid #e0e4eb;
+    }
+  </style>
+</head>
+<body>
+  <h1>Migration Toolkit - Debug Test</h1>
+
+  <div class="status">
+    <h3>Status:</h3>
+    <p id="status">Checking...</p>
+  </div>
+
+  <button onclick="testAPI()">Test electronAPI</button>
+  <button onclick="testLaunch()">Test Script Launch</button>
+  <button onclick="testClose()">Test Close</button>
+
+  <div class="status">
+    <h3>Console Output:</h3>
+    <pre id="console"></pre>
+  </div>
+
+  <script>
+    const output = document.getElementById('console');
+    const status = document.getElementById('status');
+
+    function log(msg) {
+      console.log(msg);
+      output.textContent += msg + '\n';
+    }
+
+    // Check on load
+    window.addEventListener('DOMContentLoaded', () => {
+      log('DOM Loaded');
+
+      if (window.electronAPI) {
+        status.textContent = '✓ electronAPI is available';
+        status.style.color = 'green';
+        log('✓ electronAPI found');
+        log('Available methods: ' + Object.keys(window.electronAPI).join(', '));
+      } else {
+        status.textContent = '✗ electronAPI NOT available';
+        status.style.color = 'red';
+        log('✗ electronAPI is undefined');
+        log('This means preload.js is not working');
+      }
+    });
+
+    async function testAPI() {
+      log('\nTesting electronAPI...');
+      if (!window.electronAPI) {
+        log('ERROR: electronAPI not available');
+        alert('electronAPI not available! Check preload.js');
+        return;
+      }
+      log('✓ electronAPI is available');
+      log('Methods: ' + Object.keys(window.electronAPI).join(', '));
+    }
+
+    async function testLaunch() {
+      log('\nTesting script launch...');
+      try {
+        if (!window.electronAPI) {
+          throw new Error('electronAPI not available');
+        }
+
+        log('Calling launchScript("menu.ps1")...');
+        const result = await window.electronAPI.launchScript('menu.ps1');
+        log('Result: ' + JSON.stringify(result, null, 2));
+
+        if (result.success) {
+          alert('✓ Script launched successfully!');
+        } else {
+          alert('✗ Script failed: ' + result.error);
+        }
+      } catch (error) {
+        log('ERROR: ' + error.message);
+        log('Stack: ' + error.stack);
+        alert('Error: ' + error.message);
+      }
+    }
+
+    function testClose() {
+      log('\nTesting window.close()...');
+      window.close();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# Node modules (both sub-projects)
+node_modules/
+
+# Electron build output
+MigrationToolkit-Web/dist/
+
+# Log files
+*.log
+
+# Claude Code project files (not part of the application)
+.claude/
+
+# Playwright auth session (contains live auth tokens — never commit)
+VGMigrations/auth/
+
+# Tenant-specific data files (large, customer-specific — excluded from repo)
+VGMigrations/tenant-sites.json
+VGMigrations/tenant-sites.meta.json
+VGMigrations/domains.json
+
+# Script output directories
+VGMigrations/logs/
+VGMigrations/reports/
+
+# OS artefacts
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor
+.vscode/
+*.suo
+*.user

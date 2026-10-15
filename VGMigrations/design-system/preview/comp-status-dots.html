@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0}
+  body{background:#fff;font-family:var(--font-ui);padding:22px;color:#1c1c20}
+  .row{display:flex;gap:28px;flex-wrap:wrap}
+  .dot{display:flex;align-items:center;gap:9px;font-size:12.5px}
+  .dot b{font-weight:600}
+  .d{width:13px;height:13px;border-radius:50%}
+  .sq{width:12px;height:12px}
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="dot"><span class="d" style="background:#129b3c"></span><b>Connected</b></div>
+    <div class="dot"><span class="d" style="background:#c38700"></span><b>Checking…</b></div>
+    <div class="dot"><span class="d" style="background:#c31e1e"></span><b>No credentials</b></div>
+    <div class="dot"><span class="d" style="background:#afb6c3"></span><b>Idle</b></div>
+  </div>
+  <p style="font-size:11.5px;color:#646c78;margin-top:18px">Status uses a <code style="font-family:var(--font-mono)">●</code> glyph (or 12px square in the footer bar). Green = connected/OK, amber = checking/warning, red = error, grey = idle. Same four colours drive the log level tags and grid row tints.</p>
+</body>
+</html>

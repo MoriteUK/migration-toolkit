@@ -1,0 +1,214 @@
+#Requires -Version 7.0
+<#
+.SYNOPSIS
+    Creates an Azure AD App Registration for AvePoint Fly
+.DESCRIPTION
+    Creates an app registration with required Microsoft Graph and SharePoint permissions
+.PARAMETER TenantId
+    Target tenant ID where the app will be registered
+.PARAMETER AppName
+    Name for the application (default: "AvePoint Fly Migration")
+.PARAMETER Interactive
+    Use interactive browser authentication
+.EXAMPLE
+    .\New-AzureAppRegistration.ps1 -TenantId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -Interactive
+#>
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$TenantId,
+
+    [Parameter(Mandatory=$false)]
+    [string]$AppName = "AvePoint Fly Migration",
+
+    [Parameter(Mandatory=$false)]
+    [switch]$Interactive,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipSavePrompt
+)
+
+Write-Host "`n╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║    Azure AD App Registration for AvePoint Fly            ║" -ForegroundColor Cyan
+Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+
+Write-Host "`nTenant ID: $TenantId" -ForegroundColor White
+Write-Host "App Name: $AppName" -ForegroundColor White
+
+. (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Applications')
+Write-Host "✓ Microsoft Graph modules loaded" -ForegroundColor Green
+
+# Connect to Microsoft Graph
+Write-Host "`n📡 Connecting to Microsoft Graph — sign in with the browser window that opens..." -ForegroundColor Cyan
+
+try {
+    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All" -ErrorAction Stop
+    Write-Host "`n✓ Connected to tenant: $TenantId" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to connect to Microsoft Graph: $_"
+    Write-Host "`nTroubleshooting:" -ForegroundColor Yellow
+    Write-Host "- Ensure you have 'Application Administrator' or 'Global Administrator' role" -ForegroundColor Gray
+    Write-Host "- Check that the Tenant ID is correct" -ForegroundColor Gray
+    Write-Host "- Make sure you completed the device code authentication" -ForegroundColor Gray
+    exit 1
+}
+
+# Resolve tenant display name
+$tenantName = $TenantId
+try {
+    $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
+    if ($org.DisplayName) { $tenantName = $org.DisplayName }
+    Write-Host "Tenant name: $tenantName" -ForegroundColor Gray
+} catch {
+    Write-Host "Could not resolve tenant name — using tenant ID in filename." -ForegroundColor Gray
+}
+
+# Define required permissions
+Write-Host "`n🔐 Configuring permissions..." -ForegroundColor Cyan
+
+$requiredResourceAccess = @(
+    # Microsoft Graph permissions
+    @{
+        ResourceAppId = "00000003-0000-0000-c000-000000000000" # Microsoft Graph
+        ResourceAccess = @(
+            @{ Id = "9e3f62cf-ca93-4989-b6ce-bf83c28f9fe8"; Type = "Role" }  # RoleManagement.ReadWrite.Directory
+            @{ Id = "19dbc75e-c2e2-444c-a770-ec69d8559fc7"; Type = "Role" }  # Directory.ReadWrite.All
+            @{ Id = "62a82d76-70ea-41e2-9197-370581804d09"; Type = "Role" }  # Group.ReadWrite.All
+            @{ Id = "741f803b-c850-494e-b5df-cde7c675a1ca"; Type = "Role" }  # User.ReadWrite.All
+            @{ Id = "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"; Type = "Role" }  # Application.ReadWrite.All
+            @{ Id = "06b708a9-e830-4db3-a914-8e69da51d44f"; Type = "Role" }  # AppRoleAssignment.ReadWrite.All
+        )
+    }
+    # SharePoint permissions
+    @{
+        ResourceAppId = "00000003-0000-0ff1-ce00-000000000000" # SharePoint
+        ResourceAccess = @(
+            @{ Id = "678536fe-1083-478a-9c59-b99265e6b0d3"; Type = "Role" }  # Sites.FullControl.All
+            @{ Id = "741f803b-c850-494e-b5df-cde7c675a1ca"; Type = "Role" }  # User.ReadWrite.All
+        )
+    }
+)
+
+# Create app registration
+Write-Host "`n📝 Creating app registration..." -ForegroundColor Cyan
+
+try {
+    $app = New-MgApplication `
+        -DisplayName $AppName `
+        -SignInAudience "AzureADMyOrg" `
+        -RequiredResourceAccess $requiredResourceAccess `
+        -ErrorAction Stop
+
+    Write-Host "✓ App registration created" -ForegroundColor Green
+    Write-Host "  Application ID: $($app.AppId)" -ForegroundColor White
+    Write-Host "  Object ID: $($app.Id)" -ForegroundColor White
+
+    # Create client secret
+    Write-Host "`n🔑 Creating client secret..." -ForegroundColor Cyan
+
+    $passwordCred = Add-MgApplicationPassword -ApplicationId $app.Id -PasswordCredential @{
+        DisplayName = "AvePoint Fly Secret"
+        EndDateTime = (Get-Date).AddYears(2)
+    } -ErrorAction Stop
+
+    Write-Host "✓ Client secret created" -ForegroundColor Green
+    Write-Host "  Expires: $($passwordCred.EndDateTime)" -ForegroundColor Gray
+
+    # Display results — use Write-Output so the secret is guaranteed on stdout
+    Write-Output ""
+    Write-Output "========================================================"
+    Write-Output "  App Registration Created Successfully"
+    Write-Output "========================================================"
+    Write-Output ""
+    Write-Output "IMPORTANT: Copy these credentials — the secret is only shown once."
+    Write-Output "--------------------------------------------------------"
+    Write-Output ""
+    Write-Output "Tenant ID:"
+    Write-Output "  $TenantId"
+    Write-Output ""
+    Write-Output "Application (Client) ID:"
+    Write-Output "  $($app.AppId)"
+    Write-Output ""
+    Write-Output "Client Secret:"
+    Write-Output "  $($passwordCred.SecretText)"
+    Write-Output ""
+    Write-Output "Secret Expiry:"
+    Write-Output "  $($passwordCred.EndDateTime)"
+    Write-Output ""
+    Write-Output "--------------------------------------------------------"
+
+    # Save credentials to a file and signal Electron to open it
+    $safeTenantName = $tenantName -replace '[\\/:*?"<>|]', '_'
+    $notepadPath = Join-Path $env:USERPROFILE "Desktop\AppReg_${safeTenantName}_$($app.AppId.Substring(0,8)).txt"
+    $notepadContent = @"
+AvePoint Fly App Registration Credentials
+Created: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+Tenant Name: $tenantName
+App Name: $AppName
+========================================
+
+Tenant ID:
+  $TenantId
+
+Application (Client) ID:
+  $($app.AppId)
+
+Client Secret:
+  $($passwordCred.SecretText)
+
+Secret Expiry:
+  $($passwordCred.EndDateTime)
+
+========================================
+NEXT STEPS:
+1. Grant admin consent in Azure Portal:
+   https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/CallAnAPI/appId/$($app.AppId)
+2. Enter the Client ID and Secret in Migration Toolkit > Settings > Config tab
+3. Test the connection using the 'Test Connection' button
+
+IMPORTANT: Delete this file once you have saved the credentials securely.
+"@
+    Set-Content -Path $notepadPath -Value $notepadContent -Encoding UTF8
+    Write-Output "Credentials file: $notepadPath"
+    Write-Output ""
+    # Signal the Electron app to open the file — do not remove this line
+    Write-Output "##OPEN_FILE:$notepadPath##"
+
+    # Save to config
+    $save = if ($SkipSavePrompt) { 'N' } else {
+        Write-Host "`n💾 Do you want to save these credentials to Migration Toolkit config? (Y/N): " -ForegroundColor Cyan -NoNewline
+        Read-Host
+    }
+
+    if ($save -eq 'Y' -or $save -eq 'y') {
+        $configPath = Join-Path $env:APPDATA "FlyMigration\config.json"
+        $configDir = Split-Path $configPath
+
+        if (-not (Test-Path $configDir)) {
+            New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+        }
+
+        $config = @{}
+        if (Test-Path $configPath) {
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json -AsHashtable
+        }
+
+        $config.TenantId = $TenantId
+        $config.ClientId = $app.AppId
+        # Note: Secret will be encrypted when saved via UI
+
+        $config | ConvertTo-Json -Depth 10 | Set-Content $configPath -Force
+        Write-Host "✓ Credentials saved to config (encrypt secret via Settings)" -ForegroundColor Green
+    }
+
+    Write-Host "`n⚠️  NEXT STEPS:" -ForegroundColor Yellow
+    Write-Host "1. In Azure Portal, grant admin consent for the API permissions" -ForegroundColor White
+    Write-Host "   Portal URL: https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/CallAnAPI/appId/$($app.AppId)" -ForegroundColor Gray
+    Write-Host "2. Enter the Client ID and Secret in Migration Toolkit > Settings > Config tab" -ForegroundColor White
+    Write-Host "3. Test the connection using the 'Test Connection' button" -ForegroundColor White
+
+} catch {
+    Write-Error "Failed to create app registration: $_"
+    exit 1
+} finally {
+    Disconnect-MgGraph -ErrorAction SilentlyContinue
+}
