@@ -3184,7 +3184,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const onedriveColumnOverride    = document.getElementById('onedriveColumnOverride');
   const onedriveWhatIf            = document.getElementById('onedriveWhatIf');
   const onedriveCheckExisting     = document.getElementById('onedriveCheckExisting');
-  const onedriveSkipProvisioned   = document.getElementById('onedriveSkipProvisioned');
   const onedriveExportClean       = document.getElementById('onedriveExportClean');
   const onedriveExportCleanBrowse = document.getElementById('onedriveExportCleanBrowse');
   const provisionOneDriveLog      = document.getElementById('provisionOneDriveLog');
@@ -3194,20 +3193,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!provisionOneDriveLogPre) return;
     provisionOneDriveLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
     provisionOneDriveLogPre.scrollTop = provisionOneDriveLogPre.scrollHeight;
-  }
-
-  // Handle checkbox dependencies
-  if (onedriveCheckExisting && onedriveSkipProvisioned) {
-    onedriveCheckExisting.addEventListener('change', () => {
-      if (!onedriveCheckExisting.checked) {
-        onedriveSkipProvisioned.checked = false;
-        onedriveSkipProvisioned.disabled = true;
-      } else {
-        onedriveSkipProvisioned.disabled = false;
-      }
-    });
-    // Initialize state
-    onedriveSkipProvisioned.disabled = !onedriveCheckExisting.checked;
   }
 
   if (provisionOneDriveBtn) {
@@ -3230,7 +3215,6 @@ document.addEventListener('DOMContentLoaded', () => {
         args.push('-CheckExisting');
         const exportPath = onedriveExportClean?.value?.trim();
         if (exportPath) args.push('-ExportProvisioned', exportPath);
-        if (onedriveSkipProvisioned?.checked) args.push('-SkipProvisioned');
       }
 
       window.electronAPI.onPsOutput(appendProvLog);

@@ -1076,16 +1076,11 @@
 
           <div class="form-group-tight" style="border-top:1px solid #E5E7EB; padding-top:10px; margin-top:8px;">
             <label class="form-label">Provisioning Options</label>
-            <div style="display:flex; flex-direction:column; gap:6px;">
-              <label class="form-checkbox">
-                <input type="checkbox" id="onedriveCheckExisting">
-                <span style="font-size:12px;">Check which OneDrives already exist before provisioning</span>
-              </label>
-              <label class="form-checkbox" style="margin-left:20px;">
-                <input type="checkbox" id="onedriveSkipProvisioned">
-                <span style="font-size:12px;">Skip provisioning for users who already have OneDrive (requires "Check existing")</span>
-              </label>
-            </div>
+            <label class="form-checkbox">
+              <input type="checkbox" id="onedriveCheckExisting">
+              <span style="font-size:12px;">Check existing OneDrives and auto-provision missing ones</span>
+            </label>
+            <small class="form-help">When enabled: checks which OneDrives exist, exports them to CSV, and automatically provisions only the missing ones</small>
           </div>
 
           <div class="form-group-tight">

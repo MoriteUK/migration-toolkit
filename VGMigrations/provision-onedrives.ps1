@@ -27,12 +27,11 @@
     Preview only — list UPNs that would be submitted without making changes.
 .PARAMETER CheckExisting
     Check which OneDrives are already provisioned before queuing new ones. Requires Microsoft Graph
-    connection with Sites.ReadWrite.All scope.
+    connection with Sites.ReadWrite.All scope. Automatically provisions ONLY the OneDrives that don't
+    exist yet (skips already-provisioned ones).
 .PARAMETER ExportProvisioned
     When combined with -CheckExisting, exports a filtered CSV containing only rows where OneDrive
     already exists. This CSV can be used in Fly to select and start the migration.
-.PARAMETER SkipProvisioned
-    When combined with -CheckExisting, skips provisioning for users who already have OneDrive.
 #>
 param(
     [Parameter(Mandatory=$true)]  [string]$MappingFile,
@@ -40,8 +39,7 @@ param(
     [Parameter(Mandatory=$false)] [string]$Column = "",
     [Parameter(Mandatory=$false)] [switch]$WhatIf,
     [Parameter(Mandatory=$false)] [switch]$CheckExisting,
-    [Parameter(Mandatory=$false)] [string]$ExportProvisioned = "",
-    [Parameter(Mandatory=$false)] [switch]$SkipProvisioned
+    [Parameter(Mandatory=$false)] [string]$ExportProvisioned = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -161,17 +159,13 @@ if ($CheckExisting) {
         Write-Host "This CSV can now be used in Fly to select and start the migration." -ForegroundColor Cyan
     }
 
-    # Update the list to provision based on SkipProvisioned flag
-    if ($SkipProvisioned) {
-        $upns = $notProvisionedUpns
-        if ($upns.Count -eq 0) {
-            Write-Host "`nAll OneDrives already provisioned — nothing to queue." -ForegroundColor Green
-            exit 0
-        }
-        Write-Host "`nWill queue provisioning for $($upns.Count) user(s) (skipping already provisioned)." -ForegroundColor Cyan
-    } else {
-        Write-Host "`nWill queue provisioning for all $($upns.Count) user(s) (including already provisioned)." -ForegroundColor Cyan
+    # When checking existing, only provision the ones that don't exist yet
+    $upns = $notProvisionedUpns
+    if ($upns.Count -eq 0) {
+        Write-Host "`nAll OneDrives already provisioned — nothing to queue." -ForegroundColor Green
+        exit 0
     }
+    Write-Host "`nWill queue provisioning for $($upns.Count) user(s) that don't have OneDrive yet." -ForegroundColor Cyan
 }
 
 if ($WhatIf) {
