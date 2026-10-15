@@ -162,6 +162,15 @@ function Write-FlyTemplateFile {
         throw
     }
 
+    # Also export a CSV version for scripts that need .csv
+    $csvPath = $OutputPath -replace '\.xlsx$', '.csv'
+    try {
+        $Rows | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8 -ErrorAction Stop
+        Write-Host ($PREFIX_OK + "$Label CSV: $csvPath") -ForegroundColor DarkGray
+    } catch {
+        Write-Host ($PREFIX_WARN + "$Label - CSV export failed: $($_.Exception.Message)") -ForegroundColor Yellow
+    }
+
     Write-ProgressLine -Label $Label -Count $count
 }
 
