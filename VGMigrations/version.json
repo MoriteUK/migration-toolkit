@@ -1,7 +1,14 @@
 {
-  "version": "2.9.161",
+  "version": "2.9.162",
   "releaseDate": "2026-10-15",
   "changelog": [
+    {
+      "version": "2.9.162",
+      "date": "2026-10-15",
+      "changes": [
+        "Rename Domain Objects: Added optional Admin Account field to force login with specific Exchange Administrator account - disconnects existing session and prompts for fresh login with specified UPN. Use this when your current account lacks Exchange Administrator permissions needed to remove accepted domains."
+      ]
+    },
     {
       "version": "2.9.161",
       "date": "2026-10-15",
