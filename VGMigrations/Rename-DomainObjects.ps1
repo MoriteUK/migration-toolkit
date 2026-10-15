@@ -263,19 +263,27 @@ if (Should-Process '01_AcceptedDomains.csv') {
         $rows = @(Import-Csv -Path $csvPath -Encoding UTF8)
         Write-Host "--- Remove domain from tenant (Accepted Domains): $($rows.Count) item(s) ---"
         if ($rows.Count -gt 0 -and ($WhatIf -or (Connect-EXOIfNeeded))) {
-            $removable = @($rows | Where-Object { $_.IsDefault -ne 'True' })
-            $skipCount = $rows.Count - $removable.Count
-            if ($skipCount -gt 0) { Write-Host "  Skipping $skipCount default/initial domain(s)" }
-            $ok = 0; $fail = 0
-            foreach ($r in $removable) {
-                $name = $r.DomainName
-                if ($WhatIf) { Write-Host "  WhatIf : remove domain $name from tenant"; $ok++; continue }
-                try {
-                    Remove-AcceptedDomain -Identity $name -Confirm:$false -ErrorAction Stop
-                    Write-Host "  Removed domain from tenant: $name" -ForegroundColor Green; $ok++
-                } catch { Write-Host "  FAILED : $name — $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red; $fail++ }
+            # Check if Remove-AcceptedDomain cmdlet is available
+            $hasCmdlet = Get-Command Remove-AcceptedDomain -ErrorAction SilentlyContinue
+            if (-not $hasCmdlet -and -not $WhatIf) {
+                Write-Host "  SKIPPED: Remove-AcceptedDomain cmdlet not available (requires Exchange Administrator role)" -ForegroundColor Yellow
+                Write-Host "  You may need to remove the accepted domain manually via M365 Admin Center:" -ForegroundColor Yellow
+                Write-Host "  https://admin.microsoft.com/#/Domains" -ForegroundColor Cyan
+            } else {
+                $removable = @($rows | Where-Object { $_.IsDefault -ne 'True' })
+                $skipCount = $rows.Count - $removable.Count
+                if ($skipCount -gt 0) { Write-Host "  Skipping $skipCount default/initial domain(s)" }
+                $ok = 0; $fail = 0
+                foreach ($r in $removable) {
+                    $name = $r.DomainName
+                    if ($WhatIf) { Write-Host "  WhatIf : remove domain $name from tenant"; $ok++; continue }
+                    try {
+                        Remove-AcceptedDomain -Identity $name -Confirm:$false -ErrorAction Stop
+                        Write-Host "  Removed domain from tenant: $name" -ForegroundColor Green; $ok++
+                    } catch { Write-Host "  FAILED : $name — $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red; $fail++ }
+                }
+                Write-Host "  Accepted Domains: $ok removed  |  $fail failed"
             }
-            Write-Host "  Accepted Domains: $ok removed  |  $fail failed"
         }
         Write-Host ''
     }
