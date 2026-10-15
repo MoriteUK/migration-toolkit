@@ -1,7 +1,14 @@
 {
-  "version": "2.9.158",
+  "version": "2.9.159",
   "releaseDate": "2026-10-15",
   "changelog": [
+    {
+      "version": "2.9.159",
+      "date": "2026-10-15",
+      "changes": [
+        "Mapping file generation: Now automatically creates CSV versions alongside each XLSX mapping file - both formats written to the FLY output folder with matching filenames ({name}-mapping.xlsx + {name}-mapping.csv). Fixes import workflows that expect .csv but were only getting .xlsx"
+      ]
+    },
     {
       "version": "2.9.158",
       "date": "2026-10-15",
