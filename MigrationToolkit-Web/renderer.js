@@ -2410,13 +2410,9 @@ async function saveSettings() {
     const result = await window.electronAPI.saveConfig(config);
 
     if (result.success) {
-      alert('Settings saved successfully');
       closeSettings();
-
-      // Reload customer data in all views that cache it
-      if (typeof loadCustomerDomains === 'function') loadCustomerDomains();
-      if (typeof loadMonitorProjects === 'function') loadMonitorProjects();
-      if (typeof loadConnectionsCustomers === 'function') loadConnectionsCustomers();
+      // Automatically reload the app to apply changes
+      location.reload();
     } else {
       alert(`Failed to save settings:\n${result.error}`);
     }
