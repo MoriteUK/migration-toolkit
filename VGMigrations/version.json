@@ -1,7 +1,15 @@
 {
-  "version": "2.9.156",
-  "releaseDate": "2026-10-13",
+  "version": "2.9.157",
+  "releaseDate": "2026-10-15",
   "changelog": [
+    {
+      "version": "2.9.157",
+      "date": "2026-10-15",
+      "changes": [
+        "Fixed Electron app Discovery panel to actually use search-domain.ps1 with streaming output instead of launching Run-Assessment.ps1 in a separate window - the v2.9.154 changelog claimed this was fixed but renderer.js still had the old code. Now streams search-domain.ps1 directly into the panel via window.electronAPI.onPsOutput, loops client-side for multi-domain batches, passes -Domain/-OutputPath/-BusinessUnitId/-SkipPowerPlatform parameters, and respects the Continue on Error checkbox",
+        "Fixed corrupted version.json file that was missing closing JSON brackets, causing update checks to fail with 'Version string portion was too short or too long' error"
+      ]
+    },
     {
       "version": "2.9.156",
       "date": "2026-10-13",

@@ -388,36 +388,53 @@ document.addEventListener('DOMContentLoaded', async () => {
       logOutput.textContent += `Output: ${outputFolder}\n\n`;
 
       startDiscoveryBtn.disabled = true;
-      startDiscoveryBtn.textContent = 'Opening…';
+      startDiscoveryBtn.textContent = 'Running...';
 
-      // Run-Assessment.ps1 is interactive in this build (mode menu + VBU Domain / Search Term /
-      // VBU ID / SPO Admin URL prompts + a final "delete Raw JSON?" prompt) and takes no
-      // parameters, so it can't be streamed into this panel — it's launched in its own visible
-      // PowerShell window instead. The form values below are shown here only as a reminder of
-      // what to type into that window.
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+
       try {
-        const script = domainsToRun.length === 1
-          ? 'Assessment/Run-Assessment.ps1'
-          : 'Assessment/Run-MultiAssessment.ps1';
-        const result = await window.electronAPI.launchScript(script);
+        // Run search-domain.ps1 for each domain (streams output into panel)
+        for (let i = 0; i < domainsToRun.length; i++) {
+          const domain = domainsToRun[i];
 
-        if (result?.success) {
-          logOutput.textContent += `A PowerShell window has opened for ${script.split('/').pop()}.\n`;
-          logOutput.textContent += `Pick "Run Assessment" on the menu, then enter these at the prompts:\n`;
-          if (domainsToRun.length === 1) {
-            logOutput.textContent += `  VBU Domain      : ${domainsToRun[0]}\n`;
-            if (searchTerm) logOutput.textContent += `  VBU Search Term : ${searchTerm}\n`;
-            if (vbuId)      logOutput.textContent += `  VBU ID          : ${vbuId}\n`;
-          } else {
-            logOutput.textContent += `  One window opens per domain (in order): ${domainsToRun.join(', ')}\n`;
+          if (i > 0) {
+            logOutput.textContent += `\n${'═'.repeat(80)}\n`;
           }
-          logOutput.textContent += `\nOutput is only visible in that window — nothing streams back here.\n`;
-        } else {
-          logOutput.textContent += `\n✗ Could not open the window: ${result?.error || 'unknown error'}\n`;
+          logOutput.textContent += `Starting discovery ${i + 1}/${domainsToRun.length}: ${domain}\n\n`;
+
+          const args = ['-Domain', domain, '-OutputPath', outputFolder];
+
+          if (vbuId && domainsToRun.length === 1) {
+            args.push('-BusinessUnitId', vbuId);
+          }
+
+          if (skipPP) {
+            args.push('-SkipPowerPlatform');
+          }
+
+          const result = await runStreamingScript('search-domain.ps1', args);
+
+          if (result?.success) {
+            logOutput.textContent += `\n✓ Discovery complete for ${domain}\n`;
+          } else {
+            logOutput.textContent += `\n✗ Discovery failed for ${domain} (exit ${result?.code})\n`;
+            if (!continueOnError) {
+              logOutput.textContent += `\nStopping due to error (Continue on Error was not checked)\n`;
+              break;
+            }
+          }
         }
+
+        logOutput.textContent += `\n${'═'.repeat(80)}\n`;
+        logOutput.textContent += `All discovery runs complete.\n`;
+
       } catch (err) {
         logOutput.textContent += `\n✗ Error: ${err.message}\n`;
       } finally {
+        window.electronAPI.offPsOutput();
         startDiscoveryBtn.disabled = false;
         startDiscoveryBtn.textContent = 'Start Discovery';
       }
