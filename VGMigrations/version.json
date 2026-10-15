@@ -1,7 +1,18 @@
 {
-  "version": "2.9.157",
+  "version": "2.9.158",
   "releaseDate": "2026-10-15",
   "changelog": [
+    {
+      "version": "2.9.158",
+      "date": "2026-10-15",
+      "changes": [
+        "OneDrive provisioning: Added -CheckExisting option to provision-onedrives.ps1 that checks which OneDrives already exist via Microsoft Graph, exports them to CSV (for Fly migration start), and automatically provisions only the missing ones - combines check + export + provision workflow into one fast async operation",
+        "OneDrive provisioning UI: Export CSV browse changed from file picker to folder picker with auto-generated filename ({mapping}_provisioned.csv) - simpler workflow",
+        "Discovery (search-domain.ps1): Added Members column to 03_DistributionGroups.csv export with pipe-delimited member email addresses, plus HiddenFromAddressListsEnabled property - required by New-DistributionGroups.ps1 for Create Target DLs workflow. Members are fetched when -IncludeMembers flag is used",
+        "Discovery GUI: Now automatically passes -IncludeMembers flag to search-domain.ps1 - DL membership is always captured without manual flag entry, fixing 'No Members column' error in Create Target DLs",
+        "Fixed OneDrive export folder browser that wasn't working due to require('path') not available in Electron renderer - now uses plain JavaScript string manipulation"
+      ]
+    },
     {
       "version": "2.9.157",
       "date": "2026-10-15",
