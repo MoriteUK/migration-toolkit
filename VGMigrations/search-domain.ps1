@@ -2184,12 +2184,13 @@ try {
 
         if ($hits.Count -gt 0) {
             $matchedGroups.Add([PSCustomObject]@{
-                DisplayName        = $displayName
-                PrimarySmtpAddress = $primarySmtp
-                Alias              = $alias
-                GroupType          = $grp.RecipientTypeDetails
-                ManagedBy          = ($grp.ManagedBy -join '; ')
-                MatchedOn          = $hits -join ', '
+                DisplayName                    = $displayName
+                PrimarySmtpAddress             = $primarySmtp
+                Alias                          = $alias
+                GroupType                      = $grp.RecipientTypeDetails
+                ManagedBy                      = ($grp.ManagedBy -join '; ')
+                HiddenFromAddressListsEnabled  = $grp.HiddenFromAddressListsEnabled
+                MatchedOn                      = $hits -join ', '
             }) | Out-Null
         }
     }
@@ -2209,7 +2210,6 @@ try {
     }
 
     Write-Log "Distribution Groups — $($matchedGroups.Count) match(es) after local filtering."
-    Export-SafeCsv -Path (Join-Path $DiscoveryFolder '03_DistributionGroups.csv') -Data @($matchedGroups) -Label 'Distribution Groups'
 
     if ($IncludeMembers -and $matchedGroups.Count -gt 0) {
         Write-Log "Fetching members for $($matchedGroups.Count) group(s)..." -Level INFO
@@ -2219,6 +2219,8 @@ try {
         foreach ($g in $matchedGroups) {
             $i++
             Write-Progress -Activity "DL Members" -Status "$i / $($matchedGroups.Count): $($g.PrimarySmtpAddress)" -PercentComplete (($i/$matchedGroups.Count)*100)
+
+            $memberEmails = @()
             try {
                 $members = @(Get-DistributionGroupMember -Identity $g.PrimarySmtpAddress -ResultSize Unlimited -WarningAction SilentlyContinue)
                 if (@($members).Count -eq 0) {
@@ -2232,11 +2234,14 @@ try {
                     }) | Out-Null
                 } else {
                     foreach ($m in $members) {
+                        $memberEmail = "$($m.PrimarySmtpAddress)".Trim()
+                        if ($memberEmail) { $memberEmails += $memberEmail }
+
                         $dlMembers.Add([PSCustomObject]@{
                             GroupDisplayName    = $g.DisplayName
                             GroupEmail          = $g.PrimarySmtpAddress
                             MemberDisplayName   = $m.DisplayName
-                            MemberEmail         = $m.PrimarySmtpAddress
+                            MemberEmail         = $memberEmail
                             MemberType          = $m.RecipientType
                             MemberRecipientType = $m.RecipientTypeDetails
                         }) | Out-Null
@@ -2245,12 +2250,24 @@ try {
             } catch {
                 Write-Log "DL member lookup failed for $($g.PrimarySmtpAddress): $($_.Exception.Message.Split("`n")[0])" -Level WARN
             }
+
+            # Add Members column to the group object (pipe-delimited)
+            $g | Add-Member -NotePropertyName 'Members' -NotePropertyValue ($memberEmails -join '|') -Force
         }
         Write-Progress -Activity "DL Members" -Completed
         Export-SafeCsv -Path (Join-Path $DiscoveryFolder '03b_DistributionGroup_Members.csv') -Data @($dlMembers) -Label 'DL Members'
-    } elseif (-not $IncludeMembers) {
-        Write-Log "Member lookup skipped — use -IncludeMembers to include." -Level WARN
+        Write-Log "Members added to Distribution Groups CSV (pipe-delimited in 'Members' column)." -Level INFO
+    } else {
+        # Add empty Members column if not fetching members
+        foreach ($g in $matchedGroups) {
+            $g | Add-Member -NotePropertyName 'Members' -NotePropertyValue '' -Force
+        }
+        if (-not $IncludeMembers) {
+            Write-Log "Member lookup skipped — use -IncludeMembers to include members in the 'Members' column." -Level WARN
+        }
     }
+
+    Export-SafeCsv -Path (Join-Path $DiscoveryFolder '03_DistributionGroups.csv') -Data @($matchedGroups) -Label 'Distribution Groups'
 } catch { Write-Log "Error: $($_.Exception.Message.Split("`n")[0])" -Level ERROR }
 End-Section
 
