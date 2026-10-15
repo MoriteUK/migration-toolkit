@@ -3249,16 +3249,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (onedriveExportCleanBrowse) {
     onedriveExportCleanBrowse.addEventListener('click', async () => {
-      const mapFile = onedriveMappingFile?.value?.trim() || '';
-      const defaultName = mapFile
-        ? mapFile.replace(/(\.[^.]+)$/, '_clean$1')
-        : 'mapping_clean.csv';
-      const result = await window.electronAPI.showSaveDialog({
-        defaultPath: defaultName,
-        filters: [{ name: 'CSV Files', extensions: ['csv'] }, { name: 'All Files', extensions: ['*'] }]
+      const result = await window.electronAPI.showOpenDialog({
+        properties: ['openDirectory']
       });
-      if (!result.canceled && result.filePath) {
-        onedriveExportClean.value = result.filePath;
+      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+        const selectedDir = result.filePaths[0];
+        const mapFile = onedriveMappingFile?.value?.trim() || '';
+        const baseName = mapFile
+          ? require('path').basename(mapFile, require('path').extname(mapFile))
+          : 'mapping';
+        const fileName = `${baseName}_provisioned.csv`;
+        const fullPath = require('path').join(selectedDir, fileName);
+        onedriveExportClean.value = fullPath;
       }
     });
   }
