@@ -13,13 +13,17 @@
     Comma-separated list of CSV filenames to process, or 'all' (default).
 .PARAMETER WhatIf
     Preview only — no changes will be made.
+.PARAMETER UserPrincipalName
+    Optional. Admin account UPN to use for Exchange Online connection (e.g. admin@tenant.onmicrosoft.com).
+    If specified, forces a fresh login with this account.
 #>
 param(
     [Parameter(Mandatory=$true)]  [string]$DiscoveryFolder,
     [Parameter(Mandatory=$true)]  [string]$OldDomain,
     [Parameter(Mandatory=$true)]  [string]$NewDomain,
     [Parameter(Mandatory=$false)] [string]$Sections = 'all',
-    [Parameter(Mandatory=$false)] [switch]$WhatIf
+    [Parameter(Mandatory=$false)] [switch]$WhatIf,
+    [Parameter(Mandatory=$false)] [string]$UserPrincipalName = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,12 +55,28 @@ $script:exoConnected = $false
 
 function Connect-EXOIfNeeded {
     if ($script:exoConnected) { return $true }
-    Write-Host 'Connecting to Exchange Online — sign in when the browser opens...' -ForegroundColor Cyan
+
+    # Disconnect any existing session to force fresh login
+    try { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+
+    $msg = if ($UserPrincipalName) { "Connecting to Exchange Online as $UserPrincipalName — sign in when prompted..." } else { 'Connecting to Exchange Online — sign in when the browser opens...' }
+    Write-Host $msg -ForegroundColor Cyan
+
     $cmds = @('Get-Mailbox','Set-Mailbox','Get-DistributionGroup','Set-DistributionGroup',
               'Get-UnifiedGroup','Set-UnifiedGroup','Get-MailContact','Set-MailContact',
               'Get-Recipient','Remove-AcceptedDomain')
     try {
-        Connect-ExchangeOnline -ShowBanner:$false -CommandName $cmds -DisableWAM -ErrorAction Stop
+        $connectParams = @{
+            ShowBanner  = $false
+            CommandName = $cmds
+            ErrorAction = 'Stop'
+        }
+        if ($UserPrincipalName) {
+            $connectParams.UserPrincipalName = $UserPrincipalName
+        } else {
+            $connectParams.DisableWAM = $true
+        }
+        Connect-ExchangeOnline @connectParams
         $script:exoConnected = $true
         Write-Host 'Exchange Online connected.' -ForegroundColor Green
         return $true

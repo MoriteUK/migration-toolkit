@@ -4097,11 +4097,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const removeRunBtn = document.getElementById('removeRunBtn');
   if (removeRunBtn) {
     removeRunBtn.addEventListener('click', async () => {
-      const folder    = document.getElementById('removeDiscoveryFolder').value.trim();
-      const oldDomain = document.getElementById('removeOldDomain').value.trim();
-      const newDomain = document.getElementById('removeNewDomain').value.trim();
-      const whatIf    = document.getElementById('removeWhatIf').checked;
-      const checked   = [...document.querySelectorAll('.remove-section:checked')].map(cb => cb.value);
+      const folder       = document.getElementById('removeDiscoveryFolder').value.trim();
+      const oldDomain    = document.getElementById('removeOldDomain').value.trim();
+      const newDomain    = document.getElementById('removeNewDomain').value.trim();
+      const adminAccount = document.getElementById('removeAdminAccount')?.value?.trim() || '';
+      const whatIf       = document.getElementById('removeWhatIf').checked;
+      const checked      = [...document.querySelectorAll('.remove-section:checked')].map(cb => cb.value);
 
       if (!folder)    { alert('Please select a Discovery folder.'); return; }
       if (!oldDomain) { alert('Please enter the Old Domain (rename from).'); return; }
@@ -4119,6 +4120,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const args = ['-DiscoveryFolder', folder, '-OldDomain', oldDomain, '-NewDomain', newDomain,
                     '-Sections', checked.join(',')];
       if (whatIf) args.push('-WhatIf');
+      if (adminAccount) args.push('-UserPrincipalName', adminAccount);
 
       window.electronAPI.onPsOutput((text) => {
         logOutput.textContent += text;
