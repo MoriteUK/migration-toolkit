@@ -405,7 +405,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
           logOutput.textContent += `Starting discovery ${i + 1}/${domainsToRun.length}: ${domain}\n\n`;
 
-          const args = ['-Domain', domain, '-OutputPath', outputFolder];
+          const args = ['-Domain', domain, '-OutputPath', outputFolder, '-IncludeMembers'];
 
           if (vbuId && domainsToRun.length === 1) {
             args.push('-BusinessUnitId', vbuId);
