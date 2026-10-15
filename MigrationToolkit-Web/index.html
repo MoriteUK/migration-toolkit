@@ -1074,12 +1074,27 @@
             </div>
           </div>
 
+          <div class="form-group-tight" style="border-top:1px solid #E5E7EB; padding-top:10px; margin-top:8px;">
+            <label class="form-label">Provisioning Options</label>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <label class="form-checkbox">
+                <input type="checkbox" id="onedriveCheckExisting">
+                <span style="font-size:12px;">Check which OneDrives already exist before provisioning</span>
+              </label>
+              <label class="form-checkbox" style="margin-left:20px;">
+                <input type="checkbox" id="onedriveSkipProvisioned">
+                <span style="font-size:12px;">Skip provisioning for users who already have OneDrive (requires "Check existing")</span>
+              </label>
+            </div>
+          </div>
+
           <div class="form-group-tight">
-            <label class="form-label">Export clean CSV <small style="font-weight:normal; color:#6B7280;">(Check Status only — saves rows where OneDrive exists)</small></label>
+            <label class="form-label">Export provisioned users to CSV <small style="font-weight:normal; color:#6B7280;">(saves rows where OneDrive exists)</small></label>
             <div class="input-with-button">
               <input type="text" class="form-input form-input-compact" id="onedriveExportClean" placeholder="Optional — browse to choose save location">
               <button type="button" class="btn btn-secondary btn-compact" id="onedriveExportCleanBrowse">Browse</button>
             </div>
+            <small class="form-help">Works with "Check Status" button or "Start Provisioning" when "Check existing" is enabled</small>
           </div>
 
           <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">

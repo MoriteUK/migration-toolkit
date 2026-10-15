@@ -25,12 +25,23 @@
     Column name to read UPNs from. Auto-detected if omitted.
 .PARAMETER WhatIf
     Preview only — list UPNs that would be submitted without making changes.
+.PARAMETER CheckExisting
+    Check which OneDrives are already provisioned before queuing new ones. Requires Microsoft Graph
+    connection with Sites.ReadWrite.All scope.
+.PARAMETER ExportProvisioned
+    When combined with -CheckExisting, exports a filtered CSV containing only rows where OneDrive
+    already exists. This CSV can be used in Fly to select and start the migration.
+.PARAMETER SkipProvisioned
+    When combined with -CheckExisting, skips provisioning for users who already have OneDrive.
 #>
 param(
     [Parameter(Mandatory=$true)]  [string]$MappingFile,
     [Parameter(Mandatory=$true)]  [string]$AdminUrl,
     [Parameter(Mandatory=$false)] [string]$Column = "",
-    [Parameter(Mandatory=$false)] [switch]$WhatIf
+    [Parameter(Mandatory=$false)] [switch]$WhatIf,
+    [Parameter(Mandatory=$false)] [switch]$CheckExisting,
+    [Parameter(Mandatory=$false)] [string]$ExportProvisioned = "",
+    [Parameter(Mandatory=$false)] [switch]$SkipProvisioned
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,6 +97,82 @@ $dropped = $rows.Count - $upns.Count
 if ($dropped -gt 0) { Write-Warning "$dropped row(s) skipped — blank or invalid UPNs." }
 if ($upns.Count -eq 0) { Write-Error "No valid UPNs found."; exit 1 }
 Write-Host "$($upns.Count) unique UPN(s) ready." -ForegroundColor Green
+
+# Check existing OneDrives if requested
+$provisionedUpns = @()
+$notProvisionedUpns = @()
+
+if ($CheckExisting) {
+    Write-Host "`n=== Checking existing OneDrive status ===" -ForegroundColor Cyan
+
+    # Load Microsoft Graph modules
+    Write-Host "Loading Microsoft Graph modules..." -ForegroundColor Cyan
+    . (Join-Path $PSScriptRoot 'Ensure-GraphModules.ps1') -GraphModules @('Microsoft.Graph.Files')
+    Write-Host "Graph modules loaded." -ForegroundColor Green
+
+    Write-Host "`nConnecting to Microsoft Graph — sign in with the browser window that opens..." -ForegroundColor Cyan
+    try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
+    Connect-MgGraph -Scopes 'Sites.ReadWrite.All','User.Read.All' -ContextScope Process -NoWelcome -ErrorAction Stop
+    $ctx = Get-MgContext
+    Write-Host "Connected to Microsoft Graph as $($ctx.Account) (tenant $($ctx.TenantId))." -ForegroundColor Green
+
+    if ($ctx.Scopes -notcontains 'Sites.ReadWrite.All' -and $ctx.Scopes -notcontains 'Sites.FullControl.All') {
+        Write-Host "WARNING: 'Sites.ReadWrite.All' was not granted — check may be inaccurate. Re-run and approve when prompted." -ForegroundColor Yellow
+    }
+
+    # Check each UPN for OneDrive
+    Write-Host "`nChecking $($upns.Count) UPN(s) for existing OneDrive..." -ForegroundColor Cyan
+    $checkedCount = 0
+    foreach ($upn in $upns) {
+        $checkedCount++
+        Write-Host "  [$checkedCount/$($upns.Count)] Checking $upn..." -NoNewline
+        try {
+            $drive = Get-MgUserDrive -UserId $upn -ErrorAction Stop
+            if ($drive -and $drive.Id) {
+                $provisionedUpns += $upn
+                Write-Host " EXISTS" -ForegroundColor Green
+            } else {
+                $notProvisionedUpns += $upn
+                Write-Host " NOT FOUND" -ForegroundColor Yellow
+            }
+        } catch {
+            $notProvisionedUpns += $upn
+            Write-Host " NOT FOUND" -ForegroundColor Yellow
+        }
+    }
+
+    try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}
+
+    # Summary
+    Write-Host "`n--- Status Summary ---" -ForegroundColor Cyan
+    Write-Host "  Already provisioned: $($provisionedUpns.Count)" -ForegroundColor Green
+    Write-Host "  Not provisioned:     $($notProvisionedUpns.Count)" -ForegroundColor Yellow
+
+    # Export provisioned ones to CSV if requested
+    if ($ExportProvisioned -and $provisionedUpns.Count -gt 0) {
+        $keepSet = @{}
+        foreach ($u in $provisionedUpns) { $keepSet[$u.ToLower()] = $true }
+        $provisionedRows = $rows | Where-Object {
+            $v = if ($_.$col) { $_.$col.ToString().Trim().ToLower() } else { '' }
+            $keepSet.ContainsKey($v)
+        }
+        $provisionedRows | Export-Csv -Path $ExportProvisioned -NoTypeInformation -Encoding UTF8 -ErrorAction Stop
+        Write-Host "`nProvisioned OneDrives exported to: $ExportProvisioned ($($provisionedRows.Count) rows)" -ForegroundColor Green
+        Write-Host "This CSV can now be used in Fly to select and start the migration." -ForegroundColor Cyan
+    }
+
+    # Update the list to provision based on SkipProvisioned flag
+    if ($SkipProvisioned) {
+        $upns = $notProvisionedUpns
+        if ($upns.Count -eq 0) {
+            Write-Host "`nAll OneDrives already provisioned — nothing to queue." -ForegroundColor Green
+            exit 0
+        }
+        Write-Host "`nWill queue provisioning for $($upns.Count) user(s) (skipping already provisioned)." -ForegroundColor Cyan
+    } else {
+        Write-Host "`nWill queue provisioning for all $($upns.Count) user(s) (including already provisioned)." -ForegroundColor Cyan
+    }
+}
 
 if ($WhatIf) {
     Write-Host "`nWhatIf — would submit $($upns.Count) UPN(s) to Request-SPOPersonalSite:"
@@ -153,8 +240,23 @@ try { Disconnect-SPOService -ErrorAction SilentlyContinue } catch {}
 
 Write-Host "`n=== Provisioning request complete ===" -ForegroundColor Green
 Write-Host "Queued: $queued   Failed to queue: $failed"
-Write-Host "Provisioning is asynchronous - it can take anywhere from a few minutes to a few hours." -ForegroundColor DarkGray
-Write-Host "Re-run Check-OneDriveStatus.ps1 against the same mapping file later to confirm which OneDrives now exist." -ForegroundColor DarkGray
+
+if ($CheckExisting) {
+    Write-Host "`n--- Pre-Check Results ---" -ForegroundColor Cyan
+    Write-Host "  Already provisioned: $($provisionedUpns.Count)" -ForegroundColor Green
+    Write-Host "  Not provisioned:     $($notProvisionedUpns.Count)" -ForegroundColor Yellow
+    if ($ExportProvisioned -and $provisionedUpns.Count -gt 0) {
+        Write-Host "`n  Provisioned users exported to:" -ForegroundColor Green
+        Write-Host "  $ExportProvisioned" -ForegroundColor White
+        Write-Host "  Use this CSV in Fly to select and start the migration." -ForegroundColor Cyan
+    }
+}
+
+Write-Host "`nProvisioning is asynchronous - it can take anywhere from a few minutes to a few hours." -ForegroundColor DarkGray
+if (-not $CheckExisting) {
+    Write-Host "Re-run with -CheckExisting to verify which OneDrives now exist, or use Check-OneDriveStatus.ps1." -ForegroundColor DarkGray
+}
+
 if ($failed -gt 0) {
     Write-Warning "$failed UPN(s) could not be queued for provisioning."
     exit 1
