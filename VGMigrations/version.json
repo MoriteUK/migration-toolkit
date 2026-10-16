@@ -1,7 +1,14 @@
 {
-  "version": "2.9.163",
+  "version": "2.9.164",
   "releaseDate": "2026-10-16",
   "changelog": [
+    {
+      "version": "2.9.164",
+      "date": "2026-10-16",
+      "changes": [
+        "Added export-group-aliases.ps1 (generic group alias export tool) - replaces export-faragroupaliases.ps1. Accepts -Domains parameter, -SearchPattern for wildcard matching, or prompts for domain names interactively. Exports group secondary SMTP aliases with GroupType column for migration."
+      ]
+    },
     {
       "version": "2.9.163",
       "date": "2026-10-16",
