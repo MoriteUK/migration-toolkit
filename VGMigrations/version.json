@@ -1,7 +1,14 @@
 {
-  "version": "2.9.162",
-  "releaseDate": "2026-10-15",
+  "version": "2.9.163",
+  "releaseDate": "2026-10-16",
   "changelog": [
+    {
+      "version": "2.9.163",
+      "date": "2026-10-16",
+      "changes": [
+        "Added export-aliases.ps1 (generic alias export tool) - replaces export-faraaliases.ps1. Accepts -Domains parameter, -SearchPattern for wildcard matching, or prompts for domain names interactively. Exports secondary SMTP aliases to CSV for migration to new tenant."
+      ]
+    },
     {
       "version": "2.9.162",
       "date": "2026-10-15",
