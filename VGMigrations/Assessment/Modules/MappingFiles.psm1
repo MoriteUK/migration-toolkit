@@ -266,9 +266,17 @@ function Invoke-MappingFileGeneration {
     Write-Host ($PREFIX_OK + "Output folder: $outFolder") -ForegroundColor Green
 
     # --- Mapping file names - sanitized VBU name from the Assessment Summary sheet ---
+    # Try Assessment format first, fall back to Discovery format (_Summary)
     $summarySheet = Import-WorkbookSheet -Path $workbookPath -SheetName 'Assessment Summary'
-    $vbuNameValue = ($summarySheet | Where-Object { $_.Section -eq 'VBU Name' } | Select-Object -First 1 -ExpandProperty Value)
-    $safeName     = ("$vbuNameValue" -replace '[^\w\-]', '')
+    if ($summarySheet.Count -eq 0) {
+        $summarySheet = Import-WorkbookSheet -Path $workbookPath -SheetName '_Summary'
+    }
+    $vbuNameValue = ($summarySheet | Where-Object { $_.Section -eq 'VBU Name' -or $_.Item -eq 'VBU Name' } | Select-Object -First 1 -ExpandProperty Value)
+    if (-not $vbuNameValue) {
+        # Fallback: extract from workbook filename
+        $vbuNameValue = [System.IO.Path]::GetFileNameWithoutExtension($workbookPath) -replace '\s*Discovery Objects$', ''
+    }
+    $safeName = ("$vbuNameValue" -replace '[^\w\-]', '')
 
     # Official template filenames, as shipped by AvePoint - must match exactly
     $templateFiles = @{
@@ -291,15 +299,21 @@ function Invoke-MappingFileGeneration {
         SharePoint = "$safeName-sharepoint-mapping.xlsx"
     }
 
-    # --- Read source sheets ---
+    # --- Read source sheets (try Assessment format, fall back to Discovery format) ---
     Write-Host ($PREFIX_INFO + 'Reading workbook sheets...') -ForegroundColor DarkGray
     $teams           = Import-WorkbookSheet -Path $workbookPath -SheetName 'Teams'
     $m365Groups      = Import-WorkbookSheet -Path $workbookPath -SheetName 'M365 Groups'
+    if ($m365Groups.Count -eq 0) { $m365Groups = Import-WorkbookSheet -Path $workbookPath -SheetName 'M365Groups' }
     $spoSites        = Import-WorkbookSheet -Path $workbookPath -SheetName 'SharePoint Sites'
+    if ($spoSites.Count -eq 0) { $spoSites = Import-WorkbookSheet -Path $workbookPath -SheetName 'SharePointSites' }
     $oneDrives       = Import-WorkbookSheet -Path $workbookPath -SheetName 'OneDrives'
     $adUsers         = Import-WorkbookSheet -Path $workbookPath -SheetName 'AD Users'
+    if ($adUsers.Count -eq 0) { $adUsers = Import-WorkbookSheet -Path $workbookPath -SheetName 'ADUsers' }
     $userMailboxes   = Import-WorkbookSheet -Path $workbookPath -SheetName 'User Mailboxes'
+    # Discovery format has no separate User Mailboxes sheet - use ADUsers which has UserPrincipalName
+    if ($userMailboxes.Count -eq 0) { $userMailboxes = $adUsers }
     $sharedMailboxes = Import-WorkbookSheet -Path $workbookPath -SheetName 'Shared Mailboxes'
+    if ($sharedMailboxes.Count -eq 0) { $sharedMailboxes = Import-WorkbookSheet -Path $workbookPath -SheetName 'SharedMailboxes' }
 
     # Teams sheet has no PrimarySmtpAddress - resolve via M365 Groups on GroupId
     $groupIdToEmail = @{}
@@ -308,8 +322,14 @@ function Invoke-MappingFileGeneration {
     }
 
     # --- Teams ---
+    # Assessment format has MigrationObjectType, Discovery format doesn't - check for both
     $teamRows = @($teams |
-        Where-Object { $_.MigrationObjectType -eq 'Migrated as Team' -and (Test-MigrateFlag -Row $_) } |
+        Where-Object {
+            $_.DisplayName -and (
+                (-not $_.PSObject.Properties['MigrationObjectType']) -or
+                $_.MigrationObjectType -eq 'Migrated as Team'
+            ) -and (Test-MigrateFlag -Row $_)
+        } |
         ForEach-Object {
             $srcEmail = if ($_.GroupId -and $groupIdToEmail.ContainsKey($_.GroupId)) { $groupIdToEmail[$_.GroupId] } else { '' }
             [PSCustomObject]@{
@@ -322,7 +342,12 @@ function Invoke-MappingFileGeneration {
 
     # --- M365 Groups ---
     $groupRows = @($m365Groups |
-        Where-Object { $_.MigrationObjectType -eq 'Migrated as M365 Group' } |
+        Where-Object {
+            $_.DisplayName -and (
+                (-not $_.PSObject.Properties['MigrationObjectType']) -or
+                $_.MigrationObjectType -eq 'Migrated as M365 Group'
+            ) -and (Test-MigrateFlag -Row $_)
+        } |
         ForEach-Object {
             [PSCustomObject]@{
                 'Source group name'               = $_.DisplayName
@@ -334,7 +359,12 @@ function Invoke-MappingFileGeneration {
 
     # --- SharePoint ---
     $spoRows = @($spoSites |
-        Where-Object { $_.MigrationObjectType -eq 'Migrate as SharePoint Site' -and (Test-MigrateFlag -Row $_) } |
+        Where-Object {
+            $_.Url -and (
+                (-not $_.PSObject.Properties['MigrationObjectType']) -or
+                $_.MigrationObjectType -eq 'Migrate as SharePoint Site'
+            ) -and (Test-MigrateFlag -Row $_)
+        } |
         ForEach-Object {
             [PSCustomObject]@{
                 'Source URL'               = $_.Url
@@ -347,12 +377,21 @@ function Invoke-MappingFileGeneration {
 
     # --- OneDrive ---
     # Key-field guard excludes the '(No data collected)' placeholder row on empty sheets
+    # Assessment format uses OwnerUPN, Discovery format uses Owner or UserPrincipalName
     $oneDriveRows = @($oneDrives |
-        Where-Object { $_.PSObject.Properties['OwnerUPN'] -and $_.OwnerUPN -and (Test-MigrateFlag -Row $_) } |
+        Where-Object {
+            (($_.PSObject.Properties['OwnerUPN'] -and $_.OwnerUPN) -or
+             ($_.PSObject.Properties['Owner'] -and $_.Owner) -or
+             ($_.PSObject.Properties['UserPrincipalName'] -and $_.UserPrincipalName)) -and
+            (Test-MigrateFlag -Row $_)
+        } |
         ForEach-Object {
+            $sourceUser = if ($_.OwnerUPN) { $_.OwnerUPN }
+                         elseif ($_.Owner) { $_.Owner }
+                         else { $_.UserPrincipalName }
             [PSCustomObject]@{
-                'Source user'      = $_.OwnerUPN
-                'Destination user' = Convert-EmailToDestination -Address $_.OwnerUPN -DestinationDomain $destDomain
+                'Source user'      = $sourceUser
+                'Destination user' = Convert-EmailToDestination -Address $sourceUser -DestinationDomain $destDomain
             }
         })
 

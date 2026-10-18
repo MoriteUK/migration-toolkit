@@ -1,7 +1,14 @@
 {
-  "version": "2.9.166",
+  "version": "2.9.167",
   "releaseDate": "2026-10-18",
   "changelog": [
+    {
+      "version": "2.9.167",
+      "date": "2026-10-18",
+      "changes": [
+        "Mapping file generation: Now accepts BOTH Assessment workbook format AND Discovery output format. The script auto-detects the format and handles sheet name differences (_Summary vs Assessment Summary, M365Groups vs M365 Groups, ADUsers vs AD Users, SharedMailboxes vs Shared Mailboxes, SharePointSites vs SharePoint Sites). Discovery format uses Owner/UserPrincipalName for OneDrive mappings instead of OwnerUPN. Fixes 'Cannot index into a null array' errors when generating mappings from search-domain.ps1 discovery files. VBU name fallback extracts from filename when not found in summary sheet."
+      ]
+    },
     {
       "version": "2.9.166",
       "date": "2026-10-18",
