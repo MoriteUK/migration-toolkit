@@ -260,6 +260,51 @@ try {
         Write-Host ($PREFIX_FAIL + 'Workbook generation error: ' + $_.Exception.Message) -ForegroundColor Red
     }
 
+    # Export individual CSV files (search-domain.ps1 format) for scripts that need them
+    try {
+        Write-Host ($PREFIX_INFO + 'Exporting individual CSV files...') -ForegroundColor DarkGray
+        $csvFolder = Join-Path $assessFolder 'CSV'
+        New-Item -ItemType Directory -Path $csvFolder -Force | Out-Null
+
+        # Map Assessment sheet names to search-domain.ps1 CSV filenames
+        # Note: search-domain.ps1 merges AD Users + User Mailboxes into 02_ADUsers.csv
+        # but Assessment has them as separate sheets, so we export User Mailboxes as 02b
+        $sheetToCsv = @{
+            'Accepted Domains'    = '01_AcceptedDomains.csv'
+            'AD Users'            = '02_ADUsers.csv'
+            'User Mailboxes'      = '02b_UserMailboxes.csv'
+            'Distribution Groups' = '03_DistributionGroups.csv'
+            'Mail Contacts'       = '04_MailContacts.csv'
+            'Shared Mailboxes'    = '05_SharedMailboxes.csv'
+            'M365 Groups'         = '06_M365Groups.csv'
+            'App Registrations'   = '07_AppRegistrations.csv'
+            'Enterprise Apps'     = '08_EnterpriseApps.csv'
+            'SharePoint Sites'    = '09_SharePointSites.csv'
+            'OneDrives'           = '10_OneDrives.csv'
+            'Teams'               = '11_Teams.csv'
+            'Devices'             = '12_Devices.csv'
+        }
+
+        foreach ($sheet in $sheetToCsv.Keys) {
+            $csvName = $sheetToCsv[$sheet]
+            $csvPath = Join-Path $csvFolder $csvName
+            try {
+                $data = Import-Excel -Path $xlsxPath -WorksheetName $sheet -ErrorAction Stop
+                if ($data) {
+                    $data | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
+                    Write-Host "  [OK]   $csvName" -ForegroundColor DarkGray
+                }
+            }
+            catch {
+                # Sheet might not exist or be empty - skip silently
+            }
+        }
+        Write-Host ($PREFIX_OK + "CSV files exported to: $csvFolder") -ForegroundColor Green
+    }
+    catch {
+        Write-Host ($PREFIX_WARN + 'CSV export failed: ' + $_.Exception.Message) -ForegroundColor Yellow
+    }
+
     # Final summary
     $adCounts  = if ($adResult)  { $adResult.Counts }  else { $null }
     $exCounts  = if ($exResult)  { $exResult.Counts }  else { $null }

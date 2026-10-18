@@ -1,7 +1,14 @@
 {
-  "version": "2.9.170",
+  "version": "2.9.171",
   "releaseDate": "2026-10-18",
   "changelog": [
+    {
+      "version": "2.9.171",
+      "date": "2026-10-18",
+      "changes": [
+        "Assessment workflow: Now exports individual CSV files (search-domain.ps1 format) to CSV subfolder after building the Excel workbook. Scripts that rely on discovery CSV files can now use Assessment output. Exports: 01_AcceptedDomains, 02_ADUsers, 02b_UserMailboxes, 03_DistributionGroups, 04_MailContacts, 05_SharedMailboxes, 06_M365Groups, 07_AppRegistrations, 08_EnterpriseApps, 09_SharePointSites, 10_OneDrives, 11_Teams, 12_Devices. Gives you BOTH the consolidated Excel workbook AND the individual CSV files in one run."
+      ]
+    },
     {
       "version": "2.9.170",
       "date": "2026-10-18",
