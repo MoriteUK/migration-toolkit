@@ -1,7 +1,14 @@
 {
-  "version": "2.9.164",
-  "releaseDate": "2026-10-16",
+  "version": "2.9.165",
+  "releaseDate": "2026-10-18",
   "changelog": [
+    {
+      "version": "2.9.165",
+      "date": "2026-10-18",
+      "changes": [
+        "Fixed AOS sign-in error - exposed saveSharedConfig function in preload.js. Resolves 'window.electronAPI.saveSharedConfig is not a function' error when signing in to AvePoint Online Services."
+      ]
+    },
     {
       "version": "2.9.164",
       "date": "2026-10-16",
