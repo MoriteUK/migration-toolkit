@@ -1,7 +1,14 @@
 {
-  "version": "2.9.171",
+  "version": "2.9.172",
   "releaseDate": "2026-10-18",
   "changelog": [
+    {
+      "version": "2.9.172",
+      "date": "2026-10-18",
+      "changes": [
+        "Electron app Discovery sidebar: Removed 'M365 Discovery' option - now only 'Run Assessment' is available. Assessment workflow (v2.9.171) exports BOTH the Excel workbook AND individual CSV files, so there's no need for separate discovery workflows. Simplifies the UI to one discovery option."
+      ]
+    },
     {
       "version": "2.9.171",
       "date": "2026-10-18",
