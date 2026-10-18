@@ -61,8 +61,8 @@ function New-AssessmentContext {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$VBUDomain,
-        [Parameter(Mandatory)][string]$VBUId,
-        [Parameter(Mandatory)][string]$VBUSearchTerm,
+        [string]$VBUId = '',
+        [string]$VBUSearchTerm = '',
         [Parameter(Mandatory)][string]$RawPath,
         [string]$SPOAdminUrl = ''
     )

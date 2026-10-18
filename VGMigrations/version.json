@@ -1,7 +1,14 @@
 {
-  "version": "2.9.167",
+  "version": "2.9.168",
   "releaseDate": "2026-10-18",
   "changelog": [
+    {
+      "version": "2.9.168",
+      "date": "2026-10-18",
+      "changes": [
+        "Assessment workflow: Made VBUId and VBUSearchTerm optional parameters in New-AssessmentContext - now accept empty strings with defaults. Fixes 'Cannot bind argument to parameter because it is an empty string' errors when running Run-Assessment.ps1 and leaving these fields blank. Empty VBUSearchTerm means objects are filtered by domain only (Test-WholeWordMatch returns false for empty terms)."
+      ]
+    },
     {
       "version": "2.9.167",
       "date": "2026-10-18",
