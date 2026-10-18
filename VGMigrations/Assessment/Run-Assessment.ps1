@@ -87,16 +87,22 @@ if ($mode -eq 'Generate Mapping Files') {
 Import-Module ActiveDirectory                  -DisableNameChecking -ErrorAction Stop
 Import-Module ExchangeOnlineManagement         -DisableNameChecking -ErrorAction Stop
 
-# Pin Microsoft.Graph.Authentication to 2.33.0 to avoid MSAL assembly conflict with ExchangeOnlineManagement.
-# Newer versions require WAM (Web Account Manager) which conflicts with Exchange's own MSAL usage.
-# This version uses browser-popup auth and coexists peacefully with Exchange.
+# Pin ALL Microsoft.Graph.* modules to 2.33.0 to avoid MSAL assembly conflict with ExchangeOnlineManagement.
+# Newer versions (2.34+) require WAM (Web Account Manager) which conflicts with Exchange's own MSAL usage.
+# Version 2.33.0 uses browser-popup auth and coexists peacefully with Exchange.
 Import-Module Microsoft.Graph.Authentication   -RequiredVersion 2.33.0 -DisableNameChecking -ErrorAction Stop
+Import-Module Microsoft.Graph.Groups           -RequiredVersion 2.33.0 -DisableNameChecking -ErrorAction Stop
+Import-Module Microsoft.Graph.Teams            -RequiredVersion 2.33.0 -DisableNameChecking -ErrorAction Stop
+Import-Module Microsoft.Graph.Users            -RequiredVersion 2.33.0 -DisableNameChecking -ErrorAction Stop
 
-Import-Module Microsoft.Graph.Groups           -DisableNameChecking -ErrorAction Stop
-Import-Module Microsoft.Graph.Teams            -DisableNameChecking -ErrorAction Stop
-Import-Module Microsoft.Graph.Users            -DisableNameChecking -ErrorAction Stop
-Import-Module Microsoft.Graph.DeviceManagement -DisableNameChecking -ErrorAction Stop
-Import-Module ImportExcel                      -DisableNameChecking -ErrorAction Stop
+# DeviceManagement v2.33.0 may not be installed - soft-fail (devices collection will be skipped)
+try {
+    Import-Module Microsoft.Graph.DeviceManagement -RequiredVersion 2.33.0 -DisableNameChecking -ErrorAction Stop
+} catch {
+    Write-Host ($PREFIX_WARN + 'Microsoft.Graph.DeviceManagement v2.33.0 not available - device collection will be skipped') -ForegroundColor Yellow
+}
+
+Import-Module ImportExcel -DisableNameChecking -ErrorAction Stop
 
 # SharePoint - soft-fail (installable by Test-Prerequisites; missing sets SkipSharePoint)
 try {

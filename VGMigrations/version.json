@@ -1,7 +1,14 @@
 {
-  "version": "2.9.169",
+  "version": "2.9.170",
   "releaseDate": "2026-10-18",
   "changelog": [
+    {
+      "version": "2.9.170",
+      "date": "2026-10-18",
+      "changes": [
+        "Assessment workflow: Pin ALL Microsoft.Graph.* modules to v2.33.0 for assembly version compatibility. Previous fix only pinned Graph.Authentication which caused other Graph modules (Groups, Teams, Users, DeviceManagement) to fail loading with 'Assembly with same name is already loaded' errors. Now all Graph modules load v2.33.0 together. DeviceManagement v2.33.0 is optional (soft-fail) since it may not be installed - devices collection will be skipped if missing."
+      ]
+    },
     {
       "version": "2.9.169",
       "date": "2026-10-18",
