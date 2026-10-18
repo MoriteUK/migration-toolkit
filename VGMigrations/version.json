@@ -1,7 +1,14 @@
 {
-  "version": "2.9.168",
+  "version": "2.9.169",
   "releaseDate": "2026-10-18",
   "changelog": [
+    {
+      "version": "2.9.169",
+      "date": "2026-10-18",
+      "changes": [
+        "Assessment workflow: Fixed Graph MSAL assembly conflict by pinning Microsoft.Graph.Authentication to v2.33.0 (last version before mandatory WAM) and adding -DisableWAM to Connect-ExchangeOnline. Fixes 'Method not found: Microsoft.Identity.Client.BaseAbstractApplicationBuilder.WithLogging' error when Graph tries to connect after Exchange. Same workaround that makes search-domain.ps1 work reliably."
+      ]
+    },
     {
       "version": "2.9.168",
       "date": "2026-10-18",

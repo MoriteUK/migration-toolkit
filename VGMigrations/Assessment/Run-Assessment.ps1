@@ -86,7 +86,12 @@ if ($mode -eq 'Generate Mapping Files') {
 # -----------------------------------------------------------------------
 Import-Module ActiveDirectory                  -DisableNameChecking -ErrorAction Stop
 Import-Module ExchangeOnlineManagement         -DisableNameChecking -ErrorAction Stop
-Import-Module Microsoft.Graph.Authentication   -DisableNameChecking -ErrorAction Stop
+
+# Pin Microsoft.Graph.Authentication to 2.33.0 to avoid MSAL assembly conflict with ExchangeOnlineManagement.
+# Newer versions require WAM (Web Account Manager) which conflicts with Exchange's own MSAL usage.
+# This version uses browser-popup auth and coexists peacefully with Exchange.
+Import-Module Microsoft.Graph.Authentication   -RequiredVersion 2.33.0 -DisableNameChecking -ErrorAction Stop
+
 Import-Module Microsoft.Graph.Groups           -DisableNameChecking -ErrorAction Stop
 Import-Module Microsoft.Graph.Teams            -DisableNameChecking -ErrorAction Stop
 Import-Module Microsoft.Graph.Users            -DisableNameChecking -ErrorAction Stop
@@ -179,7 +184,7 @@ if (-not $ctx.SkipSharePoint) {
 }
 
 Write-Host ($PREFIX_INFO + 'Connecting to Exchange Online...') -ForegroundColor DarkGray
-Connect-ExchangeOnline -ShowBanner:$false -ErrorAction Stop
+Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -ErrorAction Stop
 Write-Host ($PREFIX_OK + 'Exchange Online connected') -ForegroundColor Green
 
 $skipGraph  = $false
