@@ -1,7 +1,14 @@
 {
-  "version": "2.9.165",
+  "version": "2.9.166",
   "releaseDate": "2026-10-18",
   "changelog": [
+    {
+      "version": "2.9.166",
+      "date": "2026-10-18",
+      "changes": [
+        "AOS Setup: Added default values (OurVolaris / ourvolaris / OurVolaris App) and auto-load from saved config. Fields auto-populate when opening the view - saved config overrides defaults. Added getSharedConfig to preload.js to support auto-loading."
+      ]
+    },
     {
       "version": "2.9.165",
       "date": "2026-10-18",
