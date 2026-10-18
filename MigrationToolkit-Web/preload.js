@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Config management
   getConfig: () => ipcRenderer.invoke('get-config'),
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
+  saveSharedConfig: (values) => ipcRenderer.invoke('save-shared-config', values),
 
   // Open logs folder
   openLogs: () => ipcRenderer.invoke('open-logs'),
