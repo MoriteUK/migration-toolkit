@@ -1942,6 +1942,7 @@ function switchView(viewName) {
     'discovery': 'discoveryView',
     // Discovery sub-views
     'discovery-cache': 'discoveryCacheView',
+    'run-assessment': 'runAssessmentView',
     'domainReadiness': 'domainReadinessView',
     'discovery-tenant-licenses': 'discoveryTenantLicensesView',
     // AvePoint Fly sub-views

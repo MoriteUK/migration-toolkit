@@ -1,7 +1,14 @@
 {
-  "version": "2.9.176",
+  "version": "2.9.177",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.177",
+      "date": "2026-10-19",
+      "changes": [
+        "Run Assessment: Fixed blank GUI bug - added 'run-assessment': 'runAssessmentView' mapping to switchView function. The view was created but not registered in the viewMap, causing the view switch to fail silently. Now clicking Run Assessment properly shows the assessment form instead of blank screen."
+      ]
+    },
     {
       "version": "2.9.176",
       "date": "2026-10-19",
