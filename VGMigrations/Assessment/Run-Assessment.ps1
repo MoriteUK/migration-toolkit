@@ -210,7 +210,10 @@ Write-SectionHeader 'Authentication'
 if (-not $ctx.SkipSharePoint) {
     Write-Host ($PREFIX_INFO + 'Connecting to SharePoint Online...') -ForegroundColor DarkGray
     try {
-        Connect-SPOService -Url $ctx.SPOAdminUrl -ErrorAction Stop
+        # -UseSystemBrowser required when running from Electron app (no window handle for popup)
+        # Opens OS default browser instead - same fix as provision-onedrives.ps1
+        try { Disconnect-SPOService -ErrorAction SilentlyContinue } catch {}
+        Connect-SPOService -Url $ctx.SPOAdminUrl -UseSystemBrowser:$true -ErrorAction Stop
         Write-Host ($PREFIX_OK + 'SharePoint Online connected') -ForegroundColor Green
     }
     catch {

@@ -1,7 +1,14 @@
 {
-  "version": "2.9.175",
+  "version": "2.9.176",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.176",
+      "date": "2026-10-19",
+      "changes": [
+        "Run Assessment: Fixed SharePoint connection WAM error by adding -UseSystemBrowser flag to Connect-SPOService. Fixes 'Unable to load DLL msalruntime' and 'No valid OAuth 2.0 authentication session exists' errors when running from Electron app. Also disconnects any stale SPO session before connecting. Same fix proven in provision-onedrives.ps1 - opens OS default browser instead of popup window."
+      ]
+    },
     {
       "version": "2.9.175",
       "date": "2026-10-19",
