@@ -1090,6 +1090,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Wrap switchView to stop dashboard timer when leaving dashboard
+  (function() {
+    const originalSwitchView = switchView;
+    switchView = function(viewName) {
+      if (viewName !== 'dashboard') {
+        stopDashboardAutoRefresh();
+      }
+      originalSwitchView(viewName);
+    };
+  })();
+
   if (dashboardRefreshBtn) {
     dashboardRefreshBtn.addEventListener('click', refreshDashboard);
   }
@@ -1992,6 +2003,7 @@ function switchView(viewName) {
       if (viewName === 'discovery') {
         loadDiscoveryDomains();
       } else if (viewName === 'run-assessment') {
+        console.log('[switchView] Loading domains for Assessment view...');
         loadDiscoveryDomains();  // Load VBU domain data for dropdown
       } else if (viewName === 'discovery-cache') {
         loadDiscoveryCacheDefaults();
@@ -2029,9 +2041,7 @@ function switchView(viewName) {
   }
 
   // Stop dashboard auto-refresh when navigating away from dashboard
-  if (viewName !== 'dashboard') {
-    stopDashboardAutoRefresh();
-  }
+  // (handled by wrapper function defined later in file)
 }
 
 // ── Discovery: domain/VBU dropdown ───────────────────────────────────────────
@@ -2065,22 +2075,29 @@ async function loadTargetDomain() {
 
 async function loadDiscoveryDomains() {
   try {
+    console.log('[loadDiscoveryDomains] Starting...');
     const cfgResult = await window.electronAPI.getConfig();
     const csvPath = cfgResult?.config?.VbuCsvPath;
+    console.log('[loadDiscoveryDomains] VBU CSV Path:', csvPath);
 
     // Try to load from VBU CSV if configured
     if (csvPath) {
       const result = await window.electronAPI.readVbuCsv(csvPath);
+      console.log('[loadDiscoveryDomains] CSV read result:', result);
       if (result.success && result.rows.length) {
         _vbuMap = {};
         _vbuRows = result.rows;
-        result.rows.forEach(r => { _vbuMap[r.domain] = r.vbuId; });
+        result.rows.forEach(r => { _vbuMap[r.domain.toLowerCase()] = r.vbuId; });
+        console.log(`[loadDiscoveryDomains] Loaded ${_vbuRows.length} domains from VBU CSV`);
       }
+    } else {
+      console.log('[loadDiscoveryDomains] No VBU CSV path configured in settings');
     }
 
     // Fallback: use Customers array from config if no CSV data
     if (_vbuRows.length === 0) {
       const customers = cfgResult?.config?.Customers;
+      console.log('[loadDiscoveryDomains] Checking Customers fallback, count:', customers?.length || 0);
       if (customers && customers.length > 0) {
         _vbuMap = {};
         _vbuRows = customers
@@ -2091,17 +2108,20 @@ async function loadDiscoveryDomains() {
             vbuName: c.Prefix || ''
           }));
         _vbuRows.forEach(r => { _vbuMap[r.domain.toLowerCase()] = r.vbuId; });
-        console.log(`Loaded ${_vbuRows.length} domains from Customers config`);
+        console.log(`[loadDiscoveryDomains] Loaded ${_vbuRows.length} domains from Customers config`);
       }
     }
+
+    console.log('[loadDiscoveryDomains] Final _vbuRows count:', _vbuRows.length);
 
     // Also populate Assessment output folder if that field exists
     const assessmentOutputField = document.getElementById('assessmentOutputFolder');
     if (assessmentOutputField && cfgResult?.config?.DiscoveryOutputPath) {
       assessmentOutputField.value = cfgResult.config.DiscoveryOutputPath;
+      console.log('[loadDiscoveryDomains] Set output folder to:', cfgResult.config.DiscoveryOutputPath);
     }
   } catch (err) {
-    console.error('loadDiscoveryDomains failed:', err);
+    console.error('[loadDiscoveryDomains] ERROR:', err);
   }
 }
 

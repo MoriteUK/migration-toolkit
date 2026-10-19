@@ -1,7 +1,21 @@
 {
-  "version": "2.9.181",
+  "version": "2.9.183",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.183",
+      "date": "2026-10-19",
+      "changes": [
+        "Critical fix: Resolved JavaScript error 'stopDashboardAutoRefresh is not defined' that was preventing ANY view from loading (including Run Assessment). The error was caused by a scope issue - stopDashboardAutoRefresh was being called from switchView but was defined in a different scope. Now uses a wrapper function pattern like the monitor timer. This was blocking loadDiscoveryDomains() from ever running, which is why the Assessment dropdown never populated."
+      ]
+    },
+    {
+      "version": "2.9.182",
+      "date": "2026-10-19",
+      "changes": [
+        "Debug: Added console logging to loadDiscoveryDomains() to diagnose why Assessment dropdown isn't populating. Logs VBU CSV path, load results, and final domain count. Check DevTools console (Ctrl+Shift+I) when opening Run Assessment view to see if VBU CSV is configured and loading correctly."
+      ]
+    },
     {
       "version": "2.9.181",
       "date": "2026-10-19",
