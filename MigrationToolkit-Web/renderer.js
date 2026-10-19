@@ -3388,6 +3388,105 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── Assessment Domain Combobox ────────────────────────────────────────────
+  (function initAssessmentDomainCombobox() {
+    const input  = document.getElementById('assessmentDomain');
+    const btn    = document.getElementById('assessmentDomainDropdownBtn');
+    const panel  = document.getElementById('assessmentDomainDropdownPanel');
+    const list   = document.getElementById('assessmentDomainDropdownList');
+    if (!input || !btn || !panel || !list) return;
+
+    let highlightedIndex = -1;
+
+    function selectDomain(domain) {
+      input.value = domain;
+      const vbuInput = document.getElementById('assessmentVbuId');
+      if (vbuInput) vbuInput.value = _vbuMap[domain.toLowerCase()] || '';
+      closePanel();
+    }
+
+    function getVisibleItems() {
+      return Array.from(list.querySelectorAll('.domain-dropdown-item'));
+    }
+
+    function setHighlight(index) {
+      const items = getVisibleItems();
+      items.forEach(el => el.classList.remove('highlighted'));
+      if (index >= 0 && index < items.length) {
+        items[index].classList.add('highlighted');
+        items[index].scrollIntoView({ block: 'nearest' });
+      }
+      highlightedIndex = index;
+    }
+
+    function renderItems(filter) {
+      highlightedIndex = -1;
+      const q = (filter || '').toLowerCase();
+      const rows = _vbuRows.filter(r => !q || r.domain.includes(q) || (r.vbuName && r.vbuName.toLowerCase().includes(q)));
+      if (rows.length === 0) {
+        list.innerHTML = `<div class="domain-dropdown-empty">No matches</div>`;
+      } else {
+        list.innerHTML = rows.map(r =>
+          `<div class="domain-dropdown-item" data-domain="${r.domain}">
+            <span class="di-domain">${r.domain}</span>
+            ${r.vbuName ? `<span class="di-vbu">${r.vbuName}</span>` : ''}
+          </div>`
+        ).join('');
+        list.querySelectorAll('.domain-dropdown-item').forEach(el => {
+          el.addEventListener('mousedown', e => { e.preventDefault(); selectDomain(el.dataset.domain); });
+        });
+      }
+    }
+
+    function openPanel() {
+      if (_vbuRows.length === 0) { closePanel(); return; }
+      renderItems(input.value);
+      panel.classList.remove('hidden');
+    }
+
+    function closePanel() {
+      panel.classList.add('hidden');
+      highlightedIndex = -1;
+    }
+
+    btn.addEventListener('click', () => {
+      if (_vbuRows.length === 0) { input.focus(); return; }
+      if (panel.classList.contains('hidden')) { input.focus(); openPanel(); } else { closePanel(); }
+    });
+
+    input.addEventListener('input', () => { openPanel(); });
+    input.addEventListener('focus', () => { openPanel(); });
+    input.addEventListener('blur', () => {
+      setTimeout(() => {
+        closePanel();
+        const domain = input.value.trim().toLowerCase();
+        const vbuInput = document.getElementById('assessmentVbuId');
+        if (vbuInput && _vbuMap[domain] !== undefined) vbuInput.value = _vbuMap[domain];
+      }, 150);
+    });
+
+    input.addEventListener('keydown', e => {
+      if (panel.classList.contains('hidden')) return;
+      const items = getVisibleItems();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlight(Math.min(highlightedIndex + 1, items.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlight(Math.max(highlightedIndex - 1, 0));
+      } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+        e.preventDefault();
+        selectDomain(items[highlightedIndex].dataset.domain);
+      } else if (e.key === 'Escape') {
+        closePanel();
+      }
+    });
+
+    document.addEventListener('click', e => {
+      if (!input.contains(e.target) && !btn.contains(e.target) && !panel.contains(e.target)) closePanel();
+    });
+  })();
+
   // ── Tenant Baseline Config ────────────────────────────────────────────────
   const baselineRunBtn       = document.getElementById('baselineRunBtn');
   const baselineAdminUpn      = document.getElementById('baselineAdminUpn');

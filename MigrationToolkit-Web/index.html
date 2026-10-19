@@ -525,22 +525,29 @@
           <h3 class="form-card-title">Assessment Parameters</h3>
           <p class="form-help">Comprehensive M365 tenant assessment - collects AD Users, Mailboxes, Groups, Teams, SharePoint, OneDrives, Devices. Generates Excel workbook + individual CSV files.</p>
 
-          <div class="form-group-tight">
-            <label class="form-label">VBU Domain <span style="color:var(--color-danger)">*</span></label>
-            <input type="text" class="form-input form-input-compact" id="assessmentDomain" placeholder="e.g. contoso.com">
-            <small class="form-help">The source tenant domain to assess</small>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">VBU Domain <span style="color:var(--color-danger)">*</span></label>
+              <div class="domain-combobox">
+                <input type="text" class="form-input form-input-compact domain-combobox-input" id="assessmentDomain" placeholder="Select or type a domain..." autocomplete="off">
+                <button class="domain-combobox-btn" id="assessmentDomainDropdownBtn" type="button" tabindex="-1">▾</button>
+                <div class="domain-dropdown-panel hidden" id="assessmentDomainDropdownPanel">
+                  <div id="assessmentDomainDropdownList"></div>
+                </div>
+              </div>
+              <small class="form-help">Select from VBU ID file or type a domain</small>
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">VBU ID <small style="font-weight:normal; color:#6B7280;">(optional)</small></label>
+              <input type="text" class="form-input form-input-compact" id="assessmentVbuId" placeholder="Auto-filled from CSV">
+              <small class="form-help">Auto-filled when domain selected</small>
+            </div>
           </div>
 
           <div class="form-group-tight">
             <label class="form-label">VBU Search Term <small style="font-weight:normal; color:#6B7280;">(optional)</small></label>
             <input type="text" class="form-input form-input-compact" id="assessmentSearchTerm" placeholder="e.g. Contoso">
             <small class="form-help">Company name fragment to filter objects (leave blank to skip search term filtering)</small>
-          </div>
-
-          <div class="form-group-tight">
-            <label class="form-label">VBU ID <small style="font-weight:normal; color:#6B7280;">(optional)</small></label>
-            <input type="text" class="form-input form-input-compact" id="assessmentVbuId" placeholder="extensionAttribute7 exact value">
-            <small class="form-help">Leave blank to skip VBU ID filtering</small>
           </div>
 
           <div class="form-group-tight">

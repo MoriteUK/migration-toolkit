@@ -1,7 +1,14 @@
 {
-  "version": "2.9.177",
+  "version": "2.9.178",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.178",
+      "date": "2026-10-19",
+      "changes": [
+        "Run Assessment: VBU Domain is now a dropdown that reads from the VBU ID file (same as Discovery view). Select domain from dropdown or type to filter. Auto-fills VBU ID when domain selected. Uses same domain combobox pattern as Discovery - supports keyboard navigation (Arrow keys, Enter, Escape), search filtering, and displays VBU Name alongside domain."
+      ]
+    },
     {
       "version": "2.9.177",
       "date": "2026-10-19",
