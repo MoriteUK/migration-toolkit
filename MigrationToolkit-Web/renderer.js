@@ -1991,9 +1991,11 @@ function switchView(viewName) {
       // Load dropdowns when specific views are shown
       if (viewName === 'discovery') {
         loadDiscoveryDomains();
+      } else if (viewName === 'run-assessment') {
+        loadDiscoveryDomains();  // Load VBU domain data for dropdown
       } else if (viewName === 'discovery-cache') {
         loadDiscoveryCacheDefaults();
-      } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip', 'domain-check-cloud', 'domain-check-ad', 'domain-retire-devices', 'run-assessment'].includes(viewName)) {
+      } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip', 'domain-check-cloud', 'domain-check-ad', 'domain-retire-devices'].includes(viewName)) {
         loadTargetDomain();
       } else if (viewName === 'misc-onedrive') {
         loadOneDriveTenants();

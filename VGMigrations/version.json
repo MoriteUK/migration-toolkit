@@ -1,7 +1,14 @@
 {
-  "version": "2.9.179",
+  "version": "2.9.180",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.180",
+      "date": "2026-10-19",
+      "changes": [
+        "Run Assessment: Fixed dropdown actually loading VBU data - now calls loadDiscoveryDomains() instead of loadTargetDomain(). v2.9.179 called the wrong function (loadTargetDomain only sets target domain field, doesn't populate _vbuRows/_vbuMap). Now properly loads domains from VBU ID CSV file configured in Discovery settings."
+      ]
+    },
     {
       "version": "2.9.179",
       "date": "2026-10-19",
