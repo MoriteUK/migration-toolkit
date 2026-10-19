@@ -3288,6 +3288,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── Force Provision OneDrives ──────────────────────────────────────────────
+  const forceProvisionOneDriveBtn = document.getElementById('forceProvisionOneDriveBtn');
+  if (forceProvisionOneDriveBtn) {
+    forceProvisionOneDriveBtn.addEventListener('click', async () => {
+      const adminUrl = onedriveAdHocUrl?.value?.trim() || onedriveTenantUrl?.value?.trim();
+      const mapFile  = onedriveMappingFile?.value?.trim();
+      if (!adminUrl) { alert('Please select an SPO Admin URL or enter a one-off URL.'); return; }
+      if (!mapFile)  { alert('Please browse for a mapping file.'); return; }
+
+      const confirm = window.confirm(
+        'Force Provisioning uses synchronous mode (waits for completion) and may take several minutes.\n\n' +
+        'Use this when OneDrives haven\'t provisioned after running Start Provisioning.\n\n' +
+        'Continue?'
+      );
+      if (!confirm) return;
+
+      forceProvisionOneDriveBtn.disabled = true;
+      forceProvisionOneDriveBtn.textContent = 'Force Provisioning…';
+      if (provisionOneDriveLog) provisionOneDriveLog.style.display = '';
+      if (provisionOneDriveLogPre) provisionOneDriveLogPre.textContent = '';
+
+      const args = ['-MappingFile', mapFile, '-AdminUrl', adminUrl];
+      const col = onedriveColumnOverride?.value?.trim();
+      if (col) args.push('-Column', col);
+
+      window.electronAPI.onPsOutput(appendProvLog);
+      try {
+        const result = await runStreamingScript('Force-OneDriveProvisioning.ps1', args);
+        appendProvLog(result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendProvLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        forceProvisionOneDriveBtn.disabled = false;
+        forceProvisionOneDriveBtn.textContent = '⚡ Force Provisioning';
+      }
+    });
+  }
+
   // ── Tenant Baseline Config ────────────────────────────────────────────────
   const baselineRunBtn       = document.getElementById('baselineRunBtn');
   const baselineAdminUpn      = document.getElementById('baselineAdminUpn');

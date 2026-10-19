@@ -1,7 +1,14 @@
 {
-  "version": "2.9.173",
+  "version": "2.9.174",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.174",
+      "date": "2026-10-19",
+      "changes": [
+        "Electron app Provision OneDrives: Added '⚡ Force Provisioning' button that calls Force-OneDriveProvisioning.ps1 for stuck OneDrives. Shows confirmation dialog warning that synchronous mode may take several minutes. Use when OneDrives haven't provisioned after running Start Provisioning. Button appears between 'Check Status' and 'Start Provisioning' in orange/warning color."
+      ]
+    },
     {
       "version": "2.9.173",
       "date": "2026-10-19",
