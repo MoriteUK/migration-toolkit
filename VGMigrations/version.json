@@ -1,7 +1,14 @@
 {
-  "version": "2.9.178",
+  "version": "2.9.179",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.179",
+      "date": "2026-10-19",
+      "changes": [
+        "Run Assessment: Fixed dropdown not responding to clicks - now loads VBU domain data from Discovery settings when the view opens. The dropdown UI was added in v2.9.178 but the data loading wasn't triggered, leaving _vbuRows/_vbuMap empty. Now calls loadTargetDomain() when run-assessment view is shown, same as other domain views."
+      ]
+    },
     {
       "version": "2.9.178",
       "date": "2026-10-19",

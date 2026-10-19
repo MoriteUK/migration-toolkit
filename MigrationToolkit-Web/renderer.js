@@ -1993,7 +1993,7 @@ function switchView(viewName) {
         loadDiscoveryDomains();
       } else if (viewName === 'discovery-cache') {
         loadDiscoveryCacheDefaults();
-      } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip', 'domain-check-cloud', 'domain-check-ad', 'domain-retire-devices'].includes(viewName)) {
+      } else if (['domain-remove', 'domain-onprem', 'domain-cloud', 'domain-sip', 'domain-check-cloud', 'domain-check-ad', 'domain-retire-devices', 'run-assessment'].includes(viewName)) {
         loadTargetDomain();
       } else if (viewName === 'misc-onedrive') {
         loadOneDriveTenants();
