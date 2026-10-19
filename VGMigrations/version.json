@@ -1,7 +1,14 @@
 {
-  "version": "2.9.172",
-  "releaseDate": "2026-10-18",
+  "version": "2.9.173",
+  "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.173",
+      "date": "2026-10-19",
+      "changes": [
+        "Added Force-OneDriveProvisioning.ps1 - diagnoses and force-provisions OneDrives that failed to provision after running provision-onedrives.ps1. Checks: OneDrive existence via Graph, user license status, account enabled status. Force-provisions WITHOUT -NoWait (synchronous mode) to ensure actual completion. Helps resolve stuck provisioning requests that haven't completed after days. Shows which users have license issues (no license, disabled account, user not found) vs users that just need force-provisioning."
+      ]
+    },
     {
       "version": "2.9.172",
       "date": "2026-10-18",
