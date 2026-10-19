@@ -3390,7 +3390,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       startAssessmentBtn.disabled = true;
       startAssessmentBtn.textContent = 'Running Assessment…';
-      if (assessmentLog) assessmentLog.style.display = '';
+      if (assessmentLog) assessmentLog.classList.remove('hidden');
       if (assessmentLogPre) assessmentLogPre.textContent = '';
 
       const args = ['-VbuDomain', domain];

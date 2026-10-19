@@ -1,7 +1,14 @@
 {
-  "version": "2.9.183",
+  "version": "2.9.184",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.184",
+      "date": "2026-10-19",
+      "changes": [
+        "Run Assessment: Show log panel when assessment starts. Fixed the log section visibility - was using style.display but the element has a 'hidden' class, so now uses classList.remove('hidden'). You can now see the real-time PowerShell output as the assessment runs."
+      ]
+    },
     {
       "version": "2.9.183",
       "date": "2026-10-19",
