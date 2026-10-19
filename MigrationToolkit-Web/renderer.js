@@ -3327,6 +3327,66 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── Run Assessment ─────────────────────────────────────────────────────────
+  const startAssessmentBtn     = document.getElementById('startAssessmentBtn');
+  const assessmentDomain       = document.getElementById('assessmentDomain');
+  const assessmentSearchTerm   = document.getElementById('assessmentSearchTerm');
+  const assessmentVbuId        = document.getElementById('assessmentVbuId');
+  const assessmentSpoUrl       = document.getElementById('assessmentSpoUrl');
+  const assessmentOutputFolder = document.getElementById('assessmentOutputFolder');
+  const assessmentOutputBrowse = document.getElementById('assessmentOutputBrowse');
+  const assessmentLog          = document.getElementById('assessmentLog');
+  const assessmentLogPre       = document.getElementById('assessmentLogPre');
+
+  function appendAssessmentLog(text) {
+    if (!assessmentLogPre) return;
+    assessmentLogPre.textContent += text.replace(/\x1b\[[0-9;]*m/g, '');
+    assessmentLogPre.scrollTop = assessmentLogPre.scrollHeight;
+  }
+
+  if (assessmentOutputBrowse) {
+    assessmentOutputBrowse.addEventListener('click', async () => {
+      const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });
+      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+        assessmentOutputFolder.value = result.filePaths[0];
+      }
+    });
+  }
+
+  if (startAssessmentBtn) {
+    startAssessmentBtn.addEventListener('click', async () => {
+      const domain = assessmentDomain?.value?.trim();
+      if (!domain) { alert('Please enter a VBU Domain'); return; }
+
+      startAssessmentBtn.disabled = true;
+      startAssessmentBtn.textContent = 'Running Assessment…';
+      if (assessmentLog) assessmentLog.style.display = '';
+      if (assessmentLogPre) assessmentLogPre.textContent = '';
+
+      const args = ['-VbuDomain', domain];
+      const searchTerm = assessmentSearchTerm?.value?.trim();
+      if (searchTerm) args.push('-VbuSearchTerm', searchTerm);
+      const vbuId = assessmentVbuId?.value?.trim();
+      if (vbuId) args.push('-VbuId', vbuId);
+      const spoUrl = assessmentSpoUrl?.value?.trim();
+      if (spoUrl) args.push('-SharePointAdminUrl', spoUrl);
+      const outputFolder = assessmentOutputFolder?.value?.trim();
+      if (outputFolder) args.push('-OutputPath', outputFolder);
+
+      window.electronAPI.onPsOutput(appendAssessmentLog);
+      try {
+        const result = await runStreamingScript('Assessment/Run-Assessment.ps1', args);
+        appendAssessmentLog(result.success ? '\n✓ Assessment complete\n' : `\n✗ Failed (exit ${result.code})\n`);
+      } catch (err) {
+        appendAssessmentLog(`\nError: ${err.message || err}\n`);
+      } finally {
+        window.electronAPI.offPsOutput();
+        startAssessmentBtn.disabled = false;
+        startAssessmentBtn.textContent = '▶ Start Assessment';
+      }
+    });
+  }
+
   // ── Tenant Baseline Config ────────────────────────────────────────────────
   const baselineRunBtn       = document.getElementById('baselineRunBtn');
   const baselineAdminUpn      = document.getElementById('baselineAdminUpn');

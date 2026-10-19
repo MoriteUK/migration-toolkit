@@ -1,4 +1,31 @@
 #Requires -Version 7.0
+<#
+.SYNOPSIS
+    Run M365 tenant assessment - collects AD, Exchange, Graph, SharePoint data and generates Excel workbook + CSV files.
+.PARAMETER VbuDomain
+    Source tenant domain (e.g. contoso.com). Prompted if omitted.
+.PARAMETER VbuSearchTerm
+    Company name fragment to filter objects (e.g. Contoso). Optional - leave blank to skip search term filtering. Prompted if omitted.
+.PARAMETER VbuId
+    extensionAttribute7 exact value for filtering. Optional - leave blank to skip VBU ID filtering. Prompted if omitted.
+.PARAMETER SharePointAdminUrl
+    SharePoint Online admin URL (e.g. https://contoso-admin.sharepoint.com). Prompted if omitted.
+.PARAMETER OutputPath
+    Output folder path. Defaults to VGMigrations\Assessment\{VBUName}-{timestamp} if omitted.
+.EXAMPLE
+    .\Run-Assessment.ps1
+    (Interactive mode - prompts for all values)
+.EXAMPLE
+    .\Run-Assessment.ps1 -VbuDomain contoso.com -VbuSearchTerm Contoso -VbuId "12345"
+    (Non-interactive mode - runs with provided parameters)
+#>
+param(
+    [string]$VbuDomain = '',
+    [string]$VbuSearchTerm = '',
+    [string]$VbuId = '',
+    [string]$SharePointAdminUrl = '',
+    [string]$OutputPath = ''
+)
 
 # Define module root before any imports
 $moduleRoot = Join-Path $PSScriptRoot 'Modules'
@@ -68,10 +95,14 @@ Write-Host ('=' * 40) -ForegroundColor Cyan
 Write-Host ''
 
 # -----------------------------------------------------------------------
-# Mode selection
+# Mode selection (skip if VbuDomain parameter provided - run assessment directly)
 # -----------------------------------------------------------------------
-$mode = Show-ModeMenu
-Write-Host ''
+if ($VbuDomain) {
+    $mode = 'Run Assessment'  # Skip menu when called with parameters from GUI
+} else {
+    $mode = Show-ModeMenu
+    Write-Host ''
+}
 
 if ($mode -eq 'Generate Mapping Files') {
     # Mapping mode reads only the workbook - just ImportExcel and the MappingFiles module
@@ -128,12 +159,12 @@ Import-Module (Join-Path $moduleRoot 'SharePoint.psm1')    -Force -DisableNameCh
 Import-Module (Join-Path $moduleRoot 'Workbook.psm1')      -Force -DisableNameChecking -Global
 
 # -----------------------------------------------------------------------
-# User inputs
+# User inputs (use parameters if provided, otherwise prompt)
 # -----------------------------------------------------------------------
-$vbuDomain     = (Read-Host 'VBU Domain       (e.g. contoso.com)').Trim()
-$vbuSearchTerm = (Read-Host 'VBU Search Term  (e.g. Contoso)').Trim()
-$vbuId         = (Read-Host 'VBU ID           (extensionAttribute7 exact value)').Trim()
-$spoInput      = (Read-Host 'SPO Admin URL    [https://ourvolaris-admin.sharepoint.com]').Trim()
+$vbuDomain     = if ($VbuDomain) { $VbuDomain.Trim() } else { (Read-Host 'VBU Domain       (e.g. contoso.com)').Trim() }
+$vbuSearchTerm = if ($PSBoundParameters.ContainsKey('VbuSearchTerm')) { $VbuSearchTerm.Trim() } else { (Read-Host 'VBU Search Term  (e.g. Contoso)').Trim() }
+$vbuId         = if ($PSBoundParameters.ContainsKey('VbuId')) { $VbuId.Trim() } else { (Read-Host 'VBU ID           (extensionAttribute7 exact value)').Trim() }
+$spoInput      = if ($SharePointAdminUrl) { $SharePointAdminUrl.Trim() } else { (Read-Host 'SPO Admin URL    [https://ourvolaris-admin.sharepoint.com]').Trim() }
 $spoAdminUrl   = if ($spoInput) { $spoInput } else { 'https://ourvolaris-admin.sharepoint.com' }
 
 # -----------------------------------------------------------------------
@@ -142,7 +173,7 @@ $spoAdminUrl   = if ($spoInput) { $spoInput } else { 'https://ourvolaris-admin.s
 # Temporary context call to derive VBUName via the shared TLD-strip logic in Common.psm1
 $vbuName      = (New-AssessmentContext -VBUDomain $vbuDomain -VBUId $vbuId -VBUSearchTerm $vbuSearchTerm -RawPath 'TEMP').VBUName
 $timestamp    = Get-Date -Format 'yyyyMMdd-HHmm'
-$assessFolder = Join-Path $PSScriptRoot "$vbuName-$timestamp"
+$assessFolder = if ($OutputPath) { $OutputPath.Trim() } else { Join-Path $PSScriptRoot "$vbuName-$timestamp" }
 $rawPath      = Join-Path $assessFolder 'Raw'
 $xlsxPath     = Join-Path $assessFolder "$vbuName-Assessment.xlsx"
 

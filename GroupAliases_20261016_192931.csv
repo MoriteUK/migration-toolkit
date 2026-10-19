@@ -1,0 +1,3 @@
+"PrimarySmtpAddress","Alias","GroupType"
+"department-legal@transloc.com","legal@transloc.com","MailUniversalSecurityGroup"
+"department-partnerships@transloc.com","partnerships@transloc.com","MailUniversalSecurityGroup"

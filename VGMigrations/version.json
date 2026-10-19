@@ -1,7 +1,14 @@
 {
-  "version": "2.9.174",
+  "version": "2.9.175",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.175",
+      "date": "2026-10-19",
+      "changes": [
+        "Run Assessment: Complete GUI integration - now runs inline in the Electron app with streaming output instead of separate PowerShell windows. Added dedicated view with input fields for VBU Domain, Search Term, VBU ID, SPO Admin URL, Output Folder. Run-Assessment.ps1 now accepts command-line parameters (-VbuDomain, -VbuSearchTerm, -VbuId, -SharePointAdminUrl, -OutputPath) and skips the mode menu when VbuDomain is provided. Fixes duplicate launch bug (changed from data-script to data-view). Same workflow, better UX - parameters pre-filled in GUI, output streams to log panel, no separate windows."
+      ]
+    },
     {
       "version": "2.9.174",
       "date": "2026-10-19",

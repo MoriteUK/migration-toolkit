@@ -1,0 +1,4 @@
+"PrimarySmtpAddress","Alias","GroupType"
+"fara.it-ops_dg@fara.no","dmarc-reports@fara.dk","MailUniversalDistributionGroup"
+"fara.it-ops_dg@fara.no","dmarc-reports@fara.fi","MailUniversalDistributionGroup"
+"fara.it-ops_dg@fara.no","dmarc-reports@fara.no","MailUniversalDistributionGroup"
