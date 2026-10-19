@@ -1,7 +1,14 @@
 {
-  "version": "2.9.180",
+  "version": "2.9.181",
   "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "2.9.181",
+      "date": "2026-10-19",
+      "changes": [
+        "Run Assessment: Output Folder field now auto-populates from Discovery Output Path in settings. Uses the same output folder configured for Discovery, so you don't have to browse each time. You can still override it or leave blank for the default Assessment subfolder."
+      ]
+    },
     {
       "version": "2.9.180",
       "date": "2026-10-19",

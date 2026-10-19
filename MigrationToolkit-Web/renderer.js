@@ -2075,23 +2075,30 @@ async function loadDiscoveryDomains() {
         _vbuMap = {};
         _vbuRows = result.rows;
         result.rows.forEach(r => { _vbuMap[r.domain] = r.vbuId; });
-        return;
       }
     }
 
-    // Fallback: use Customers array from config
-    const customers = cfgResult?.config?.Customers;
-    if (customers && customers.length > 0) {
-      _vbuMap = {};
-      _vbuRows = customers
-        .filter(c => c.Domain) // Only include customers with a domain
-        .map(c => ({
-          domain: c.Domain || '',
-          vbuId: '',
-          vbuName: c.Prefix || ''
-        }));
-      _vbuRows.forEach(r => { _vbuMap[r.domain.toLowerCase()] = r.vbuId; });
-      console.log(`Loaded ${_vbuRows.length} domains from Customers config`);
+    // Fallback: use Customers array from config if no CSV data
+    if (_vbuRows.length === 0) {
+      const customers = cfgResult?.config?.Customers;
+      if (customers && customers.length > 0) {
+        _vbuMap = {};
+        _vbuRows = customers
+          .filter(c => c.Domain) // Only include customers with a domain
+          .map(c => ({
+            domain: c.Domain || '',
+            vbuId: '',
+            vbuName: c.Prefix || ''
+          }));
+        _vbuRows.forEach(r => { _vbuMap[r.domain.toLowerCase()] = r.vbuId; });
+        console.log(`Loaded ${_vbuRows.length} domains from Customers config`);
+      }
+    }
+
+    // Also populate Assessment output folder if that field exists
+    const assessmentOutputField = document.getElementById('assessmentOutputFolder');
+    if (assessmentOutputField && cfgResult?.config?.DiscoveryOutputPath) {
+      assessmentOutputField.value = cfgResult.config.DiscoveryOutputPath;
     }
   } catch (err) {
     console.error('loadDiscoveryDomains failed:', err);
