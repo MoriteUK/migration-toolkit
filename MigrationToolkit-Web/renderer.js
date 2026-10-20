@@ -3410,14 +3410,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.electronAPI.onPsOutput(appendAssessmentLog);
       try {
+        console.log('[Assessment] Starting script...');
         const result = await runStreamingScript('Assessment/Run-Assessment.ps1', args);
-        appendAssessmentLog(result.success ? '\n✓ Assessment complete\n' : `\n✗ Failed (exit ${result.code})\n`);
+        console.log('[Assessment] Script completed:', result);
+        if (result && result.success !== undefined) {
+          appendAssessmentLog(result.success ? '\n✓ Assessment complete\n' : `\n✗ Failed (exit ${result.code})\n`);
+        }
       } catch (err) {
+        console.error('[Assessment] Script error:', err);
         appendAssessmentLog(`\nError: ${err.message || err}\n`);
       } finally {
-        window.electronAPI.offPsOutput();
-        startAssessmentBtn.disabled = false;
-        startAssessmentBtn.textContent = '▶ Start Assessment';
+        console.log('[Assessment] Resetting button...');
+        try {
+          window.electronAPI.offPsOutput();
+        } catch (e) {
+          console.error('[Assessment] Error turning off PS output:', e);
+        }
+        if (startAssessmentBtn) {
+          startAssessmentBtn.disabled = false;
+          startAssessmentBtn.textContent = '▶ Start Assessment';
+          console.log('[Assessment] Button reset complete');
+        }
       }
     });
   }

@@ -1,7 +1,14 @@
 {
-  "version": "2.9.187",
+  "version": "2.9.188",
   "releaseDate": "2026-10-20",
   "changelog": [
+    {
+      "version": "2.9.188",
+      "date": "2026-10-20",
+      "changes": [
+        "Run Assessment: Fixed button not resetting after script completes. Added defensive error handling and console logging to diagnose button state issues. The finally block now has explicit null checks and error catching to ensure the button always resets. Console logs show script lifecycle (start, complete, button reset) for debugging. Check DevTools console (Ctrl+Shift+I) if button still doesn't reset - the logs will show exactly where it's failing."
+      ]
+    },
     {
       "version": "2.9.187",
       "date": "2026-10-20",
