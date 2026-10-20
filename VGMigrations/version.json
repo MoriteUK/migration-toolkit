@@ -1,7 +1,14 @@
 {
-  "version": "2.9.191",
+  "version": "2.9.192",
   "releaseDate": "2026-10-20",
   "changelog": [
+    {
+      "version": "2.9.192",
+      "date": "2026-10-20",
+      "changes": [
+        "GUI: Updated cache-busting version numbers in index.html. Changed renderer.js from v=2.9.92 to v=2.9.191 and main.css from v=2.9.113 to v=2.9.191. This forces the browser to reload the latest JavaScript and CSS files instead of using old cached versions. Fixes issue where fixes like button reset weren't working because old cached code was being used."
+      ]
+    },
     {
       "version": "2.9.191",
       "date": "2026-10-20",
