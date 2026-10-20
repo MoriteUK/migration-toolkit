@@ -1,7 +1,14 @@
 {
-  "version": "2.9.185",
+  "version": "2.9.186",
   "releaseDate": "2026-10-20",
   "changelog": [
+    {
+      "version": "2.9.186",
+      "date": "2026-10-20",
+      "changes": [
+        "Run Assessment: Now exports ALL workbook sheets to CSV (23 files total, up from 12). Added: AD Groups, Transport Rules, Power Platform, Connectors, Remote Domains, Journal Rules, Mailbox Permissions, Mail-Enabled Security Groups, Dynamic Distribution Groups, Resource Mailboxes, AD Group Memberships. Assessment collects more data than search-domain in some areas (e.g. mailbox permissions, journal rules, connectors) but still doesn't collect Planner Plans, Proxy Addresses filter, or Entra CA/Auth policies that search-domain has."
+      ]
+    },
     {
       "version": "2.9.185",
       "date": "2026-10-20",
