@@ -1,7 +1,14 @@
 {
-  "version": "2.9.186",
+  "version": "2.9.187",
   "releaseDate": "2026-10-20",
   "changelog": [
+    {
+      "version": "2.9.187",
+      "date": "2026-10-20",
+      "changes": [
+        "Run Assessment: Output now goes into domain-specific subfolders (matching Discovery behavior). If output folder is C:\\M365Discovery and domain is trapezegroup.me, all files (Raw, MappingFiles, CSV, Excel) are saved to C:\\M365Discovery\\trapezegroup.me\\. Keeps multi-domain assessments organized and consistent with Discovery output structure."
+      ]
+    },
     {
       "version": "2.9.186",
       "date": "2026-10-20",

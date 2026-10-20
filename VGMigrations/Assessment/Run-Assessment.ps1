@@ -173,7 +173,13 @@ $spoAdminUrl   = if ($spoInput) { $spoInput } else { 'https://ourvolaris-admin.s
 # Temporary context call to derive VBUName via the shared TLD-strip logic in Common.psm1
 $vbuName      = (New-AssessmentContext -VBUDomain $vbuDomain -VBUId $vbuId -VBUSearchTerm $vbuSearchTerm -RawPath 'TEMP').VBUName
 $timestamp    = Get-Date -Format 'yyyyMMdd-HHmm'
-$assessFolder = if ($OutputPath) { $OutputPath.Trim() } else { Join-Path $PSScriptRoot "$vbuName-$timestamp" }
+$assessFolder = if ($OutputPath) {
+    # Create domain-specific subfolder: e.g. C:\M365Discovery\trapezegroup.me
+    $basePath = $OutputPath.Trim()
+    Join-Path $basePath $vbuDomain
+} else {
+    Join-Path $PSScriptRoot "$vbuName-$timestamp"
+}
 $rawPath      = Join-Path $assessFolder 'Raw'
 $xlsxPath     = Join-Path $assessFolder "$vbuName-Assessment.xlsx"
 
