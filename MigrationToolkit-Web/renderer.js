@@ -405,7 +405,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
           logOutput.textContent += `Starting discovery ${i + 1}/${domainsToRun.length}: ${domain}\n\n`;
 
-          const args = ['-Domain', domain, '-OutputPath', outputFolder, '-IncludeMembers'];
+          // Create domain-specific subfolder: e.g. C:\M365Discovery\trapezegroup.me
+          const domainOutputPath = outputFolder.endsWith('\\') || outputFolder.endsWith('/')
+            ? `${outputFolder}${domain}`
+            : `${outputFolder}\\${domain}`;
+
+          const args = ['-Domain', domain, '-OutputPath', domainOutputPath, '-IncludeMembers'];
 
           if (vbuId && domainsToRun.length === 1) {
             args.push('-BusinessUnitId', vbuId);

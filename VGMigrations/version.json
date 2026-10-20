@@ -1,7 +1,14 @@
 {
-  "version": "2.9.184",
-  "releaseDate": "2026-10-19",
+  "version": "2.9.185",
+  "releaseDate": "2026-10-20",
   "changelog": [
+    {
+      "version": "2.9.185",
+      "date": "2026-10-20",
+      "changes": [
+        "Discovery: Output files now go into domain-specific subfolders. If output folder is C:\\M365Discovery and domain is trapezegroup.me, files are saved to C:\\M365Discovery\\trapezegroup.me\\. Makes it easier to organize multi-domain discoveries and keeps each domain's files separate."
+      ]
+    },
     {
       "version": "2.9.184",
       "date": "2026-10-19",
