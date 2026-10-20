@@ -201,6 +201,8 @@ function Invoke-WorkbookGeneration {
         $spoSites          = Import-AssessmentJson -FileName 'SharePointSites.json'           -RawPath $Context.RawPath
         $oneDrives         = Import-AssessmentJson -FileName 'OneDrives.json'                 -RawPath $Context.RawPath
         $powerPlatform     = Import-AssessmentJson -FileName 'PowerPlatform.json'             -RawPath $Context.RawPath
+        $userLicenses      = Import-AssessmentJson -FileName 'UserLicenses.json'              -RawPath $Context.RawPath
+        $licenseCounts     = Import-AssessmentJson -FileName 'LicenseCounts.json'             -RawPath $Context.RawPath
 
         Write-Host ($PREFIX_INFO + 'Classifying Teams, Groups, and Sites...') -ForegroundColor DarkGray
 
@@ -246,6 +248,8 @@ function Invoke-WorkbookGeneration {
             [PSCustomObject]@{ Section = 'Devices';                         Value = $devices.Count }
             [PSCustomObject]@{ Section = 'App Registrations';              Value = $appRegistrations.Count }
             [PSCustomObject]@{ Section = 'Power Platform Objects';          Value = $powerPlatform.Count }
+            [PSCustomObject]@{ Section = 'User Licenses (assigned)';        Value = $userLicenses.Count }
+            [PSCustomObject]@{ Section = 'License SKUs (tenant)';           Value = $licenseCounts.Count }
         )
 
         Write-Host ($PREFIX_INFO + 'Writing workbook...') -ForegroundColor DarkGray
@@ -291,6 +295,8 @@ function Invoke-WorkbookGeneration {
         Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Devices'                      -Data $devices
         Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'App Registrations'            -Data $appRegistrations
         Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Power Platform'               -Data $powerPlatform
+        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'User Licenses'                -Data $userLicenses
+        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'License Counts'               -Data $licenseCounts
 
         Write-Host ($PREFIX_OK + 'Workbook written: ' + (Split-Path $XlsxPath -Leaf)) -ForegroundColor Green
     }

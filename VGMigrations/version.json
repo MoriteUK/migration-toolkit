@@ -1,7 +1,14 @@
 {
-  "version": "2.9.188",
+  "version": "2.9.189",
   "releaseDate": "2026-10-20",
   "changelog": [
+    {
+      "version": "2.9.189",
+      "date": "2026-10-20",
+      "changes": [
+        "Assessment & Discovery: Added license information with friendly names. Discovery already had 22_UserLicenses.csv (one row per user with LicenseNames column showing friendly names like 'Microsoft 365 E3', 'Business Premium') and 22a_LicenseCounts.csv (aggregate counts per SKU). Assessment now also exports this - added 'User Licenses' and 'License Counts' sheets to Excel workbook and 24_UserLicenses.csv + 25_LicenseCounts.csv to CSV output. Use for reference when assigning licenses in the new tenant."
+      ]
+    },
     {
       "version": "2.9.188",
       "date": "2026-10-20",

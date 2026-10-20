@@ -334,6 +334,8 @@ try {
             'Dynamic Distribution Groups'  = '21_DynamicDistributionGroups.csv'
             'Resource Mailboxes'           = '22_ResourceMailboxes.csv'
             'AD Group Memberships'         = '23_ADGroupMemberships.csv'
+            'User Licenses'                = '24_UserLicenses.csv'
+            'License Counts'               = '25_LicenseCounts.csv'
         }
 
         foreach ($sheet in $sheetToCsv.Keys) {
