@@ -1,7 +1,14 @@
 {
-  "version": "2.9.190",
+  "version": "2.9.191",
   "releaseDate": "2026-10-20",
   "changelog": [
+    {
+      "version": "2.9.191",
+      "date": "2026-10-20",
+      "changes": [
+        "GUI: Reduced sidebar submenu item spacing to fix Domain Removal section being cut off. Changed .sidebar-subitem vertical padding from 10px to 7px, saving 6px per item. The 'Check AD References' option at the bottom of Domain Removal is now fully visible without scrolling."
+      ]
+    },
     {
       "version": "2.9.190",
       "date": "2026-10-20",
