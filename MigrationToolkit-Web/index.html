@@ -1898,6 +1898,15 @@
           </div>
 
           <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">User List File <span style="font-weight:normal;color:var(--color-text-muted)">(optional - one username per line)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="retireUserListFile" placeholder="Leave blank to retire all devices, or specify file to filter...">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="txt,csv">Browse</button>
+            </div>
+            <small class="form-help" style="margin-top:4px; display:block;">Upload a text file with usernames (one per line) to only retire devices owned by those users. Use this to preserve devices for users with old domain aliases who aren't being migrated.</small>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
             <label class="form-label">Tenant Domain</label>
             <input type="text" class="form-input form-input-compact" id="retireDomain" placeholder="Set in Settings > Discovery" readonly style="background:#f9fafb; cursor:not-allowed;">
             <small class="form-help" style="margin-top:4px; display:block;">Change this in Settings (⚙) > Discovery tab. Passed to Connect-MgGraph -TenantId so sign-in lands in the right tenant instead of failing every device with Request_ResourceNotFound.</small>

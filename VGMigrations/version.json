@@ -1,7 +1,14 @@
 {
-  "version": "2.9.189",
+  "version": "2.9.190",
   "releaseDate": "2026-10-20",
   "changelog": [
+    {
+      "version": "2.9.190",
+      "date": "2026-10-20",
+      "changes": [
+        "Retire Devices: Added user list filtering to selectively retire devices. Upload a text file with usernames (one per line) to only retire devices owned by those users. This prevents retiring devices for users who have an old domain alias but aren't being migrated and need their devices to continue working. GUI has new 'User List File' field, script has -UserListFile parameter. Matches against OwnerUPN column in devices CSV (case-insensitive). Leave blank to retire all devices as before."
+      ]
+    },
     {
       "version": "2.9.189",
       "date": "2026-10-20",

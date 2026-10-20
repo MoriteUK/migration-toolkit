@@ -27,12 +27,19 @@
     Without this, sign-in lands in the signed-in account's home tenant, which will not contain
     the device object IDs from the discovery CSV if that account isn't native to the customer
     tenant — every Update-MgDevice call then fails with Request_ResourceNotFound.
+
+.PARAMETER UserListFile
+    Optional text file containing usernames (one per line) to filter devices. Only devices
+    owned by users in this list will be retired. Use this to selectively retire devices for
+    users being migrated while preserving devices for users with old domain aliases who aren't
+    being migrated. The script matches against the OwnerUPN column in the devices CSV.
 #>
 
 param(
     [string]$DiscoveryFolder = '',
     [string]$CsvFile         = '',
     [string]$Domain          = '',
+    [string]$UserListFile    = '',
     [switch]$WhatIf
 )
 
@@ -53,12 +60,55 @@ if (-not $csvPath -or -not (Test-Path $csvPath)) {
     exit 1
 }
 
-$devices = @(Import-Csv -Path $csvPath -Encoding UTF8)
+$allDevices = @(Import-Csv -Path $csvPath -Encoding UTF8)
 Write-Host "=== Retire Devices$(if ($WhatIf) { ' [WhatIf]' }) ==="
 Write-Host "CSV          : $csvPath"
-Write-Host "Device count : $($devices.Count)"
+Write-Host "Total devices: $($allDevices.Count)"
 
-if ($devices.Count -eq 0) { Write-Host 'No devices in CSV.'; exit 0 }
+if ($allDevices.Count -eq 0) { Write-Host 'No devices in CSV.'; exit 0 }
+
+# Filter by user list if provided
+$devices = $allDevices
+if ($UserListFile) {
+    if (-not (Test-Path $UserListFile)) {
+        Write-Host "ERROR: User list file not found: $UserListFile" -ForegroundColor Red
+        exit 1
+    }
+
+    $userList = @(Get-Content -Path $UserListFile -Encoding UTF8 |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -and -not $_.StartsWith('#') })
+
+    Write-Host "User list    : $UserListFile"
+    Write-Host "Users loaded : $($userList.Count)"
+
+    # Check if devices have OwnerUPN column
+    $cols = @($allDevices[0].PSObject.Properties.Name)
+    if ($cols -notcontains 'OwnerUPN') {
+        Write-Host "ERROR: Devices CSV must have an 'OwnerUPN' column when filtering by user list. Found: $($cols -join ', ')" -ForegroundColor Red
+        exit 1
+    }
+
+    # Filter devices to only those owned by users in the list (case-insensitive)
+    $userSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($u in $userList) { $userSet.Add($u) | Out-Null }
+
+    $devices = @($allDevices | Where-Object {
+        $owner = $_.OwnerUPN
+        $owner -and $userSet.Contains($owner)
+    })
+
+    Write-Host "Filtered to  : $($devices.Count) device(s) owned by users in the list" -ForegroundColor Cyan
+
+    if ($devices.Count -eq 0) {
+        Write-Host 'No devices match the user list.' -ForegroundColor Yellow
+        exit 0
+    }
+}
+
+Write-Host "Retiring     : $($devices.Count) device(s)"
+
+if ($devices.Count -eq 0) { Write-Host 'No devices to retire.'; exit 0 }
 
 # Detect ID column
 $cols = @($devices[0].PSObject.Properties.Name)

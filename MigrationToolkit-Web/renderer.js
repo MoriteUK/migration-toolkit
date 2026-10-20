@@ -4657,10 +4657,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const retireRunBtn = document.getElementById('retireRunBtn');
   if (retireRunBtn) {
     retireRunBtn.addEventListener('click', async () => {
-      const folder  = document.getElementById('retireDiscoveryFolder').value.trim();
-      const csvFile = document.getElementById('retireCsvFile').value.trim();
-      const domain  = document.getElementById('retireDomain').value.trim();
-      const whatIf  = document.getElementById('retireWhatIf').checked;
+      const folder      = document.getElementById('retireDiscoveryFolder').value.trim();
+      const csvFile     = document.getElementById('retireCsvFile').value.trim();
+      const userListFile = document.getElementById('retireUserListFile').value.trim();
+      const domain      = document.getElementById('retireDomain').value.trim();
+      const whatIf      = document.getElementById('retireWhatIf').checked;
 
       if (!folder && !csvFile) { alert('Please select a Discovery folder or CSV file.'); return; }
       if (!domain) { alert('Tenant Domain is not set.\n\nSet it in Settings (⚙) > Discovery tab — without it, sign-in lands in your own home tenant, not the customer\'s, and every update fails with Request_ResourceNotFound.'); return; }
@@ -4674,10 +4675,11 @@ document.addEventListener('DOMContentLoaded', () => {
       retireRunBtn.textContent = 'Running…';
 
       const args = [];
-      if (csvFile)  args.push('-CsvFile', csvFile);
-      else          args.push('-DiscoveryFolder', folder);
+      if (csvFile)      args.push('-CsvFile', csvFile);
+      else              args.push('-DiscoveryFolder', folder);
       args.push('-Domain', domain);
-      if (whatIf)   args.push('-WhatIf');
+      if (userListFile) args.push('-UserListFile', userListFile);
+      if (whatIf)       args.push('-WhatIf');
 
       window.electronAPI.onPsOutput((text) => {
         logOutput.textContent += text;
