@@ -7,17 +7,128 @@ $script:GraphBase = 'https://graph.microsoft.com/v1.0'
 
 # Static skuPartNumber -> friendly product name lookup, falls back to the raw skuPartNumber
 $script:LicenseFriendlyNames = @{
-    'SPE_E3'                = 'Microsoft 365 E3'
-    'SPE_E5'                = 'Microsoft 365 E5'
-    'ENTERPRISEPACK'        = 'Office 365 E3'
-    'ENTERPRISEPREMIUM'     = 'Office 365 E5'
-    'SPB'                   = 'Microsoft 365 Business Premium'
-    'O365_BUSINESS_PREMIUM' = 'Microsoft 365 Business Standard'
-    'FLOW_FREE'             = 'Microsoft Power Automate Free'
-    'POWER_BI_STANDARD'     = 'Power BI Free'
-    'EXCHANGESTANDARD'      = 'Exchange Online Plan 1'
-    'EXCHANGEENTERPRISE'    = 'Exchange Online Plan 2'
-    'TEAMS_EXPLORATORY'     = 'Teams Exploratory'
+    # Microsoft 365 Enterprise
+    'SPE_E3'                        = 'Microsoft 365 E3'
+    'SPE_E5'                        = 'Microsoft 365 E5'
+    'SPE_F1'                        = 'Microsoft 365 F1'
+    'SPE_F3'                        = 'Microsoft 365 F3'
+    'Microsoft_365_E3'              = 'Microsoft 365 E3'
+    'Microsoft_365_E5'              = 'Microsoft 365 E5'
+    'M365EDU_A3_FACULTY'            = 'Microsoft 365 A3 for Faculty'
+    'M365EDU_A3_STUDENT'            = 'Microsoft 365 A3 for Students'
+    'M365EDU_A5_FACULTY'            = 'Microsoft 365 A5 for Faculty'
+    'M365EDU_A5_STUDENT'            = 'Microsoft 365 A5 for Students'
+
+    # Office 365 Enterprise
+    'ENTERPRISEPACK'                = 'Office 365 E3'
+    'ENTERPRISEPREMIUM'             = 'Office 365 E5'
+    'ENTERPRISEPACK_USGOV_DOD'      = 'Office 365 E3 (US Gov DoD)'
+    'ENTERPRISEPACK_USGOV_GCCHIGH'  = 'Office 365 E3 (US Gov GCC High)'
+    'ENTERPRISEPREMIUM_NOPSTNCONF'  = 'Office 365 E5 without Audio Conferencing'
+    'DESKLESSPACK'                  = 'Office 365 F3'
+    'O365_BUSINESS'                 = 'Office 365 Business'
+    'O365_BUSINESS_ESSENTIALS'      = 'Office 365 Business Essentials'
+    'O365_BUSINESS_PREMIUM'         = 'Office 365 Business Premium'
+    'SMB_BUSINESS'                  = 'Microsoft 365 Apps for Business'
+    'OFFICESUBSCRIPTION'            = 'Microsoft 365 Apps for Enterprise'
+    'LITEPACK'                      = 'Office 365 Small Business'
+
+    # Microsoft 365 Business
+    'SPB'                           = 'Microsoft 365 Business Premium'
+    'O365_BUSINESS_PREMIUM'         = 'Microsoft 365 Business Standard'
+    'SMB_BUSINESS_PREMIUM'          = 'Microsoft 365 Business Premium'
+    'BUSINESS_ESSENTIALS'           = 'Microsoft 365 Business Basic'
+    'SMB_BUSINESS_ESSENTIALS'       = 'Microsoft 365 Business Basic'
+
+    # Exchange Online
+    'EXCHANGESTANDARD'              = 'Exchange Online Plan 1'
+    'EXCHANGEENTERPRISE'            = 'Exchange Online Plan 2'
+    'EXCHANGEARCHIVE'               = 'Exchange Online Archiving'
+    'EXCHANGEARCHIVE_ADDON'         = 'Exchange Online Archiving for Exchange Online'
+    'EXCHANGEDESKLESS'              = 'Exchange Online Kiosk'
+    'EXCHANGE_S_ESSENTIALS'         = 'Exchange Online Essentials'
+    'EOP_ENTERPRISE'                = 'Exchange Online Protection'
+
+    # SharePoint
+    'SHAREPOINTSTANDARD'            = 'SharePoint Online Plan 1'
+    'SHAREPOINTENTERPRISE'          = 'SharePoint Online Plan 2'
+    'SHAREPOINTSTORAGE'             = 'SharePoint Online Storage'
+    'SHAREPOINTWAC'                 = 'Office Online'
+
+    # Teams
+    'TEAMS_EXPLORATORY'             = 'Microsoft Teams Exploratory'
+    'TEAMS1'                        = 'Microsoft Teams'
+    'TEAMS_COMMERCIAL_TRIAL'        = 'Microsoft Teams Commercial Cloud Trial'
+    'MCOEV'                         = 'Microsoft Teams Phone Standard'
+    'MCOEV_DOD'                     = 'Microsoft Teams Phone Standard for DoD'
+    'MCOEV_GOV'                     = 'Microsoft Teams Phone Standard for Government'
+    'MCOPSTN1'                      = 'Domestic Calling Plan (120 min)'
+    'MCOPSTN2'                      = 'Domestic and International Calling Plan'
+    'MCOPSTN5'                      = 'Domestic Calling Plan (3000 min)'
+    'MCOPSTN_5'                     = 'Domestic Calling Plan (3000 min)'
+    'MCOPSTN6'                      = 'Domestic Calling Plan (1200 min)'
+    'MCOMEETADV'                    = 'Microsoft 365 Audio Conferencing'
+
+    # Power Platform
+    'FLOW_FREE'                     = 'Microsoft Power Automate Free'
+    'FLOW_P1'                       = 'Microsoft Power Automate Plan 1'
+    'FLOW_P2'                       = 'Microsoft Power Automate Plan 2'
+    'POWER_BI_STANDARD'             = 'Power BI Free'
+    'POWER_BI_PRO'                  = 'Power BI Pro'
+    'POWER_BI_ADDON'                = 'Power BI for Office 365 Add-On'
+    'POWER_BI_INDIVIDUAL_USER'      = 'Power BI Individual'
+    'POWERAPPS_VIRAL'               = 'Microsoft Power Apps Plan 2 Trial'
+    'POWERAPPS_PER_USER'            = 'Power Apps Per User Plan'
+    'POWERAPPS_PER_APP'             = 'Power Apps Per App Plan'
+
+    # Project & Visio
+    'PROJECTPREMIUM'                = 'Project Plan 5'
+    'PROJECTONLINE_PLAN_1'          = 'Project Plan 1'
+    'PROJECTESSENTIALS'             = 'Project Plan 3'
+    'PROJECTPROFESSIONAL'           = 'Project Plan 5'
+    'VISIOONLINE_PLAN1'             = 'Visio Plan 1'
+    'VISIOCLIENT'                   = 'Visio Plan 2'
+
+    # Security & Compliance
+    'EMS'                           = 'Enterprise Mobility + Security E3'
+    'EMSPREMIUM'                    = 'Enterprise Mobility + Security E5'
+    'AAD_PREMIUM'                   = 'Azure Active Directory Premium P1'
+    'AAD_PREMIUM_P2'                = 'Azure Active Directory Premium P2'
+    'ADALLOM_S_STANDALONE'          = 'Microsoft Defender for Cloud Apps'
+    'ATP_ENTERPRISE'                = 'Microsoft Defender for Office 365 Plan 1'
+    'THREAT_INTELLIGENCE'           = 'Microsoft Defender for Office 365 Plan 2'
+    'INFORMATION_PROTECTION_COMPLIANCE' = 'Microsoft 365 E5 Compliance'
+    'IDENTITY_THREAT_PROTECTION'    = 'Microsoft 365 E5 Security'
+    'M365_SECURITY_COMPLIANCE_FOR_FLW' = 'Microsoft 365 F5 Security + Compliance'
+    'RIGHTSMANAGEMENT'              = 'Azure Rights Management'
+    'RIGHTSMANAGEMENT_ADHOC'        = 'Rights Management Adhoc'
+    'INFORMATION_BARRIERS'          = 'Information Barriers'
+    'EQUIVIO_ANALYTICS'             = 'Office 365 Advanced eDiscovery'
+    'LOCKBOX_ENTERPRISE'            = 'Customer Lockbox'
+
+    # Intune & Device Management
+    'INTUNE_A'                      = 'Microsoft Intune'
+    'INTUNE_A_D'                    = 'Microsoft Intune Device'
+    'INTUNE_A_VL'                   = 'Microsoft Intune (Volume License)'
+    'WIN10_PRO_ENT_SUB'             = 'Windows 10/11 Enterprise E3'
+    'WIN10_VDA_E3'                  = 'Windows 10/11 Enterprise E3 VDA'
+    'WIN10_VDA_E5'                  = 'Windows 10/11 Enterprise E5'
+
+    # Standalone Services
+    'STREAM'                        = 'Microsoft Stream'
+    'COMMUNICATIONS_DLP'            = 'Microsoft Communications DLP'
+    'COMMUNICATIONS_COMPLIANCE'     = 'Microsoft Communications Compliance'
+    'YAMMER_ENTERPRISE'             = 'Yammer Enterprise'
+    'RMS_S_ENTERPRISE'              = 'Azure Active Directory Rights Management'
+    'CRMSTANDARD'                   = 'Microsoft Dynamics CRM Online'
+    'CRMPLAN2'                      = 'Microsoft Dynamics CRM Online Basic'
+
+    # Developer & Other
+    'DEVELOPERPACK'                 = 'Microsoft 365 E3 Developer'
+    'DEVELOPERPACK_E5'              = 'Microsoft 365 E5 Developer'
+    'WIN_DEF_ATP'                   = 'Microsoft Defender for Endpoint'
+    'MDATP_Server'                  = 'Microsoft Defender for Endpoint Server'
+    'WDATP_UNIFIED_SERVER'          = 'Microsoft Defender for Endpoint Server'
 }
 
 # -----------------------------------------------------------------------
@@ -361,8 +472,25 @@ function Get-FriendlyLicenseName {
     Retrieves tenant-wide subscribed SKUs (licenses available on the tenant).
 #>
 function Get-SubscribedSkuData {
-    $response = Invoke-MgGraphRequest -Uri "$script:GraphBase/subscribedSkus" -Method GET -ErrorAction Stop
-    return @($response.value)
+    try {
+        Write-Host ($PREFIX_INFO + 'Fetching tenant subscribed SKUs...') -ForegroundColor DarkGray
+        $response = Invoke-MgGraphRequest -Uri "$script:GraphBase/subscribedSkus" -Method GET -ErrorAction Stop
+        $skus = @($response.value)
+
+        Write-Host ($PREFIX_INFO + "Found $($skus.Count) subscribed SKU(s):") -ForegroundColor DarkGray
+        foreach ($sku in $skus) {
+            $friendly = Get-FriendlyLicenseName -SkuPartNumber $sku.skuPartNumber
+            $available = $sku.prepaidUnits.enabled - $sku.consumedUnits
+            Write-Host ($PREFIX_INFO + "  - $friendly ($($sku.skuPartNumber)): $($sku.consumedUnits) assigned, $available available") -ForegroundColor DarkGray
+        }
+
+        return $skus
+    }
+    catch {
+        Write-Host ($PREFIX_WARN + "Failed to fetch subscribed SKUs: $($_.Exception.Message)") -ForegroundColor Yellow
+        Write-Host ($PREFIX_INFO + 'Check that the required Graph permission (Organization.Read.All) is granted') -ForegroundColor DarkGray
+        throw
+    }
 }
 
 <#
@@ -378,26 +506,58 @@ function Get-UserLicenseData {
     $adUsersPath = Join-Path $Context.RawPath 'ADUsers.json'
     if (-not (Test-Path $adUsersPath)) {
         Write-Host ($PREFIX_WARN + 'ADUsers.json not found - user license lookup skipped') -ForegroundColor Yellow
+        Write-Host ($PREFIX_INFO + "Expected path: $adUsersPath") -ForegroundColor DarkGray
         return @()
     }
 
+    Write-Host ($PREFIX_INFO + 'Building SKU lookup table from subscribed SKUs...') -ForegroundColor DarkGray
     $skuLookup = @{}
     foreach ($sku in $SubscribedSkus) {
-        if ($sku.skuId) { $skuLookup[$sku.skuId.ToString()] = $sku.skuPartNumber }
+        if ($sku.skuId) {
+            $skuLookup[$sku.skuId.ToString()] = $sku.skuPartNumber
+        }
     }
+    Write-Host ($PREFIX_INFO + "SKU lookup table: $($skuLookup.Count) SKU(s)") -ForegroundColor DarkGray
 
     $adUsers = Get-Content $adUsersPath -Raw | ConvertFrom-Json
-    $records = [System.Collections.Generic.List[PSCustomObject]]::new()
+    Write-Host ($PREFIX_INFO + "Processing licenses for $($adUsers.Count) user(s)...") -ForegroundColor DarkGray
 
+    $records = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $successCount = 0
+    $errorCount = 0
+    $usersWithLicenses = 0
+    $usersWithoutLicenses = 0
+
+    $current = 0
     foreach ($u in $adUsers) {
+        $current++
         $upn = $u.UserPrincipalName
-        if (-not $upn) { continue }
+        if (-not $upn) {
+            Write-Host ($PREFIX_WARN + "Skipping user without UPN (DisplayName: $($u.DisplayName))") -ForegroundColor Yellow
+            continue
+        }
+
+        # Show progress every 50 users
+        if ($current % 50 -eq 0) {
+            Write-Host ($PREFIX_INFO + "Progress: $current of $($adUsers.Count) users processed (Success: $successCount, Errors: $errorCount)") -ForegroundColor DarkGray
+        }
 
         try {
             $result = Invoke-MgGraphRequest -Uri "$script:GraphBase/users/$([Uri]::EscapeDataString($upn))?`$select=assignedLicenses,displayName" -Method GET -ErrorAction Stop
+            $successCount++
         }
         catch {
-            Write-Host ($PREFIX_WARN + "Could not retrieve licenses for '$upn': " + $_.Exception.Message) -ForegroundColor Yellow
+            $errorCount++
+            $errorMsg = $_.Exception.Message
+            if ($errorMsg -like '*Request_ResourceNotFound*') {
+                Write-Host ($PREFIX_WARN + "User not found in Entra ID: '$upn'") -ForegroundColor Yellow
+            }
+            elseif ($errorMsg -like '*Authorization_RequestDenied*' -or $errorMsg -like '*Forbidden*') {
+                Write-Host ($PREFIX_WARN + "Authorization denied reading licenses for '$upn' - check Graph permissions") -ForegroundColor Yellow
+            }
+            else {
+                Write-Host ($PREFIX_WARN + "Could not retrieve licenses for '$upn': $errorMsg") -ForegroundColor Yellow
+            }
             continue
         }
 
@@ -413,6 +573,8 @@ function Get-UserLicenseData {
             $skuIds.Add($skuId)
         }
 
+        if ($skuIds.Count -gt 0) { $usersWithLicenses++ } else { $usersWithoutLicenses++ }
+
         $records.Add([PSCustomObject]@{
             DisplayName       = $result.displayName
             UserPrincipalName = $upn
@@ -421,6 +583,18 @@ function Get-UserLicenseData {
             LicenseNames      = $licenseNames -join '|'
             SkuIds            = $skuIds -join '|'
         })
+    }
+
+    Write-Host ($PREFIX_INFO + "License lookup complete:") -ForegroundColor DarkGray
+    Write-Host ($PREFIX_INFO + "  Total users processed: $current") -ForegroundColor DarkGray
+    Write-Host ($PREFIX_INFO + "  Successful lookups: $successCount") -ForegroundColor DarkGray
+    Write-Host ($PREFIX_INFO + "  Failed lookups: $errorCount") -ForegroundColor DarkGray
+    Write-Host ($PREFIX_INFO + "  Users with licenses: $usersWithLicenses") -ForegroundColor DarkGray
+    Write-Host ($PREFIX_INFO + "  Users without licenses: $usersWithoutLicenses") -ForegroundColor DarkGray
+
+    if ($errorCount -gt 0) {
+        Write-Host ($PREFIX_WARN + "License collection had $errorCount error(s) - check Graph API permissions") -ForegroundColor Yellow
+        Write-Host ($PREFIX_INFO + "Required scopes: User.Read.All, Organization.Read.All") -ForegroundColor DarkGray
     }
 
     return $records.ToArray()
