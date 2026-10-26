@@ -275,6 +275,44 @@ function Show-MiscSubMenu {
     $dlg.Controls.Add($miscSub3)
     $y += 26
 
+    # ── Assign Licenses ───────────────────────────────────────────────────────
+    $miscScript4 = Join-Path $PSScriptRoot 'Assign-Licenses.ps1'
+    $miscBtn4 = New-Object System.Windows.Forms.Button
+    $miscBtn4.Text      = 'Assign Licenses'
+    $miscBtn4.Font      = New-Object System.Drawing.Font('Segoe UI Semibold', 14)
+    $miscBtn4.Location  = [System.Drawing.Point]::new($bX, $y)
+    $miscBtn4.Size      = [System.Drawing.Size]::new($bW, $bH)
+    $miscBtn4.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $miscBtn4.FlatAppearance.BorderSize = 0
+    $miscBtn4.BackColor = $clrAccent
+    $miscBtn4.ForeColor = [System.Drawing.Color]::White
+    $miscBtn4.Cursor    = [System.Windows.Forms.Cursors]::Hand
+    $miscBtn4.Add_Click({
+        Write-Log "Assign Licenses clicked  path=$miscScript4"
+        if (-not (Test-Path $miscScript4)) {
+            [System.Windows.Forms.MessageBox]::Show("Script not found:`n$miscScript4", 'Not Found', 'OK', 'Warning') | Out-Null; return
+        }
+        try   { [FlyConsole.NativeMethods]::AllowSetForegroundWindow(-1) | Out-Null } catch {}
+        try {
+            Start-HiddenProcess 'pwsh.exe' "-NoProfile -ExecutionPolicy Bypass -File `"$miscScript4`""
+            Write-Log 'Assign Licenses launched'
+        } catch {
+            Write-Log "Assign Licenses launch FAILED: $_" 'ERROR'
+            [System.Windows.Forms.MessageBox]::Show("Failed to launch:`n$_", 'Launch Error', 'OK', 'Error') | Out-Null
+        }
+    }.GetNewClosure())
+    $dlg.Controls.Add($miscBtn4)
+    $y += $bH + 6
+
+    $miscSub4 = New-Object System.Windows.Forms.Label
+    $miscSub4.Text      = 'Assign licenses to users from exported CSV after tenant migration'
+    $miscSub4.Font      = New-Object System.Drawing.Font('Segoe UI', 8.5)
+    $miscSub4.ForeColor = $clrMuted
+    $miscSub4.Location  = [System.Drawing.Point]::new($bX + 4, $y)
+    $miscSub4.AutoSize  = $true
+    $dlg.Controls.Add($miscSub4)
+    $y += 26
+
     $dlg.ClientSize = [System.Drawing.Size]::new(480, ($y + 56))
 
     $footer = New-Object System.Windows.Forms.Panel
