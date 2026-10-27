@@ -15,20 +15,101 @@ function Write-WorksheetData {
     param(
         [string]$XlsxPath,
         [string]$WorksheetName,
-        $Data
+        $Data,
+        [switch]$AddMigrationColumns,
+        [switch]$GreenTab
     )
     $hasData = $null -ne $Data -and @($Data).Count -gt 0
     $rows    = if ($hasData) { $Data } else {
         @([PSCustomObject]@{ Note = '(No data collected)' })
     }
 
+    # Add migration columns if requested
+    if ($AddMigrationColumns -and $hasData) {
+        $rows = @($rows | Select-Object *,
+            @{N='Migrate';E={''}},
+            @{N='MigrateAs';E={''}},
+            @{N='Reason';E={''}}
+        )
+    }
+
     if ($hasData) {
-        @($rows) | Export-Excel -Path $XlsxPath -WorksheetName $WorksheetName `
-            -Append -AutoSize -FreezeTopRow -BoldTopRow -AutoFilter
+        $excelParams = @{
+            Path          = $XlsxPath
+            WorksheetName = $WorksheetName
+            Append        = $true
+            AutoSize      = $true
+            FreezeTopRow  = $true
+            BoldTopRow    = $true
+            AutoFilter    = $true
+        }
+
+        # Apply tab color if requested
+        if ($GreenTab) {
+            $excelParams['TabColor'] = 'Green'
+        }
+
+        $pkg = @($rows) | Export-Excel @excelParams -PassThru
+
+        # Apply conditional formatting based on Migrate column
+        if ($AddMigrationColumns) {
+            $ws = $pkg.Workbook.Worksheets[$WorksheetName]
+            $totalRows = $rows.Count + 1  # +1 for header
+            $totalCols = ($rows[0].PSObject.Properties | Measure-Object).Count
+
+            # Find Migrate column index
+            $migrateColIndex = 0
+            foreach ($prop in $rows[0].PSObject.Properties) {
+                $migrateColIndex++
+                if ($prop.Name -eq 'Migrate') { break }
+            }
+
+            # Convert column index to letter
+            $migrateCol = if ($migrateColIndex -le 26) {
+                [char](64 + $migrateColIndex)
+            } else {
+                $first = [char](64 + [Math]::Floor(($migrateColIndex - 1) / 26))
+                $second = [char](65 + (($migrateColIndex - 1) % 26))
+                "$first$second"
+            }
+
+            $lastCol = if ($totalCols -le 26) {
+                [char](64 + $totalCols)
+            } else {
+                $first = [char](64 + [Math]::Floor(($totalCols - 1) / 26))
+                $second = [char](65 + (($totalCols - 1) % 26))
+                "$first$second"
+            }
+
+            # Create conditional formatting rules using EPPlus
+            # Rule 1: Green for "Yes"
+            $greenAddress = New-Object OfficeOpenXml.ExcelAddress "A2:$lastCol$totalRows"
+            $greenRule = $ws.ConditionalFormatting.AddExpression($greenAddress)
+            $greenRule.Formula = "`$$migrateCol`2=`"Yes`""
+            $greenRule.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+            $greenRule.Style.Fill.BackgroundColor.Color = [System.Drawing.Color]::FromArgb(198, 239, 206)
+            $greenRule.StopIfTrue = $true
+
+            # Rule 2: Red for "No"
+            $redAddress = New-Object OfficeOpenXml.ExcelAddress "A2:$lastCol$totalRows"
+            $redRule = $ws.ConditionalFormatting.AddExpression($redAddress)
+            $redRule.Formula = "`$$migrateCol`2=`"No`""
+            $redRule.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+            $redRule.Style.Fill.BackgroundColor.Color = [System.Drawing.Color]::FromArgb(255, 199, 206)
+            $redRule.StopIfTrue = $true
+
+            # Rule 3: Yellow for anything else (not empty, not Yes, not No)
+            $yellowAddress = New-Object OfficeOpenXml.ExcelAddress "A2:$lastCol$totalRows"
+            $yellowRule = $ws.ConditionalFormatting.AddExpression($yellowAddress)
+            $yellowRule.Formula = "AND(`$$migrateCol`2<>`"`",`$$migrateCol`2<>`"Yes`",`$$migrateCol`2<>`"No`")"
+            $yellowRule.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+            $yellowRule.Style.Fill.BackgroundColor.Color = [System.Drawing.Color]::FromArgb(255, 235, 156)
+        }
+
+        Close-ExcelPackage $pkg
     }
     else {
-        @($rows) | Export-Excel -Path $XlsxPath -WorksheetName $WorksheetName `
-            -Append -AutoSize
+        @($rows) | Export-Excel -Path $XlsxPath -WorksheetName $WorksheetName -Append -AutoSize
     }
 }
 
@@ -259,15 +340,34 @@ function Invoke-WorkbookGeneration {
         # Sheet 1 - Assessment Summary (no table style)
         $summaryRows | Export-Excel -Path $XlsxPath -WorksheetName 'Assessment Summary' -AutoSize
 
-        # Sheet 2 - AD Users: exclude internal correlation fields (DistinguishedName, SamAccountName)
-        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'AD Users' -Data (
+        # ===== PRIMARY MIGRATION TABS (with Migrate columns and green tabs) =====
+
+        # Sheet 2 - User Mailboxes (renamed from AD Users)
+        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'User Mailboxes' -AddMigrationColumns -GreenTab -Data (
             $adUsers | Select-Object DisplayName, GivenName, Surname, UserPrincipalName, Mail,
                 Department, Title, Company, Manager, EmployeeID,
                 ExtensionAttribute6, ExtensionAttribute7, ProxyAddresses,
                 ObjectGUID, SID, Enabled
         )
 
-        # Sheet 3 - AD Groups: exclude internal DistinguishedName field
+        # Sheet 3 - Shared Mailboxes
+        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Shared Mailboxes' -AddMigrationColumns -GreenTab -Data $sharedMailboxes
+
+        # Sheet 4 - Teams
+        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Teams' -AddMigrationColumns -GreenTab -Data $teams
+
+        # Sheet 5 - SharePoint Sites
+        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'SharePoint Sites' -AddMigrationColumns -GreenTab -Data $spoSites
+
+        # Sheet 6 - M365 Groups
+        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'M365 Groups' -AddMigrationColumns -GreenTab -Data $m365Groups
+
+        # Sheet 7 - OneDrives
+        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'OneDrives' -AddMigrationColumns -GreenTab -Data $oneDrives
+
+        # ===== ADDITIONAL TABS =====
+
+        # AD Groups
         Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'AD Groups' -Data (
             $adGroups | Select-Object DisplayName, Name, SamAccountName, Description, Mail,
                 ProxyAddresses, ExtensionAttribute6, ExtensionAttribute7,
@@ -275,12 +375,7 @@ function Invoke-WorkbookGeneration {
         )
 
         Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'AD Group Memberships'        -Data $adMemberships
-        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'SharePoint Sites'             -Data $spoSites
-        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'OneDrives'                    -Data $oneDrives
-        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Teams'                        -Data $teams
-        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'M365 Groups'                  -Data $m365Groups
-        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'User Mailboxes'               -Data $userMailboxes
-        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Shared Mailboxes'             -Data $sharedMailboxes
+        Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Exchange Mailboxes'          -Data $userMailboxes
         Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Resource Mailboxes'           -Data $resourceMailboxes
         Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Mail Contacts'                -Data $mailContacts
         Write-WorksheetData -XlsxPath $XlsxPath -WorksheetName 'Distribution Groups'          -Data $dgs
