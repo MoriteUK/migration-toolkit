@@ -221,6 +221,12 @@
             <button type="button" class="sidebar-subitem" data-view="domainReadiness">
               <span class="sidebar-sublabel">Check Domain Readiness</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-assign-licenses">
+              <span class="sidebar-sublabel">Assign Licenses</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-compare-assessments">
+              <span class="sidebar-sublabel">Compare Assessments</span>
+            </button>
           </div>
         </nav>
 
@@ -616,6 +622,68 @@
         <div class="log-section hidden" id="domainReadinessLog">
           <h3 class="form-card-title">Domain Readiness Output</h3>
           <div class="log-output" id="domainReadinessLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Assign Licenses -->
+      <div id="miscAssignLicensesView" class="view-container hidden">
+        <h2 class="view-title">Assign Licenses</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">License Assignment After Migration</h3>
+          <p class="form-help">
+            GUI tool for assigning Microsoft 365 licenses to users after tenant migration.
+            Reads a UserLicenses CSV file (from Export-UserLicenses.ps1 or Run-Assessment.ps1)
+            and assigns those licenses to users in the new tenant with domain mapping support.
+          </p>
+
+          <div class="form-help" style="margin-top:16px;padding:12px;background:#EFF6FF;border-left:3px solid #3B82F6;border-radius:4px;">
+            <strong>Features:</strong>
+            <ul style="margin:8px 0 0 20px;">
+              <li>Domain mapping (old domain → new tenant domain)</li>
+              <li>Dry-run mode to preview changes</li>
+              <li>SKU mapping between source and target tenants</li>
+              <li>Progress tracking with detailed logging</li>
+              <li>Handles unknown/missing SKUs gracefully</li>
+            </ul>
+          </div>
+
+          <div class="form-actions" style="margin-top:20px;">
+            <button type="button" class="btn btn-primary btn-large" id="launchAssignLicensesBtn">
+              🚀 Launch License Assignment Tool
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Misc Scripts - Compare Assessments -->
+      <div id="miscCompareAssessmentsView" class="view-container hidden">
+        <h2 class="view-title">Compare Assessments</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Excel Comparison Tool</h3>
+          <p class="form-help">
+            GUI tool for comparing two versions of assessment Excel files and highlighting all differences.
+            Useful for tracking changes between assessment runs, reviewing updated migration decisions,
+            or auditing modifications to assessment data.
+          </p>
+
+          <div class="form-help" style="margin-top:16px;padding:12px;background:#EFF6FF;border-left:3px solid #3B82F6;border-radius:4px;">
+            <strong>Features:</strong>
+            <ul style="margin:8px 0 0 20px;">
+              <li>Sheet-by-sheet comparison of two Excel workbooks</li>
+              <li>Cell-by-cell difference detection</li>
+              <li>Highlights all differences in Turquoise (Accent 4)</li>
+              <li>Saves marked-up comparison file</li>
+              <li>Detailed statistics and summary report</li>
+            </ul>
+          </div>
+
+          <div class="form-actions" style="margin-top:20px;">
+            <button type="button" class="btn btn-primary btn-large" id="launchCompareAssessmentsBtn">
+              🚀 Launch Comparison Tool
+            </button>
+          </div>
         </div>
       </div>
 

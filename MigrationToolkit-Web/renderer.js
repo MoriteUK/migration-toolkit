@@ -1983,6 +1983,8 @@ function switchView(viewName) {
     'migration-update-dg-domain': 'migrationUpdateDgDomainView',
     'misc-add-dg-members': 'miscAddDgMembersView',
     'misc-dl-external-senders': 'miscDLExternalSendersView',
+    'misc-assign-licenses': 'miscAssignLicensesView',
+    'misc-compare-assessments': 'miscCompareAssessmentsView',
     // Domain Removal sub-views
     'domain-workflow': 'domainWorkflowView',
     'domain-remove': 'domainRemoveView',
@@ -4827,6 +4829,30 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         entraRemoveRunBtn.disabled = false;
         entraRemoveRunBtn.textContent = '▶ Export & Remove';
+      }
+    });
+  }
+
+  // ── Misc Scripts - Assign Licenses ────────────────────────────────────────
+  const launchAssignLicensesBtn = document.getElementById('launchAssignLicensesBtn');
+  if (launchAssignLicensesBtn) {
+    launchAssignLicensesBtn.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.launchScript('Assign-Licenses.ps1');
+      } catch (err) {
+        console.error('Failed to launch Assign Licenses:', err);
+      }
+    });
+  }
+
+  // ── Misc Scripts - Compare Assessments ────────────────────────────────────
+  const launchCompareAssessmentsBtn = document.getElementById('launchCompareAssessmentsBtn');
+  if (launchCompareAssessmentsBtn) {
+    launchCompareAssessmentsBtn.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.launchScript('Compare-Assessments.ps1');
+      } catch (err) {
+        console.error('Failed to launch Compare Assessments:', err);
       }
     });
   }
