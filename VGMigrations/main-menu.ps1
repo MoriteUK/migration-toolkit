@@ -127,7 +127,7 @@ function Show-DiscoverySubMenu {
 function Show-MiscSubMenu {
     $dlg = New-Object System.Windows.Forms.Form
     $dlg.Text            = 'Misc Scripts'
-    $dlg.ClientSize      = [System.Drawing.Size]::new(480, 500)
+    $dlg.ClientSize      = [System.Drawing.Size]::new(480, 650)
     $dlg.StartPosition   = [System.Windows.Forms.FormStartPosition]::CenterScreen
     $dlg.BackColor       = $clrBg
     $dlg.Font            = $FontBody
@@ -159,7 +159,15 @@ function Show-MiscSubMenu {
     else { $btnGear.Text = [char]0x2699; $btnGear.Font = New-Object System.Drawing.Font('Segoe UI Symbol', 16); $btnGear.ForeColor = [System.Drawing.Color]::White }
     $hdr.Controls.Add($btnGear)
 
-    $bW = 400; $bH = 90; $bX = 40; $y = 82
+    # Scrollable panel for buttons
+    $scrollPanel = New-Object System.Windows.Forms.Panel
+    $scrollPanel.Location = [System.Drawing.Point]::new(0, 56)
+    $scrollPanel.Size = [System.Drawing.Size]::new(480, 548)
+    $scrollPanel.AutoScroll = $true
+    $scrollPanel.BackColor = $clrBg
+    $dlg.Controls.Add($scrollPanel)
+
+    $bW = 400; $bH = 90; $bX = 40; $y = 26
 
     # ── Provision OneDrives ───────────────────────────────────────────────────
     $miscScript1 = Join-Path $PSScriptRoot 'provision-onedrives.ps1'
@@ -187,7 +195,7 @@ function Show-MiscSubMenu {
             [System.Windows.Forms.MessageBox]::Show("Failed to launch:`n$_", 'Launch Error', 'OK', 'Error') | Out-Null
         }
     }.GetNewClosure())
-    $dlg.Controls.Add($miscBtn1)
+    $scrollPanel.Controls.Add($miscBtn1)
     $y += $bH + 6
 
     $miscSub1 = New-Object System.Windows.Forms.Label
@@ -196,7 +204,7 @@ function Show-MiscSubMenu {
     $miscSub1.ForeColor = $clrMuted
     $miscSub1.Location  = [System.Drawing.Point]::new($bX + 4, $y)
     $miscSub1.AutoSize  = $true
-    $dlg.Controls.Add($miscSub1)
+    $scrollPanel.Controls.Add($miscSub1)
     $y += 26
 
     # ── Set Teams Owners ──────────────────────────────────────────────────────
@@ -225,7 +233,7 @@ function Show-MiscSubMenu {
             [System.Windows.Forms.MessageBox]::Show("Failed to launch:`n$_", 'Launch Error', 'OK', 'Error') | Out-Null
         }
     }.GetNewClosure())
-    $dlg.Controls.Add($miscBtn2)
+    $scrollPanel.Controls.Add($miscBtn2)
     $y += $bH + 6
 
     $miscSub2 = New-Object System.Windows.Forms.Label
@@ -234,7 +242,7 @@ function Show-MiscSubMenu {
     $miscSub2.ForeColor = $clrMuted
     $miscSub2.Location  = [System.Drawing.Point]::new($bX + 4, $y)
     $miscSub2.AutoSize  = $true
-    $dlg.Controls.Add($miscSub2)
+    $scrollPanel.Controls.Add($miscSub2)
     $y += 26
 
     # ── Get Domain Devices ────────────────────────────────────────────────────
@@ -263,7 +271,7 @@ function Show-MiscSubMenu {
             [System.Windows.Forms.MessageBox]::Show("Failed to launch:`n$_", 'Launch Error', 'OK', 'Error') | Out-Null
         }
     }.GetNewClosure())
-    $dlg.Controls.Add($miscBtn3)
+    $scrollPanel.Controls.Add($miscBtn3)
     $y += $bH + 6
 
     $miscSub3 = New-Object System.Windows.Forms.Label
@@ -272,7 +280,7 @@ function Show-MiscSubMenu {
     $miscSub3.ForeColor = $clrMuted
     $miscSub3.Location  = [System.Drawing.Point]::new($bX + 4, $y)
     $miscSub3.AutoSize  = $true
-    $dlg.Controls.Add($miscSub3)
+    $scrollPanel.Controls.Add($miscSub3)
     $y += 26
 
     # ── Assign Licenses ───────────────────────────────────────────────────────
@@ -301,7 +309,7 @@ function Show-MiscSubMenu {
             [System.Windows.Forms.MessageBox]::Show("Failed to launch:`n$_", 'Launch Error', 'OK', 'Error') | Out-Null
         }
     }.GetNewClosure())
-    $dlg.Controls.Add($miscBtn4)
+    $scrollPanel.Controls.Add($miscBtn4)
     $y += $bH + 6
 
     $miscSub4 = New-Object System.Windows.Forms.Label
@@ -310,7 +318,7 @@ function Show-MiscSubMenu {
     $miscSub4.ForeColor = $clrMuted
     $miscSub4.Location  = [System.Drawing.Point]::new($bX + 4, $y)
     $miscSub4.AutoSize  = $true
-    $dlg.Controls.Add($miscSub4)
+    $scrollPanel.Controls.Add($miscSub4)
     $y += 26
 
     # ── Compare Assessments ───────────────────────────────────────────────────
@@ -339,7 +347,7 @@ function Show-MiscSubMenu {
             [System.Windows.Forms.MessageBox]::Show("Failed to launch:`n$_", 'Launch Error', 'OK', 'Error') | Out-Null
         }
     }.GetNewClosure())
-    $dlg.Controls.Add($miscBtn5)
+    $scrollPanel.Controls.Add($miscBtn5)
     $y += $bH + 6
 
     $miscSub5 = New-Object System.Windows.Forms.Label
@@ -348,10 +356,8 @@ function Show-MiscSubMenu {
     $miscSub5.ForeColor = $clrMuted
     $miscSub5.Location  = [System.Drawing.Point]::new($bX + 4, $y)
     $miscSub5.AutoSize  = $true
-    $dlg.Controls.Add($miscSub5)
+    $scrollPanel.Controls.Add($miscSub5)
     $y += 26
-
-    $dlg.ClientSize = [System.Drawing.Size]::new(480, ($y + 56))
 
     $footer = New-Object System.Windows.Forms.Panel
     $footer.Height = 46; $footer.Dock = [System.Windows.Forms.DockStyle]::Bottom
