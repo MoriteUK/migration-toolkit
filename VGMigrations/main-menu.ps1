@@ -313,6 +313,44 @@ function Show-MiscSubMenu {
     $dlg.Controls.Add($miscSub4)
     $y += 26
 
+    # ── Compare Assessments ───────────────────────────────────────────────────
+    $miscScript5 = Join-Path $PSScriptRoot 'Compare-Assessments.ps1'
+    $miscBtn5 = New-Object System.Windows.Forms.Button
+    $miscBtn5.Text      = 'Compare Assessments'
+    $miscBtn5.Font      = New-Object System.Drawing.Font('Segoe UI Semibold', 14)
+    $miscBtn5.Location  = [System.Drawing.Point]::new($bX, $y)
+    $miscBtn5.Size      = [System.Drawing.Size]::new($bW, $bH)
+    $miscBtn5.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $miscBtn5.FlatAppearance.BorderSize = 0
+    $miscBtn5.BackColor = $clrAccent
+    $miscBtn5.ForeColor = [System.Drawing.Color]::White
+    $miscBtn5.Cursor    = [System.Windows.Forms.Cursors]::Hand
+    $miscBtn5.Add_Click({
+        Write-Log "Compare Assessments clicked  path=$miscScript5"
+        if (-not (Test-Path $miscScript5)) {
+            [System.Windows.Forms.MessageBox]::Show("Script not found:`n$miscScript5", 'Not Found', 'OK', 'Warning') | Out-Null; return
+        }
+        try   { [FlyConsole.NativeMethods]::AllowSetForegroundWindow(-1) | Out-Null } catch {}
+        try {
+            Start-HiddenProcess 'pwsh.exe' "-NoProfile -ExecutionPolicy Bypass -File `"$miscScript5`""
+            Write-Log 'Compare Assessments launched'
+        } catch {
+            Write-Log "Compare Assessments launch FAILED: $_" 'ERROR'
+            [System.Windows.Forms.MessageBox]::Show("Failed to launch:`n$_", 'Launch Error', 'OK', 'Error') | Out-Null
+        }
+    }.GetNewClosure())
+    $dlg.Controls.Add($miscBtn5)
+    $y += $bH + 6
+
+    $miscSub5 = New-Object System.Windows.Forms.Label
+    $miscSub5.Text      = 'Compare two versions of assessment Excel files and highlight differences'
+    $miscSub5.Font      = New-Object System.Drawing.Font('Segoe UI', 8.5)
+    $miscSub5.ForeColor = $clrMuted
+    $miscSub5.Location  = [System.Drawing.Point]::new($bX + 4, $y)
+    $miscSub5.AutoSize  = $true
+    $dlg.Controls.Add($miscSub5)
+    $y += 26
+
     $dlg.ClientSize = [System.Drawing.Size]::new(480, ($y + 56))
 
     $footer = New-Object System.Windows.Forms.Panel
