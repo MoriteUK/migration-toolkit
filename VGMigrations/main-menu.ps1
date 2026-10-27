@@ -159,12 +159,33 @@ function Show-MiscSubMenu {
     else { $btnGear.Text = [char]0x2699; $btnGear.Font = New-Object System.Drawing.Font('Segoe UI Symbol', 16); $btnGear.ForeColor = [System.Drawing.Color]::White }
     $hdr.Controls.Add($btnGear)
 
-    # Scrollable panel for buttons
+    # Footer must be added before scroll panel for proper docking
+    $footer = New-Object System.Windows.Forms.Panel
+    $footer.Height = 46
+    $footer.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $footer.BackColor = $clrFooter
+    $dlg.Controls.Add($footer)
+
+    $btnClose = New-Object System.Windows.Forms.Button
+    $btnClose.Text = 'Close'
+    $btnClose.Size = [System.Drawing.Size]::new(90, 30)
+    $btnClose.Location = [System.Drawing.Point]::new(374, 8)
+    $btnClose.BackColor = $clrCloseRed
+    $btnClose.ForeColor = [System.Drawing.Color]::White
+    $btnClose.Font = $FontBold
+    $btnClose.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnClose.FlatAppearance.BorderSize = 0
+    $btnClose.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $btnClose.Add_Click({ $dlg.Close() }.GetNewClosure())
+    $footer.Controls.Add($btnClose)
+    $footer.Add_SizeChanged({ $btnClose.Left = $footer.Width - 100 }.GetNewClosure())
+
+    # Scrollable panel for buttons - fills space between header and footer
     $scrollPanel = New-Object System.Windows.Forms.Panel
-    $scrollPanel.Location = [System.Drawing.Point]::new(0, 56)
-    $scrollPanel.Size = [System.Drawing.Size]::new(480, 548)
+    $scrollPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
     $scrollPanel.AutoScroll = $true
     $scrollPanel.BackColor = $clrBg
+    $scrollPanel.Padding = [System.Windows.Forms.Padding]::new(0, 26, 0, 0)
     $dlg.Controls.Add($scrollPanel)
 
     $bW = 400; $bH = 90; $bX = 40; $y = 26
@@ -358,21 +379,6 @@ function Show-MiscSubMenu {
     $miscSub5.AutoSize  = $true
     $scrollPanel.Controls.Add($miscSub5)
     $y += 26
-
-    $footer = New-Object System.Windows.Forms.Panel
-    $footer.Height = 46; $footer.Dock = [System.Windows.Forms.DockStyle]::Bottom
-    $footer.BackColor = $clrFooter
-    $dlg.Controls.Add($footer)
-    $btnClose = New-Object System.Windows.Forms.Button
-    $btnClose.Text = 'Close'; $btnClose.Size = [System.Drawing.Size]::new(90, 30)
-    $btnClose.Location = [System.Drawing.Point]::new(374, 8)
-    $btnClose.BackColor = $clrCloseRed
-    $btnClose.ForeColor = [System.Drawing.Color]::White; $btnClose.Font = $FontBold
-    $btnClose.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat; $btnClose.FlatAppearance.BorderSize = 0
-    $btnClose.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $btnClose.Add_Click({ $dlg.Close() }.GetNewClosure())
-    $footer.Controls.Add($btnClose)
-    $footer.Add_SizeChanged({ $btnClose.Left = $footer.Width - 100 }.GetNewClosure())
 
     $dlg.ShowDialog() | Out-Null
 }
