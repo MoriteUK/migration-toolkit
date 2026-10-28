@@ -1,7 +1,17 @@
 {
-  "version": "2.9.192",
-  "releaseDate": "2026-10-20",
+  "version": "2.9.193",
+  "releaseDate": "2026-10-28",
   "changelog": [
+    {
+      "version": "2.9.193",
+      "date": "2026-10-28",
+      "changes": [
+        "Rename Domain Objects: Fixed domain removal always being skipped. Remove-AcceptedDomain does not exist in Exchange Online (accepted domains are synced from Entra ID), so the v2.9.161 check could never pass regardless of role. The domain is now deleted from Entra via Microsoft Graph (DELETE /domains/{id}, needs Global Admin or Domain Name Administrator). Before deleting, it lists any objects still referencing the domain (domainNameReferences - users, groups, apps) and reports the domain as BLOCKED instead of failing with a generic error. .onmicrosoft.com domains are always skipped.",
+        "Rename Domain Objects: 'Skip rename operations' now works without a Discovery folder. With the box ticked, only the Old Domain is required - the script removes that domain from the tenant directly and does not load or connect to Exchange Online. -DiscoveryFolder and -NewDomain are now optional script parameters (NewDomain still required when a Discovery folder is given).",
+        "Added Copy-CrossTenantOneDriveFile.ps1 and Copy-CrossTenantOneDriveFolder.ps1; updated Run-Assessment.ps1 and import-x500.ps1.",
+        "GUI: Bumped renderer.js cache-busting version to v=2.9.193."
+      ]
+    },
     {
       "version": "2.9.192",
       "date": "2026-10-20",
