@@ -22,6 +22,18 @@ Press `Ctrl+Shift+I` inside the running app to open DevTools.
 
 There are no automated tests. Verification is done by running the app and exercising the UI.
 
+## Release rule — every change ships to GitHub
+
+The servers update themselves from `VGMigrations/version.json` on GitHub `main` (see `Check-Updates.ps1`), so a change isn't usable until it is pushed **and** the version is bumped. After every change, without being asked:
+
+1. **Bump the version** in `VGMigrations/version.json`: increase the patch number (e.g. 2.9.193 → 2.9.194) and set `releaseDate` to today.
+2. **Add a changelog entry** at the top of the `changelog` array with the same version and date. Write a plain description of what changed and why, matching the existing entries.
+3. **Cache-busting:** if `renderer.js` or `src/styles/main.css` changed, set its `?v=` in `MigrationToolkit-Web/index.html` to the new version.
+4. **Commit** only the files belonging to the change. Use the message `Bump version to X.Y.Z - <summary>`, or a descriptive message plus the bump in the same commit.
+5. **Push**: local `master` tracks `origin/main`, so use `git push origin master:main`.
+
+Never commit customer data (discovery/mapping CSVs, X500 exports, tenant caches). Ask first if unsure.
+
 ## Building a distributable
 
 ```powershell
