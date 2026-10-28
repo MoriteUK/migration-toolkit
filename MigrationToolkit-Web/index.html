@@ -1877,7 +1877,7 @@
           </div>
 
           <div class="form-group" style="margin-top:8px;">
-            <label class="form-label">Discovery Folder</label>
+            <label class="form-label">Discovery Folder <span style="font-weight:normal;color:var(--color-text-muted)">(not needed when skipping rename operations)</span></label>
             <div class="input-with-button">
               <input type="text" class="form-input form-input-compact" id="removeDiscoveryFolder" placeholder="Folder containing discovery CSVs...">
               <button type="button" class="btn btn-secondary btn-compact" data-folder="true">Browse</button>
@@ -1887,7 +1887,7 @@
           <div class="form-group" style="margin-top:8px;">
             <label class="form-label">Admin Account (Optional) <span style="font-weight:normal;color:var(--color-text-muted)">— forces fresh login</span></label>
             <input type="text" class="form-input form-input-compact" id="removeAdminAccount" placeholder="e.g. admin@tenant.onmicrosoft.com">
-            <small class="form-help" style="margin-top:4px; display:block;">Specify an admin account UPN to force login with Exchange Administrator permissions (required to remove accepted domains)</small>
+            <small class="form-help" style="margin-top:4px; display:block;">Specify an admin account UPN to force a fresh Exchange Online login for the rename operations. Removing the domain signs in to Microsoft Graph separately and needs Global Admin or Domain Name Administrator</small>
           </div>
 
           <div class="form-group" style="margin-top:8px;">
@@ -1895,7 +1895,7 @@
               <input type="checkbox" id="skipRenameOperations">
               <span style="font-weight:600;">Skip rename operations (only remove domain from tenant)</span>
             </label>
-            <p style="margin:4px 0 0 22px; font-size:11px; color:#6B7280;">Check this if you've already renamed objects manually or via other scripts. Will only remove the domain registration.</p>
+            <p style="margin:4px 0 0 22px; font-size:11px; color:#6B7280;">Check this if you've already renamed objects manually or via other scripts. Will only remove the Old Domain registration — no Discovery folder needed.</p>
           </div>
 
           <div class="form-group" id="renameObjectsGroup" style="margin-top:8px;">

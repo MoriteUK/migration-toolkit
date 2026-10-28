@@ -4350,12 +4350,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const newDomain    = document.getElementById('removeNewDomain').value.trim();
       const adminAccount = document.getElementById('removeAdminAccount')?.value?.trim() || '';
       const whatIf       = document.getElementById('removeWhatIf').checked;
+      const skipRename   = document.getElementById('skipRenameOperations')?.checked;
       const checked      = [...document.querySelectorAll('.remove-section:checked')].map(cb => cb.value);
 
-      if (!folder)    { alert('Please select a Discovery folder.'); return; }
       if (!oldDomain) { alert('Please enter the Old Domain (rename from).'); return; }
-      if (!newDomain) { alert('Please enter the New Domain (rename to).'); return; }
-      if (checked.length === 0) { alert('Please select at least one object type.'); return; }
+      if (skipRename) {
+        if (!document.getElementById('removeDomainFromTenant').checked) {
+          alert('Rename operations are skipped — tick "Remove domain name from tenant" to have something to run.'); return;
+        }
+      } else {
+        if (!folder)    { alert('Please select a Discovery folder.'); return; }
+        if (!newDomain) { alert('Please enter the New Domain (rename to).'); return; }
+        if (checked.length === 0) { alert('Please select at least one object type.'); return; }
+      }
 
       const logSection = document.getElementById('removeLog');
       const logOutput  = document.getElementById('removeLogOutput');
@@ -4365,8 +4372,11 @@ document.addEventListener('DOMContentLoaded', () => {
       removeRunBtn.disabled = true;
       removeRunBtn.textContent = 'Running…';
 
-      const args = ['-DiscoveryFolder', folder, '-OldDomain', oldDomain, '-NewDomain', newDomain,
-                    '-Sections', checked.join(',')];
+      // No -DiscoveryFolder when skipping renames — the script then removes -OldDomain directly
+      const args = skipRename
+        ? ['-OldDomain', oldDomain]
+        : ['-DiscoveryFolder', folder, '-OldDomain', oldDomain, '-NewDomain', newDomain,
+           '-Sections', checked.join(',')];
       if (whatIf) args.push('-WhatIf');
       if (adminAccount) args.push('-UserPrincipalName', adminAccount);
 

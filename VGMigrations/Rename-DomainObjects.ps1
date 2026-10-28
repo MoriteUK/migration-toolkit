@@ -5,10 +5,11 @@
     removes the old domain registration from the tenant.
 .PARAMETER DiscoveryFolder
     Path to the Discovery folder produced by search-domain.ps1.
+    Optional — if omitted, rename operations are skipped and only OldDomain is removed from the tenant.
 .PARAMETER OldDomain
     Domain to rename FROM (e.g. contoso.com).
 .PARAMETER NewDomain
-    Domain to rename TO (e.g. ourvolaris.onmicrosoft.com).
+    Domain to rename TO (e.g. ourvolaris.onmicrosoft.com). Required unless DiscoveryFolder is omitted.
 .PARAMETER Sections
     Comma-separated list of CSV filenames to process, or 'all' (default).
 .PARAMETER WhatIf
@@ -18,9 +19,9 @@
     If specified, forces a fresh login with this account.
 #>
 param(
-    [Parameter(Mandatory=$true)]  [string]$DiscoveryFolder,
+    [Parameter(Mandatory=$false)] [string]$DiscoveryFolder = '',
     [Parameter(Mandatory=$true)]  [string]$OldDomain,
-    [Parameter(Mandatory=$true)]  [string]$NewDomain,
+    [Parameter(Mandatory=$false)] [string]$NewDomain = '',
     [Parameter(Mandatory=$false)] [string]$Sections = 'all',
     [Parameter(Mandatory=$false)] [switch]$WhatIf,
     [Parameter(Mandatory=$false)] [string]$UserPrincipalName = ''
@@ -28,28 +29,40 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Resolve discovery folder
+# Resolve discovery folder — none means "domain removal only"
 $discFolder = $DiscoveryFolder.Trim().Trim('"')
-$candidate  = Join-Path $discFolder 'Discovery'
-if ((Split-Path $discFolder -Leaf) -ne 'Discovery' -and (Test-Path $candidate)) {
-    $discFolder = $candidate
+$domainOnly = -not $discFolder
+if (-not $domainOnly) {
+    $candidate  = Join-Path $discFolder 'Discovery'
+    if ((Split-Path $discFolder -Leaf) -ne 'Discovery' -and (Test-Path $candidate)) {
+        $discFolder = $candidate
+    }
+    if (-not (Test-Path $discFolder)) { Write-Error "Discovery folder not found: $discFolder"; exit 1 }
+    if (-not $NewDomain) { Write-Error "NewDomain is required when renaming objects."; exit 1 }
 }
-if (-not (Test-Path $discFolder)) { Write-Error "Discovery folder not found: $discFolder"; exit 1 }
 
 $oldEsc = [regex]::Escape($OldDomain)
 
 Write-Host "=== Rename Domain Objects$(if ($WhatIf) { ' [WhatIf]' }) ===" -ForegroundColor Cyan
-Write-Host "Discovery folder : $discFolder"
-Write-Host "Rename           : @$OldDomain  →  @$NewDomain"
+if ($domainOnly) {
+    Write-Host "Mode             : domain removal only (no Discovery folder — rename operations skipped)"
+    Write-Host "Domain           : $OldDomain"
+    $Sections = '01_AcceptedDomains.csv'
+} else {
+    Write-Host "Discovery folder : $discFolder"
+    Write-Host "Rename           : @$OldDomain  →  @$NewDomain"
+}
 Write-Host ''
 
-# Load ExchangeOnlineManagement
-$mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
-if (-not $mod) {
-    Write-Error "ExchangeOnlineManagement is not installed.`nRun: Install-Module ExchangeOnlineManagement -Scope CurrentUser"
-    exit 1
+# Load ExchangeOnlineManagement (not needed for domain removal only — that uses Graph)
+if (-not $domainOnly) {
+    $mod = Get-Module -ListAvailable -Name 'ExchangeOnlineManagement' -ErrorAction SilentlyContinue
+    if (-not $mod) {
+        Write-Error "ExchangeOnlineManagement is not installed.`nRun: Install-Module ExchangeOnlineManagement -Scope CurrentUser"
+        exit 1
+    }
+    Import-Module 'ExchangeOnlineManagement' -ErrorAction Stop
 }
-Import-Module 'ExchangeOnlineManagement' -ErrorAction Stop
 
 $script:exoConnected = $false
 
@@ -64,7 +77,7 @@ function Connect-EXOIfNeeded {
 
     $cmds = @('Get-Mailbox','Set-Mailbox','Get-DistributionGroup','Set-DistributionGroup',
               'Get-UnifiedGroup','Set-UnifiedGroup','Get-MailContact','Set-MailContact',
-              'Get-Recipient','Remove-AcceptedDomain')
+              'Get-Recipient')
     try {
         $connectParams = @{
             ShowBanner  = $false
@@ -277,33 +290,53 @@ if (Should-Process '13_ProxyAddresses.csv') {
 
 # ── Accepted Domains — remove domain registration from tenant ─────────────────
 if (Should-Process '01_AcceptedDomains.csv') {
-    $csvPath = Join-Path $discFolder '01_AcceptedDomains.csv'
-    if (-not (Test-Path $csvPath)) { Write-Host "Skipped (not found): 01_AcceptedDomains.csv" }
+    $csvPath = if ($domainOnly) { $null } else { Join-Path $discFolder '01_AcceptedDomains.csv' }
+    if (-not $domainOnly -and -not (Test-Path $csvPath)) { Write-Host "Skipped (not found): 01_AcceptedDomains.csv" }
     else {
-        $rows = @(Import-Csv -Path $csvPath -Encoding UTF8)
+        $rows = if ($domainOnly) { @([pscustomobject]@{ DomainName = $OldDomain; IsDefault = 'False' }) }
+                else { @(Import-Csv -Path $csvPath -Encoding UTF8) }
         Write-Host "--- Remove domain from tenant (Accepted Domains): $($rows.Count) item(s) ---"
-        if ($rows.Count -gt 0 -and ($WhatIf -or (Connect-EXOIfNeeded))) {
-            # Check if Remove-AcceptedDomain cmdlet is available
-            $hasCmdlet = Get-Command Remove-AcceptedDomain -ErrorAction SilentlyContinue
-            if (-not $hasCmdlet -and -not $WhatIf) {
-                Write-Host "  SKIPPED: Remove-AcceptedDomain cmdlet not available (requires Exchange Administrator role)" -ForegroundColor Yellow
-                Write-Host "  You may need to remove the accepted domain manually via M365 Admin Center:" -ForegroundColor Yellow
-                Write-Host "  https://admin.microsoft.com/#/Domains" -ForegroundColor Cyan
-            } else {
-                $removable = @($rows | Where-Object { $_.IsDefault -ne 'True' })
-                $skipCount = $rows.Count - $removable.Count
-                if ($skipCount -gt 0) { Write-Host "  Skipping $skipCount default/initial domain(s)" }
-                $ok = 0; $fail = 0
-                foreach ($r in $removable) {
-                    $name = $r.DomainName
-                    if ($WhatIf) { Write-Host "  WhatIf : remove domain $name from tenant"; $ok++; continue }
-                    try {
-                        Remove-AcceptedDomain -Identity $name -Confirm:$false -ErrorAction Stop
-                        Write-Host "  Removed domain from tenant: $name" -ForegroundColor Green; $ok++
-                    } catch { Write-Host "  FAILED : $name — $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red; $fail++ }
-                }
-                Write-Host "  Accepted Domains: $ok removed  |  $fail failed"
+        # EXO accepted domains are synced from Entra ID — there is no Remove-AcceptedDomain in
+        # Exchange Online. The domain must be deleted from Entra via Microsoft Graph instead.
+        $removable = @($rows | Where-Object { $_.IsDefault -ne 'True' -and $_.DomainName -notmatch '\.onmicrosoft\.com$' })
+        $skipCount = $rows.Count - $removable.Count
+        if ($skipCount -gt 0) { Write-Host "  Skipping $skipCount default/initial domain(s)" }
+        $graphReady = $WhatIf
+        if ($removable.Count -gt 0 -and -not $WhatIf) {
+            try {
+                Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
+                Write-Host 'Connecting to Microsoft Graph — sign in when prompted (needs Global Admin or Domain Name Administrator)...' -ForegroundColor Cyan
+                Connect-MgGraph -Scopes 'Domain.ReadWrite.All','Directory.Read.All' -ContextScope Process -NoWelcome -ErrorAction Stop
+                $graphReady = $true
+            } catch {
+                Write-Host "ERROR: Graph connect failed: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red
+                Write-Host "  Remove the domain manually via M365 Admin Center: https://admin.microsoft.com/#/Domains" -ForegroundColor Yellow
             }
+        }
+        if ($graphReady) {
+            $ok = 0; $fail = 0; $blocked = 0
+            foreach ($r in $removable) {
+                $name = $r.DomainName
+                if ($WhatIf) { Write-Host "  WhatIf : remove domain $name from tenant"; $ok++; continue }
+                try {
+                    # Entra refuses the delete while any object still references the domain — list them first
+                    $refs = @((Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/domains/$name/domainNameReferences?`$select=id,displayName" -ErrorAction Stop).value)
+                    if ($refs.Count -gt 0) {
+                        Write-Host "  BLOCKED : $name — still referenced by $($refs.Count) object(s):" -ForegroundColor Yellow
+                        foreach ($ref in ($refs | Select-Object -First 25)) {
+                            $type = ($ref.'@odata.type' -replace '^#microsoft\.graph\.', '')
+                            Write-Host "    [$type] $($ref.displayName)"
+                        }
+                        if ($refs.Count -gt 25) { Write-Host "    ...and $($refs.Count - 25) more" }
+                        Write-Host "    (UPNs, proxy addresses and app identifiers must all move off the domain first; EXO changes can take a while to sync to Entra)"
+                        $blocked++; continue
+                    }
+                    Invoke-MgGraphRequest -Method DELETE -Uri "https://graph.microsoft.com/v1.0/domains/$name" -ErrorAction Stop | Out-Null
+                    Write-Host "  Removed domain from tenant: $name" -ForegroundColor Green; $ok++
+                } catch { Write-Host "  FAILED : $name — $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red; $fail++ }
+            }
+            Write-Host "  Accepted Domains: $ok removed  |  $blocked blocked  |  $fail failed"
+            if (-not $WhatIf) { try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {} }
         }
         Write-Host ''
     }
