@@ -1,5 +1,13 @@
 #Requires -Version 7.0
 
+param(
+    [string]$VbuDomain,
+    [string]$VbuSearchTerm,
+    [string]$VbuId,
+    [string]$SharePointAdminUrl,
+    [string]$OutputPath
+)
+
 # Define module root before any imports
 $moduleRoot = Join-Path $PSScriptRoot 'Modules'
 
@@ -127,25 +135,14 @@ function Show-ModeMenu {
 }
 
 # -----------------------------------------------------------------------
-# Banner
+# Banner (skip when running non-interactively from Electron)
 # -----------------------------------------------------------------------
-Write-Host ''
-Write-Host 'M365 Tenant Assessment' -ForegroundColor Cyan
-Write-Host ('=' * 40) -ForegroundColor Cyan
-Write-Host ''
-
-# -----------------------------------------------------------------------
-# Mode selection
-# -----------------------------------------------------------------------
-$mode = Show-ModeMenu
-Write-Host ''
-
-if ($mode -eq 'Generate Mapping Files') {
-    # Mapping mode reads only the workbook - just ImportExcel and the MappingFiles module
-    Import-Module ImportExcel -DisableNameChecking -ErrorAction Stop
-    Import-Module (Join-Path $moduleRoot 'MappingFiles.psm1') -Force -DisableNameChecking -Global
-    Invoke-MappingFileGeneration
-    return
+$isNonInteractive = $VbuDomain -ne ''
+if (-not $isNonInteractive) {
+    Write-Host ''
+    Write-Host 'M365 Tenant Assessment' -ForegroundColor Cyan
+    Write-Host ('=' * 40) -ForegroundColor Cyan
+    Write-Host ''
 }
 
 # -----------------------------------------------------------------------
@@ -186,13 +183,23 @@ Import-Module (Join-Path $moduleRoot 'SharePoint.psm1')    -Force -DisableNameCh
 Import-Module (Join-Path $moduleRoot 'Workbook.psm1')      -Force -DisableNameChecking -Global
 
 # -----------------------------------------------------------------------
-# User inputs
+# User inputs - use parameters if provided, otherwise prompt
 # -----------------------------------------------------------------------
-$vbuDomains     = Read-MultiValue -Prompt 'VBU Domain       (e.g. contoso.com)'
-$vbuSearchTerms = Read-MultiValue -Prompt 'VBU Search Term  (e.g. Contoso)'
-$vbuIds         = Read-MultiValue -Prompt 'VBU ID           (extensionAttribute7 exact value)'
-$spoInput       = (Read-Host 'SPO Admin URL    [https://ourvolaris-admin.sharepoint.com]').Trim()
-$spoAdminUrl    = if ($spoInput) { $spoInput } else { 'https://ourvolaris-admin.sharepoint.com' }
+if ($isNonInteractive) {
+    # Running from Electron - use provided parameters
+    $vbuDomains     = @($VbuDomain)
+    $vbuSearchTerms = if ($VbuSearchTerm) { @($VbuSearchTerm) } else { @() }
+    $vbuIds         = if ($VbuId) { @($VbuId) } else { @() }
+    $spoAdminUrl    = if ($SharePointAdminUrl) { $SharePointAdminUrl } else { 'https://ourvolaris-admin.sharepoint.com' }
+}
+else {
+    # Running interactively - prompt for inputs
+    $vbuDomains     = Read-MultiValue -Prompt 'VBU Domain       (e.g. contoso.com)'
+    $vbuSearchTerms = Read-MultiValue -Prompt 'VBU Search Term  (e.g. Contoso)'
+    $vbuIds         = Read-MultiValue -Prompt 'VBU ID           (extensionAttribute7 exact value)'
+    $spoInput       = (Read-Host 'SPO Admin URL    [https://ourvolaris-admin.sharepoint.com]').Trim()
+    $spoAdminUrl    = if ($spoInput) { $spoInput } else { 'https://ourvolaris-admin.sharepoint.com' }
+}
 
 # -----------------------------------------------------------------------
 # Folder structure
@@ -201,7 +208,16 @@ $spoAdminUrl    = if ($spoInput) { $spoInput } else { 'https://ourvolaris-admin.
 # (VBUName is folder/file naming only - derived from the first domain entered)
 $vbuName      = (New-AssessmentContext -VBUDomains $vbuDomains -VBUIds $vbuIds -VBUSearchTerms $vbuSearchTerms -RawPath 'TEMP').VBUName
 $timestamp    = Get-Date -Format 'yyyyMMdd-HHmm'
-$assessFolder = Join-Path $PSScriptRoot "$vbuName-$timestamp"
+
+if ($OutputPath) {
+    # Use provided output path (from Electron)
+    $assessFolder = Join-Path $OutputPath "$vbuName-$timestamp"
+}
+else {
+    # Default to script directory
+    $assessFolder = Join-Path $PSScriptRoot "$vbuName-$timestamp"
+}
+
 $rawPath      = Join-Path $assessFolder 'Raw'
 $xlsxPath     = Join-Path $assessFolder "$vbuName-Assessment.xlsx"
 

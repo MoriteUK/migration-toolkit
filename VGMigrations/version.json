@@ -1,7 +1,14 @@
 {
-  "version": "2.9.194",
+  "version": "2.9.195",
   "releaseDate": "2026-10-29",
   "changelog": [
+    {
+      "version": "2.9.195",
+      "date": "2026-10-29",
+      "changes": [
+        "Run Assessment: Added command-line parameter support for non-interactive execution from Electron. Script now accepts -VbuDomain, -VbuSearchTerm, -VbuId, -SharePointAdminUrl, and -OutputPath parameters. When VbuDomain is provided, the script runs non-interactively without prompts (uses provided parameters or defaults). Removed the mode selection menu - script always runs assessment workflow. Mapping file generation is handled by a separate script."
+      ]
+    },
     {
       "version": "2.9.194",
       "date": "2026-10-29",
