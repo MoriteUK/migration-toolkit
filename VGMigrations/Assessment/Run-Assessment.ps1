@@ -52,26 +52,77 @@ function Show-ModeMenu {
     $options  = @('Run Assessment', 'Generate Mapping Files')
     $selected = 0
 
-    Write-Host 'Select mode (arrow keys, Enter to confirm):' -ForegroundColor Cyan
-    while ($true) {
+    # Arrow-key menu needs a real console; hosts with redirected input (VS Code Run,
+    # ISE, web UI, Start-Process -Redirect*, Electron IPC) fall back to a numbered Read-Host prompt.
+    $interactive = $false
+    if (-not [System.Console]::IsInputRedirected) {
+        try {
+            # Test actual console capabilities - reading properties might succeed even
+            # when ReadKey will fail (e.g., Electron IPC, piped input).
+            $null = [System.Console]::CursorTop
+            $null = [System.Console]::KeyAvailable
+            # Try to set cursor position as final check
+            $origPos = [System.Console]::CursorTop
+            [System.Console]::SetCursorPosition(0, $origPos)
+            $interactive = $true
+        }
+        catch {
+            $interactive = $false
+        }
+    }
+
+    if (-not $interactive) {
+        Write-Host 'Select mode:' -ForegroundColor Cyan
         for ($i = 0; $i -lt $options.Count; $i++) {
-            if ($i -eq $selected) {
-                Write-Host ('> ' + $options[$i]) -ForegroundColor Green
-            }
-            else {
-                Write-Host ('  ' + $options[$i]) -ForegroundColor DarkGray
+            Write-Host ("  {0}. {1}" -f ($i + 1), $options[$i])
+        }
+        while ($true) {
+            $answer = (Read-Host "Enter 1-$($options.Count)").Trim()
+            $n = 0
+            if ([int]::TryParse($answer, [ref]$n) -and $n -ge 1 -and $n -le $options.Count) {
+                return $options[$n - 1]
             }
         }
+    }
 
-        $key = [System.Console]::ReadKey($true)
-        switch ($key.Key) {
-            'UpArrow'   { if ($selected -gt 0) { $selected-- } }
-            'DownArrow' { if ($selected -lt $options.Count - 1) { $selected++ } }
-            'Enter'     { return $options[$selected] }
+    # Interactive arrow-key menu - wrap in try-catch as final safety net
+    try {
+        Write-Host 'Select mode (arrow keys, Enter to confirm):' -ForegroundColor Cyan
+        while ($true) {
+            for ($i = 0; $i -lt $options.Count; $i++) {
+                if ($i -eq $selected) {
+                    Write-Host ('> ' + $options[$i]) -ForegroundColor Green
+                }
+                else {
+                    Write-Host ('  ' + $options[$i]) -ForegroundColor DarkGray
+                }
+            }
+
+            $key = [System.Console]::ReadKey($true)
+            switch ($key.Key) {
+                'UpArrow'   { if ($selected -gt 0) { $selected-- } }
+                'DownArrow' { if ($selected -lt $options.Count - 1) { $selected++ } }
+                'Enter'     { return $options[$selected] }
+            }
+
+            # Redraw in place - move cursor back to the first option line
+            [System.Console]::SetCursorPosition(0, [System.Console]::CursorTop - $options.Count)
         }
-
-        # Redraw in place - move cursor back to the first option line
-        [System.Console]::SetCursorPosition(0, [System.Console]::CursorTop - $options.Count)
+    }
+    catch {
+        # Console input failed mid-operation - fall back to numbered menu
+        Write-Host ''
+        Write-Host 'Select mode:' -ForegroundColor Cyan
+        for ($i = 0; $i -lt $options.Count; $i++) {
+            Write-Host ("  {0}. {1}" -f ($i + 1), $options[$i])
+        }
+        while ($true) {
+            $answer = (Read-Host "Enter 1-$($options.Count)").Trim()
+            $n = 0
+            if ([int]::TryParse($answer, [ref]$n) -and $n -ge 1 -and $n -le $options.Count) {
+                return $options[$n - 1]
+            }
+        }
     }
 }
 

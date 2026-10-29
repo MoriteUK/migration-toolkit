@@ -1,7 +1,14 @@
 {
-  "version": "2.9.193",
-  "releaseDate": "2026-10-28",
+  "version": "2.9.194",
+  "releaseDate": "2026-10-29",
   "changelog": [
+    {
+      "version": "2.9.194",
+      "date": "2026-10-29",
+      "changes": [
+        "Run Assessment: Fixed console input detection for Electron IPC execution. The script's interactive menu detection was failing when run from the Electron app via stream-powershell, causing 'Cannot read keys when console input has been redirected' errors. Enhanced detection now tests SetCursorPosition capability and wraps the entire interactive block in a try-catch fallback, ensuring the numbered menu always works when arrow-key navigation isn't available (Electron IPC, VS Code Run, piped input, etc.)."
+      ]
+    },
     {
       "version": "2.9.193",
       "date": "2026-10-28",
