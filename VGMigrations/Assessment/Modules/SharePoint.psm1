@@ -74,7 +74,10 @@ function Build-SPOSiteRecord {
 
 <#
 .SYNOPSIS
-    Retrieves all SPO sites via Get-SPOSite -Limit All and filters client-side to the VBU scope on URL and title.
+    Retrieves all SPO sites - from cache if available and fresh, otherwise via Get-SPOSite -Limit All.
+.DESCRIPTION
+    Checks for cached SharePointSites-All.json (< 7 days old). If found, loads from cache and filters
+    to VBU scope. Otherwise falls back to Get-SPOSite -Limit All (slow tenant-wide query).
 #>
 function Get-SPOSiteData {
     param([PSCustomObject]$Context)
@@ -82,7 +85,28 @@ function Get-SPOSiteData {
     $sites      = [System.Collections.Generic.List[PSCustomObject]]::new()
     $searchTerm = $Context.VBUSearchTerm
     $domain     = $Context.VBUDomain
+    $cacheFile  = if ($Context.CacheFolder) { Join-Path $Context.CacheFolder 'SharePointSites-All.json' } else { '' }
 
+    # Try cache first
+    if ($cacheFile -and (Test-Path $cacheFile)) {
+        $cacheAge = (Get-Date) - (Get-Item $cacheFile).LastWriteTime
+        if ($cacheAge.TotalDays -lt 7) {
+            Write-Host ($PREFIX_INFO + "Loading SharePoint sites from cache ($([math]::Round($cacheAge.TotalDays, 1)) days old)...") -ForegroundColor DarkGray
+            $allSites = @(Get-Content $cacheFile -Raw | ConvertFrom-Json)
+
+            foreach ($s in $allSites) {
+                if (($s.Url   -like "*$searchTerm*") -or
+                    ($s.Url   -like "*$domain*")     -or
+                    (Test-WholeWordMatch -Text $s.Title -Term $searchTerm)) {
+                    $sites.Add($s)
+                }
+            }
+            return $sites.ToArray()
+        }
+    }
+
+    # No cache or cache stale - query live
+    Write-Host ($PREFIX_INFO + 'Querying SharePoint sites live (no cache)...') -ForegroundColor DarkGray
     $allSites = @(Get-SPOSite -Limit All -ErrorAction Stop)
     foreach ($s in $allSites) {
         if (($s.Url   -like "*$searchTerm*") -or
@@ -97,7 +121,7 @@ function Get-SPOSiteData {
 
 <#
 .SYNOPSIS
-    Retrieves personal sites and keeps those whose owner login (claims prefix stripped) matches an in-scope user mailbox.
+    Retrieves personal sites - from cache if available, otherwise via Get-SPOSite -IncludePersonalSite.
 .DESCRIPTION
     OneDrives are a migration target, so they follow the same scope as mailboxes rather
     than the broader AD user scope (ADUsers.json is intentionally broad - it also catches
@@ -106,6 +130,9 @@ function Get-SPOSiteData {
     since a shared mailbox is not a migrating user and its OneDrive (if any) should not
     appear on the OneDrives tab. The owner lookup is keyed on both PrimarySmtpAddress and
     UserPrincipalName (lowercased) so either address form on the OneDrive owner login resolves.
+
+    Checks for cached OneDrives-All.json (< 7 days old). If found, loads from cache and filters
+    to in-scope mailboxes. Otherwise falls back to Get-SPOSite -IncludePersonalSite.
 #>
 function Get-OneDriveData {
     param([PSCustomObject]$Context)
@@ -123,8 +150,40 @@ function Get-OneDriveData {
         if ($mb.UserPrincipalName)  { $loginToMailbox["$($mb.UserPrincipalName)".ToLower()]  = $mb }
     }
 
+    $records   = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $cacheFile = if ($Context.CacheFolder) { Join-Path $Context.CacheFolder 'OneDrives-All.json' } else { '' }
+
+    # Try cache first
+    if ($cacheFile -and (Test-Path $cacheFile)) {
+        $cacheAge = (Get-Date) - (Get-Item $cacheFile).LastWriteTime
+        if ($cacheAge.TotalDays -lt 7) {
+            Write-Host ($PREFIX_INFO + "Loading OneDrives from cache ($([math]::Round($cacheAge.TotalDays, 1)) days old)...") -ForegroundColor DarkGray
+            $allOneDrives = @(Get-Content $cacheFile -Raw | ConvertFrom-Json)
+
+            foreach ($od in $allOneDrives) {
+                $ownerLogin = $od.OwnerUPN
+                if (-not $loginToMailbox.ContainsKey($ownerLogin.ToLower())) { continue }
+
+                $mailbox = $loginToMailbox[$ownerLogin.ToLower()]
+                $records.Add([PSCustomObject]@{
+                    OwnerUPN           = $ownerLogin
+                    OwnerDisplayName   = $mailbox.DisplayName
+                    OneDriveUrl        = $od.OneDriveUrl
+                    StorageUsedGB      = $od.StorageUsedGB
+                    StorageQuotaGB     = $od.StorageQuotaGB
+                    StorageRemainingGB = [math]::Round($od.StorageQuotaGB - $od.StorageUsedGB, 2)
+                    StorageUsedPercent = $od.StorageUsedPercent
+                    LastModified       = $od.LastModified
+                    IsProvisioned      = $od.IsProvisioned
+                })
+            }
+            return $records.ToArray()
+        }
+    }
+
+    # No cache or cache stale - query live
+    Write-Host ($PREFIX_INFO + 'Querying OneDrive accounts live (no cache)...') -ForegroundColor DarkGray
     $rawSites = @(Get-SPOSite -IncludePersonalSite $true -Limit All -ErrorAction Stop)
-    $records  = [System.Collections.Generic.List[PSCustomObject]]::new()
 
     foreach ($od in ($rawSites | Where-Object { $_.Url -like '*/personal/*' })) {
         # Strip claims provider prefix: i:0#.f|membership|user@domain.com -> user@domain.com

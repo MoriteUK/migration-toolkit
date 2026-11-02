@@ -227,14 +227,21 @@ New-Item -ItemType Directory -Path (Join-Path $assessFolder 'MappingFiles') -For
 Write-Host ($PREFIX_OK + "Output folder: $assessFolder") -ForegroundColor Green
 
 # -----------------------------------------------------------------------
+# Cache folder (for tenant-wide caches)
+# -----------------------------------------------------------------------
+$cacheRootPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'Assessment\Cache'
+$cacheFolder   = Get-DiscoveryCacheFolder -SharePointAdminUrl $spoAdminUrl -CacheRoot $cacheRootPath
+
+# -----------------------------------------------------------------------
 # Assessment context
 # -----------------------------------------------------------------------
 $ctx = New-AssessmentContext `
-    -VBUDomains     $vbuDomains `
-    -VBUIds         $vbuIds `
-    -VBUSearchTerms $vbuSearchTerms `
+    -VBUDomain      $vbuDomains[0] `
+    -VBUId          $(if ($vbuIds.Count -gt 0) { $vbuIds[0] } else { '' }) `
+    -VBUSearchTerm  $(if ($vbuSearchTerms.Count -gt 0) { $vbuSearchTerms[0] } else { '' }) `
     -RawPath        $rawPath `
-    -SPOAdminUrl    $spoAdminUrl
+    -SPOAdminUrl    $spoAdminUrl `
+    -CacheFolder    $cacheFolder
 
 if (-not (Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShell')) {
     $ctx.SkipSharePoint = $true

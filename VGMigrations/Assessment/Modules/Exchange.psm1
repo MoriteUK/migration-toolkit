@@ -182,15 +182,50 @@ function Get-MailContactData {
 
 <#
 .SYNOPSIS
-    Retrieves VBU-scoped distribution groups with member counts, split into DGs and mail-enabled security groups.
+    Retrieves VBU-scoped distribution groups - from cache if available, otherwise via live query.
+.DESCRIPTION
+    Checks for cached DistributionGroups-All.json and MailEnabledSecurityGroups-All.json (< 7 days old).
+    If found, loads from cache and filters by VBU search term. Otherwise falls back to the slower
+    Get-DistributionGroup -Filter query with live member counts.
 #>
 function Get-DistributionGroupData {
     param([PSCustomObject]$Context)
 
-    $t    = $Context.VBUSearchTerm
+    $t         = $Context.VBUSearchTerm
+    $dgCache   = if ($Context.CacheFolder) { Join-Path $Context.CacheFolder 'DistributionGroups-All.json' } else { '' }
+    $mesgCache = if ($Context.CacheFolder) { Join-Path $Context.CacheFolder 'MailEnabledSecurityGroups-All.json' } else { '' }
+    $dgs       = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $mesg      = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+    # Try cache first
+    if ($dgCache -and (Test-Path $dgCache) -and (Test-Path $mesgCache)) {
+        $dgAge = (Get-Date) - (Get-Item $dgCache).LastWriteTime
+        if ($dgAge.TotalDays -lt 7) {
+            Write-Host ($PREFIX_INFO + "Loading distribution groups from cache ($([math]::Round($dgAge.TotalDays, 1)) days old)...") -ForegroundColor DarkGray
+
+            # Load DGs from cache and filter
+            $allDGs = @(Get-Content $dgCache -Raw | ConvertFrom-Json)
+            foreach ($dg in $allDGs) {
+                if ($dg.EmailAddresses -like "*$t*") {
+                    $dgs.Add($dg)
+                }
+            }
+
+            # Load MESGs from cache and filter
+            $allMESG = @(Get-Content $mesgCache -Raw | ConvertFrom-Json)
+            foreach ($m in $allMESG) {
+                if ($m.EmailAddresses -like "*$t*") {
+                    $mesg.Add($m)
+                }
+            }
+
+            return @{ DGs = $dgs.ToArray(); MailEnabledSecurityGroups = $mesg.ToArray() }
+        }
+    }
+
+    # No cache or cache stale - query live
+    Write-Host ($PREFIX_INFO + 'Querying distribution groups live (no cache)...') -ForegroundColor DarkGray
     $raw  = @(Get-DistributionGroup -Filter "EmailAddresses -like '*$t*'" -ResultSize Unlimited -ErrorAction Stop)
-    $dgs  = [System.Collections.Generic.List[PSCustomObject]]::new()
-    $mesg = [System.Collections.Generic.List[PSCustomObject]]::new()
 
     foreach ($dg in $raw) {
         try {

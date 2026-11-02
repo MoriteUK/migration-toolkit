@@ -91,7 +91,8 @@ function New-AssessmentContext {
         [string]$VBUId = '',
         [string]$VBUSearchTerm = '',
         [Parameter(Mandatory)][string]$RawPath,
-        [string]$SPOAdminUrl = ''
+        [string]$SPOAdminUrl = '',
+        [string]$CacheFolder = ''
     )
 
     [PSCustomObject]@{
@@ -101,6 +102,7 @@ function New-AssessmentContext {
         VBUSearchTerm  = $VBUSearchTerm
         RawPath        = $RawPath
         SPOAdminUrl    = $SPOAdminUrl
+        CacheFolder    = $CacheFolder
         AssessmentDate = Get-Date
         SkipSharePoint = $false
     }

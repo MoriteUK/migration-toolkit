@@ -1,7 +1,12 @@
 {
-  "version": "2.9.198",
+  "version": "2.9.199",
   "releaseDate": "2026-11-02",
   "changelog": [
+    {
+      "version": "2.9.199",
+      "date": "2026-11-02",
+      "changes": "Assessment now uses cached data: SharePoint sites/OneDrive, Distribution Groups, and Teams memberships load from 7-day tenant-wide caches if available (created by Update-*Cache.ps1 scripts). Falls back to live queries if cache missing/stale. Dramatically speeds up assessments - tenant-wide scans only need to run once per week instead of on every assessment. Updated Common.psm1 (add CacheFolder to New-AssessmentContext), SharePoint.psm1 (Get-SPOSiteData and Get-OneDriveData cache-aware), Exchange.psm1 (Get-DistributionGroupData cache-aware), and Run-Assessment.ps1 (calculate and pass CacheFolder)."
+    },
     {
       "version": "2.9.198",
       "date": "2026-11-02",
