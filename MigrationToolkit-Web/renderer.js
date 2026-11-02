@@ -1974,6 +1974,7 @@ function switchView(viewName) {
     'misc-onedrive': 'miscOneDriveView',
     'misc-teams': 'miscTeamsView',
     'misc-invite-external': 'miscInviteExternalView',
+    'misc-team-memberships': 'miscTeamMembershipsView',
     'misc-deduplicate': 'miscDeduplicateView',
     'misc-purge-spo':     'miscPurgeSpoView',
     'misc-restore-proxy': 'miscRestoreProxyView',
@@ -4198,6 +4199,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── Get Team Memberships ─────────────────────────────────────────────────
+  const teamMembershipsRunBtn = document.getElementById('teamMembershipsRunBtn');
+  const teamMembershipsDomain = document.getElementById('teamMembershipsDomain');
+  const teamMembershipsOutputFolder = document.getElementById('teamMembershipsOutputFolder');
+  const teamMembershipsIncludeStandard = document.getElementById('teamMembershipsIncludeStandard');
+  const teamMembershipsLogPre = document.getElementById('teamMembershipsLogPre');
+
+  if (teamMembershipsRunBtn) {
+    teamMembershipsRunBtn.addEventListener('click', async () => {
+      const domain = teamMembershipsDomain?.value?.trim();
+      if (!domain) { alert('Please enter the domain to capture memberships for.'); return; }
+
+      teamMembershipsRunBtn.disabled = true;
+      teamMembershipsRunBtn.textContent = '⏳ Running...';
+      if (teamMembershipsLogPre) teamMembershipsLogPre.textContent = '';
+
+      const args = ['-Domain', domain];
+      const outputFolder = teamMembershipsOutputFolder?.value?.trim();
+      if (outputFolder) args.push('-OutputCsv', outputFolder);
+      if (teamMembershipsIncludeStandard?.checked) args.push('-IncludeStandardChannels');
+
+      try {
+        await window.electronAPI.streamPowerShell('Get-DomainTeamMemberships.ps1', args, (output) => {
+          if (teamMembershipsLogPre) {
+            teamMembershipsLogPre.textContent += output.replace(/\x1b\[[0-9;]*m/g, '');
+            teamMembershipsLogPre.scrollTop = teamMembershipsLogPre.scrollHeight;
+          }
+        });
+      } catch (err) {
+        if (teamMembershipsLogPre) {
+          teamMembershipsLogPre.textContent += `\n✗ Error: ${err.message || err}\n`;
+        }
+      } finally {
+        teamMembershipsRunBtn.disabled = false;
+        teamMembershipsRunBtn.textContent = '▶ Capture Memberships';
+      }
+    });
+  }
+
   // ── Tenant License Report ─────────────────────────────────────────────────
   const tenantLicensesRunBtn = document.getElementById('tenantLicensesRunBtn');
   const tenantLicensesCsvFile = document.getElementById('tenantLicensesCsvFile');
@@ -4871,5 +4911,72 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.workflow-nav-btn[data-view]').forEach((btn) => {
     btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
   });
+
+  // ── Cache Refresh Reminder (Monday check) ───────────────────────────────────
+  function checkCacheFreshness() {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+    // Only show on Mondays (1) or if last reminder was more than 7 days ago
+    const lastDismissed = localStorage.getItem('cacheReminderLastDismissed');
+    if (lastDismissed) {
+      const daysSinceDismiss = (Date.now() - parseInt(lastDismissed)) / (1000 * 60 * 60 * 24);
+      if (daysSinceDismiss < 7 && dayOfWeek !== 1) {
+        return; // Don't show if dismissed recently and it's not Monday
+      }
+    }
+
+    // Show reminder on Mondays or if it's been over 7 days since last dismissed
+    if (dayOfWeek === 1 || (lastDismissed && (Date.now() - parseInt(lastDismissed)) / (1000 * 60 * 60 * 24) >= 7)) {
+      const banner = document.getElementById('cacheRefreshBanner');
+      const text = document.getElementById('cacheRefreshText');
+
+      if (dayOfWeek === 1) {
+        text.textContent = '📅 Monday cache refresh: Keep your data fresh for the week ahead!';
+      } else {
+        text.textContent = '📅 Weekly cache refresh recommended - It\'s been over a week since last update';
+      }
+
+      if (banner) {
+        banner.classList.remove('hidden');
+      }
+    }
+  }
+
+  // Refresh All Caches button
+  const refreshCachesBtn = document.getElementById('refreshCachesBtn');
+  if (refreshCachesBtn) {
+    refreshCachesBtn.addEventListener('click', async () => {
+      refreshCachesBtn.disabled = true;
+      refreshCachesBtn.textContent = '⏳ Refreshing...';
+
+      try {
+        // Launch the discovery cache refresh script
+        await window.electronAPI.launchScript('discovery-cache.ps1');
+
+        refreshCachesBtn.textContent = '✓ Started';
+        setTimeout(() => {
+          document.getElementById('cacheRefreshBanner').classList.add('hidden');
+          localStorage.setItem('cacheReminderLastDismissed', Date.now().toString());
+        }, 2000);
+      } catch (err) {
+        refreshCachesBtn.textContent = 'Refresh All Caches';
+        refreshCachesBtn.disabled = false;
+        alert('Failed to start cache refresh: ' + (err.message || err));
+      }
+    });
+  }
+
+  // Dismiss cache reminder button
+  const dismissCacheReminderBtn = document.getElementById('dismissCacheReminderBtn');
+  if (dismissCacheReminderBtn) {
+    dismissCacheReminderBtn.addEventListener('click', () => {
+      document.getElementById('cacheRefreshBanner').classList.add('hidden');
+      localStorage.setItem('cacheReminderLastDismissed', Date.now().toString());
+    });
+  }
+
+  // Check cache freshness on app load
+  checkCacheFreshness();
 
 });

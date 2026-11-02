@@ -60,12 +60,66 @@ param(
 
     [switch]$IncludeStandardChannels,
 
-    [string]$TenantId = ''
+    [string]$TenantId = '',
+
+    [string]$SharePointAdminUrl = '',
+
+    [string]$CacheRoot = '',
+
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
 $Domain = $Domain.Trim().TrimStart('@').ToLowerInvariant()
 $User   = $User.Trim().ToLowerInvariant()
+
+# ── Cache check ────────────────────────────────────────────────────────────────
+$cacheRootPath = if ($CacheRoot) { $CacheRoot } else { Join-Path $PSScriptRoot 'Assessment\Cache' }
+$cacheFolder = if ($SharePointAdminUrl) {
+    $moduleRoot = Join-Path $PSScriptRoot 'Assessment\Modules'
+    if (Test-Path (Join-Path $moduleRoot 'Common.psm1')) {
+        Import-Module (Join-Path $moduleRoot 'Common.psm1') -Force -DisableNameChecking -Global
+        Get-DiscoveryCacheFolder -SharePointAdminUrl $SharePointAdminUrl -CacheRoot $cacheRootPath
+    } else {
+        # Fallback
+        $hash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($SharePointAdminUrl.ToLowerInvariant()))).Replace('-','').Substring(0,16)
+        Join-Path $cacheRootPath $hash
+    }
+} else {
+    Join-Path $cacheRootPath 'TeamMemberships'
+}
+
+$cacheFile = Join-Path $cacheFolder "DomainTeamMemberships-$Domain.csv"
+
+# Check if cache exists and is fresh (less than 7 days old)
+if (-not $Force -and (Test-Path $cacheFile)) {
+    $cacheAge = (Get-Date) - (Get-Item $cacheFile).LastWriteTime
+    if ($cacheAge.TotalDays -lt 7) {
+        Write-Host ""
+        Write-Host "=== Using Cached Data ===" -ForegroundColor Green
+        Write-Host "Cache file: $cacheFile" -ForegroundColor Cyan
+        Write-Host "Age: $([math]::Round($cacheAge.TotalDays, 1)) days old (refreshes every 7 days)" -ForegroundColor Cyan
+        Write-Host ""
+
+        # Copy cache to output location if different
+        if ($OutputCsv -and $OutputCsv -ne $cacheFile) {
+            Copy-Item -Path $cacheFile -Destination $OutputCsv -Force
+            Write-Host "Copied to: $OutputCsv" -ForegroundColor Cyan
+        } else {
+            $OutputCsv = $cacheFile
+        }
+
+        Write-Host ""
+        Write-Host "To force a refresh, run with -Force parameter." -ForegroundColor Yellow
+        Write-Host "Or use Update-DomainTeamMembershipsCache.ps1 -Domain $Domain -Force" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "CSV location: $OutputCsv" -ForegroundColor Green
+        return
+    } else {
+        Write-Host ""
+        Write-Host "Cache is stale ($([math]::Round($cacheAge.TotalDays, 1)) days old) - refreshing..." -ForegroundColor Yellow
+    }
+}
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 $_logDir = Join-Path $env:APPDATA 'FlyMigration\Logs'
@@ -75,8 +129,9 @@ function Log { param([string]$m) $ts = Get-Date -Format 'HH:mm:ss'; "$ts $m" | T
 
 $_csvName = "DomainTeamMemberships-$Domain-$(Get-Date -Format 'yyyyMMdd-HHmmss').csv"
 if (-not $OutputCsv) {
-    # Default alongside the rest of the toolkit's output, not the (possibly read-only) script folder.
-    $OutputCsv = Join-Path $env:APPDATA 'FlyMigration\Logs'
+    # Default to cache file location
+    New-Item -ItemType Directory -Path $cacheFolder -Force | Out-Null
+    $OutputCsv = $cacheFile
 }
 # Accept either a folder (UI "Browse" picks one) or a full file path.
 if ((Test-Path $OutputCsv -PathType Container) -or ($OutputCsv -notmatch '\.csv$')) {

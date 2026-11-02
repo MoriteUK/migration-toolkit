@@ -50,6 +50,13 @@
       <button type="button" class="update-banner-btn" id="installUpdateBtn">Install Update</button>
     </div>
 
+    <!-- Cache Refresh Banner (hidden by default, shown on Mondays if caches are stale) -->
+    <div class="update-banner hidden" id="cacheRefreshBanner" style="background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%);">
+      <span class="update-banner-text" id="cacheRefreshText">📅 Weekly cache refresh recommended</span>
+      <button type="button" class="update-banner-btn" id="refreshCachesBtn" style="background: linear-gradient(135deg, #0064b4, #004e98);">Refresh All Caches</button>
+      <button type="button" class="btn btn-subtle" id="dismissCacheReminderBtn" style="margin-left:8px;">Dismiss</button>
+    </div>
+
     <!-- Main Layout with Sidebar -->
     <div class="main-layout">
       <!-- Sidebar Navigation -->
@@ -208,6 +215,9 @@
             </button>
             <button type="button" class="sidebar-subitem" data-view="misc-invite-external">
               <span class="sidebar-sublabel">Invite External Users</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="misc-team-memberships">
+              <span class="sidebar-sublabel">Get Team Memberships</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="misc-purge-spo">
               <span class="sidebar-sublabel">Purge Deleted SPO Sites</span>
@@ -1470,6 +1480,48 @@
         </div>
       </div>
 
+      <!-- Misc Scripts - Get Team Memberships -->
+      <div id="miscTeamMembershipsView" class="view-container hidden">
+        <h2 class="view-title">Get Team Memberships</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Capture Team Memberships Before Migration</h3>
+          <p class="note" style="margin-top:0;">Scans ALL Teams in the source tenant and records which users from the specified domain belong to each Team and private/shared channel. Run this <strong>BEFORE</strong> migrating users. The CSV output can then be used with <strong>Restore-DomainTeamMemberships.ps1</strong> to re-add users as guests after migration.</p>
+
+          <div class="form-group">
+            <label class="form-label">Domain <span class="form-required">*</span></label>
+            <input type="text" class="form-input" id="teamMembershipsDomain" placeholder="contoso.com">
+            <p class="note">The email domain to capture memberships for (e.g., contoso.com)</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Output Folder</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input" id="teamMembershipsOutputFolder" placeholder="Default: %APPDATA%\FlyMigration\Logs">
+              <button type="button" data-folder="true">Browse</button>
+            </div>
+            <p class="note">Optional. Where to save the CSV file. Defaults to %APPDATA%\FlyMigration\Logs</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" id="teamMembershipsIncludeStandard">
+              <span>Include standard channels</span>
+            </label>
+            <p class="note" style="margin-left:22px;">Standard channel membership always mirrors the parent team, so this is usually redundant.</p>
+          </div>
+
+          <button type="button" class="btn btn-primary" id="teamMembershipsRunBtn" style="margin-top:16px;">
+            ▶ Capture Memberships
+          </button>
+
+          <div class="form-card form-card-compact" style="margin-top:24px;">
+            <h3 class="form-card-title">Output</h3>
+            <pre id="teamMembershipsLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:320px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
+        </div>
+      </div>
+
       <!-- Misc Scripts - Deduplicate Inventory -->
       <div id="miscDeduplicateView" class="view-container hidden">
         <h2 class="view-title">Deduplicate Inventory</h2>
@@ -2611,7 +2663,7 @@
     </div>
   </div>
 
-  <script src="renderer.js?v=2.9.193"></script>
+  <script src="renderer.js?v=2.9.196"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">

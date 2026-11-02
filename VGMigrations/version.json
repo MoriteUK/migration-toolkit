@@ -1,7 +1,12 @@
 {
-  "version": "2.9.195",
-  "releaseDate": "2026-10-29",
+  "version": "2.9.196",
+  "releaseDate": "2026-11-02",
   "changelog": [
+    {
+      "version": "2.9.196",
+      "date": "2026-11-02",
+      "changes": "Add Team Memberships caching system (7-day cache like Discovery cache), update Get-DomainTeamMemberships.ps1 to check cache first, add Update-DomainTeamMembershipsCache.ps1, add Get Team Memberships to Misc Scripts GUI menu with streaming output, add Monday cache refresh reminder banner, create export-group-members.ps1 and import-group-members.ps1 for targeted group member export/import with domain rewriting, update import-dlinfo.ps1 with -CreateCloudOnly flag and domain name in failed CSVs"
+    },
     {
       "version": "2.9.195",
       "date": "2026-10-29",
