@@ -372,6 +372,7 @@ function Test-WholeWordMatch {
 # -----------------------------------------------------------------------
 
 Export-ModuleMember -Function @(
+    'Get-DiscoveryCacheFolder'
     'New-AssessmentContext'
     'Write-JsonOutput'
     'Import-AssessmentJson'

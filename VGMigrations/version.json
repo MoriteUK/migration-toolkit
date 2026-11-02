@@ -1,7 +1,12 @@
 {
-  "version": "2.9.197",
+  "version": "2.9.198",
   "releaseDate": "2026-11-02",
   "changelog": [
+    {
+      "version": "2.9.198",
+      "date": "2026-11-02",
+      "changes": "Fix Get-DiscoveryCacheFolder export: Add function to Export-ModuleMember in Common.psm1. The function existed but wasn't exported, causing 'term not recognized' errors in cache refresh scripts."
+    },
     {
       "version": "2.9.197",
       "date": "2026-11-02",
