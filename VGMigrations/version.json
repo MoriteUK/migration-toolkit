@@ -1,7 +1,12 @@
 {
-  "version": "2.9.196",
+  "version": "2.9.197",
   "releaseDate": "2026-11-02",
   "changelog": [
+    {
+      "version": "2.9.197",
+      "date": "2026-11-02",
+      "changes": "Fix cache refresh scripts: Add missing Get-DiscoveryCacheFolder function to Common.psm1, add Update-SharePointSitesCacheFile to SharePoint.psm1, add Update-DistributionGroupsCacheFile to Exchange.psm1. These functions are required by Update-SharePointSitesCache.ps1, Update-TeamsChannelsCache.ps1, and Update-DistributionGroupsCache.ps1 to refresh tenant-wide caches."
+    },
     {
       "version": "2.9.196",
       "date": "2026-11-02",
