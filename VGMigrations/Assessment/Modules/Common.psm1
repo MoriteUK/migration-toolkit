@@ -51,6 +51,33 @@ function Save-CollectorStatus {
 
 <#
 .SYNOPSIS
+    Returns the tenant-specific cache folder path based on SharePointAdminUrl.
+.DESCRIPTION
+    Creates a consistent cache folder location for a tenant by hashing the SharePointAdminUrl.
+    This ensures all cache scripts (SharePoint, Teams, Distribution Groups, etc.) use the same
+    tenant-specific cache folder.
+#>
+function Get-DiscoveryCacheFolder {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SharePointAdminUrl,
+
+        [Parameter(Mandatory)]
+        [string]$CacheRoot
+    )
+
+    # Create SHA256 hash of the SPO admin URL (first 16 chars)
+    $hash = [System.BitConverter]::ToString(
+        [System.Security.Cryptography.SHA256]::Create().ComputeHash(
+            [System.Text.Encoding]::UTF8.GetBytes($SharePointAdminUrl.ToLowerInvariant())
+        )
+    ).Replace('-','').Substring(0,16)
+
+    return Join-Path $CacheRoot $hash
+}
+
+<#
+.SYNOPSIS
     Creates the assessment context object passed to all collectors.
 .DESCRIPTION
     Builds a PSCustomObject holding the VBU identifiers, Raw output path, SPO admin URL,

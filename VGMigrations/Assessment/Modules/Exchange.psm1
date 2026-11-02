@@ -542,8 +542,90 @@ function Invoke-ExchangeCollection {
     }
 }
 
+<#
+.SYNOPSIS
+    Updates the tenant-wide distribution groups cache file.
+.DESCRIPTION
+    Runs Get-DistributionGroup -ResultSize Unlimited to collect all distribution groups and
+    mail-enabled security groups, then saves them to a cache file that individual VBU assessments
+    can read and filter locally instead of running the slow server-side filter every time.
+#>
+function Update-DistributionGroupsCacheFile {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CacheFolder
+    )
+
+    Write-Host ($PREFIX_INFO + 'Collecting all distribution groups...') -ForegroundColor DarkGray
+    $allGroups = @(Get-DistributionGroup -ResultSize Unlimited -ErrorAction Stop)
+
+    $dgs  = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $mesg = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+    $processed = 0
+    foreach ($dg in $allGroups) {
+        $processed++
+        if ($processed % 100 -eq 0) {
+            Write-Host ($PREFIX_INFO + "  ...$processed / $($allGroups.Count) groups") -ForegroundColor DarkGray
+        }
+
+        try {
+            $memberCount = (Get-DistributionGroupMember -Identity $dg.Guid.ToString() -ResultSize Unlimited -ErrorAction Stop).Count
+        }
+        catch { $memberCount = $null }
+
+        $record = [PSCustomObject]@{
+            DisplayName                  = $dg.DisplayName
+            PrimarySmtpAddress           = if ($dg.PrimarySmtpAddress) { $dg.PrimarySmtpAddress.ToString() } else { '' }
+            EmailAddresses               = if ($dg.EmailAddresses) { ($dg.EmailAddresses | Sort-Object) -join '|' } else { '' }
+            Alias                        = $dg.Alias
+            GroupType                    = $dg.RecipientTypeDetails.ToString()
+            MemberCount                  = $memberCount
+            ManagedBy                    = if ($dg.ManagedBy) { ($dg.ManagedBy | ForEach-Object { $_.ToString() }) -join '|' } else { '' }
+            HiddenFromAddressListsEnabled = $dg.HiddenFromAddressListsEnabled
+            WhenCreated                  = $dg.WhenCreated
+            Guid                         = $dg.Guid.ToString()
+        }
+
+        if ($dg.RecipientTypeDetails -eq 'MailUniversalSecurityGroup') {
+            $mesg.Add($record)
+        }
+        else {
+            $dgs.Add($record)
+        }
+    }
+
+    Write-Host ($PREFIX_INFO + 'Collecting all dynamic distribution groups...') -ForegroundColor DarkGray
+    $ddgs = @(Get-DynamicDistributionGroup -ResultSize Unlimited -ErrorAction Stop |
+        ForEach-Object {
+            [PSCustomObject]@{
+                DisplayName        = $_.DisplayName
+                PrimarySmtpAddress = if ($_.PrimarySmtpAddress) { $_.PrimarySmtpAddress.ToString() } else { '' }
+                EmailAddresses     = if ($_.EmailAddresses) { ($_.EmailAddresses | Sort-Object) -join '|' } else { '' }
+                Alias              = $_.Alias
+                RecipientFilter    = $_.RecipientFilter
+                ManagedBy          = if ($_.ManagedBy) { ($_.ManagedBy | ForEach-Object { $_.ToString() }) -join '|' } else { '' }
+                WhenCreated        = $_.WhenCreated
+                Guid               = $_.Guid.ToString()
+            }
+        })
+
+    # Save each type to its own cache file
+    $dgFile = Join-Path $CacheFolder 'DistributionGroups-All.json'
+    $dgs.ToArray() | ConvertTo-Json -Depth 10 | Set-Content -Path $dgFile -Encoding UTF8
+    Write-Host ($PREFIX_OK + "Cached $($dgs.Count) distribution groups") -ForegroundColor Green
+
+    $mesgFile = Join-Path $CacheFolder 'MailEnabledSecurityGroups-All.json'
+    $mesg.ToArray() | ConvertTo-Json -Depth 10 | Set-Content -Path $mesgFile -Encoding UTF8
+    Write-Host ($PREFIX_OK + "Cached $($mesg.Count) mail-enabled security groups") -ForegroundColor Green
+
+    $ddgFile = Join-Path $CacheFolder 'DynamicDistributionGroups-All.json'
+    $ddgs | ConvertTo-Json -Depth 10 | Set-Content -Path $ddgFile -Encoding UTF8
+    Write-Host ($PREFIX_OK + "Cached $($ddgs.Length) dynamic distribution groups") -ForegroundColor Green
+}
+
 # -----------------------------------------------------------------------
 # Exports
 # -----------------------------------------------------------------------
 
-Export-ModuleMember -Function 'Invoke-ExchangeCollection'
+Export-ModuleMember -Function 'Invoke-ExchangeCollection', 'Update-DistributionGroupsCacheFile'

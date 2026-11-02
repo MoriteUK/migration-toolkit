@@ -214,8 +214,68 @@ function Invoke-SharePointCollection {
     }
 }
 
+<#
+.SYNOPSIS
+    Updates the tenant-wide SharePoint sites cache file.
+.DESCRIPTION
+    Runs Get-SPOSite -Limit All and Get-SPOSite -IncludePersonalSite $true -Limit All
+    to collect all sites and OneDrive accounts, then saves them to cache files that
+    individual VBU assessments can read and filter locally instead of re-scanning the
+    entire tenant every time.
+#>
+function Update-SharePointSitesCacheFile {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CacheFolder
+    )
+
+    Write-Host ($PREFIX_INFO + 'Collecting all SharePoint sites...') -ForegroundColor DarkGray
+    $allSites = @(Get-SPOSite -Limit All -ErrorAction Stop)
+
+    # Build records for all sites
+    $siteRecords = [System.Collections.Generic.List[PSCustomObject]]::new()
+    foreach ($site in $allSites) {
+        $siteRecords.Add((Build-SPOSiteRecord -Site $site))
+    }
+
+    $sitesFile = Join-Path $CacheFolder 'SharePointSites-All.json'
+    $siteRecords.ToArray() | ConvertTo-Json -Depth 10 | Set-Content -Path $sitesFile -Encoding UTF8
+    Write-Host ($PREFIX_OK + "Cached $($siteRecords.Count) SharePoint sites") -ForegroundColor Green
+
+    Write-Host ($PREFIX_INFO + 'Collecting all OneDrive accounts...') -ForegroundColor DarkGray
+    $allPersonalSites = @(Get-SPOSite -IncludePersonalSite $true -Limit All -ErrorAction Stop |
+        Where-Object { $_.Url -like '*/personal/*' })
+
+    # Build OneDrive records (simplified - no mailbox cross-reference for cache)
+    $oneDriveRecords = [System.Collections.Generic.List[PSCustomObject]]::new()
+    foreach ($od in $allPersonalSites) {
+        $ownerLogin = $od.Owner
+        if ($ownerLogin -like '*|*') { $ownerLogin = $ownerLogin.Split('|')[-1] }
+
+        $usedGB = Convert-SizeToGB -Value $od.StorageUsageCurrent -FromMB
+        $quotaGB = Convert-SizeToGB -Value $od.StorageQuota -FromMB
+        $usedPct = if ($od.StorageQuota -gt 0) {
+            [math]::Round($od.StorageUsageCurrent / $od.StorageQuota * 100, 1)
+        } else { [double]0 }
+
+        $oneDriveRecords.Add([PSCustomObject]@{
+            OwnerUPN = $ownerLogin
+            OneDriveUrl = $od.Url
+            StorageUsedGB = $usedGB
+            StorageQuotaGB = $quotaGB
+            StorageUsedPercent = $usedPct
+            LastModified = $od.LastContentModifiedDate
+            IsProvisioned = ($od.Status -eq 'Active')
+        })
+    }
+
+    $oneDrivesFile = Join-Path $CacheFolder 'OneDrives-All.json'
+    $oneDriveRecords.ToArray() | ConvertTo-Json -Depth 10 | Set-Content -Path $oneDrivesFile -Encoding UTF8
+    Write-Host ($PREFIX_OK + "Cached $($oneDriveRecords.Count) OneDrive accounts") -ForegroundColor Green
+}
+
 # -----------------------------------------------------------------------
 # Exports
 # -----------------------------------------------------------------------
 
-Export-ModuleMember -Function 'Invoke-SharePointCollection'
+Export-ModuleMember -Function 'Invoke-SharePointCollection', 'Update-SharePointSitesCacheFile'
