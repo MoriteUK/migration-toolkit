@@ -1,7 +1,12 @@
 {
-  "version": "2.9.207",
+  "version": "2.9.208",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.208",
+      "date": "2026-11-03",
+      "changes": "Add Monday cache refresh completion banner: Shows first time app opens after 8am on Monday (once per day). Green banner displays '✅ Monday cache refresh completed - All caches fresh for the week!' with 'View Logs' button that opens %APPDATA%\\FlyMigration\\Logs in Explorer to check for errors. Uses localStorage to track if shown today. Dismissible. Complements scheduled cache refresh tasks - confirms they ran successfully and provides easy log access."
+    },
     {
       "version": "2.9.207",
       "date": "2026-11-03",

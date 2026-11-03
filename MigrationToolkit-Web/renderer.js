@@ -4979,4 +4979,70 @@ document.addEventListener('DOMContentLoaded', () => {
   // Check cache freshness on app load
   checkCacheFreshness();
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Cache Refresh Complete Banner (Monday after 8am - first open)
+  // ═══════════════════════════════════════════════════════════════════════════
+  function checkMondayCacheRefreshComplete() {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday
+    const hour = now.getHours();
+
+    // Only show on Monday after 8am
+    if (dayOfWeek !== 1 || hour < 8) {
+      return;
+    }
+
+    // Check if we've already shown this today
+    const lastShown = localStorage.getItem('cacheCompleteLastShown');
+    if (lastShown) {
+      const lastShownDate = new Date(parseInt(lastShown));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      lastShownDate.setHours(0, 0, 0, 0);
+
+      if (lastShownDate.getTime() === today.getTime()) {
+        // Already shown today, don't show again
+        return;
+      }
+    }
+
+    // Show the banner - assume caches ran via scheduled tasks
+    const banner = document.getElementById('cacheRefreshCompleteBanner');
+    const text = document.getElementById('cacheRefreshCompleteText');
+
+    if (banner && text) {
+      text.textContent = '✅ Monday cache refresh completed - All caches fresh for the week!';
+      banner.classList.remove('hidden');
+
+      // Mark as shown today
+      localStorage.setItem('cacheCompleteLastShown', Date.now().toString());
+    }
+  }
+
+  // View Cache Logs button
+  const viewCacheLogsBtn = document.getElementById('viewCacheLogsBtn');
+  if (viewCacheLogsBtn) {
+    viewCacheLogsBtn.addEventListener('click', async () => {
+      try {
+        const logDir = 'C:\\Users\\' + process.env.USERNAME + '\\AppData\\Roaming\\FlyMigration\\Logs';
+
+        // Open the logs directory in Explorer
+        await window.electronAPI.executeCommand('explorer.exe', [logDir]);
+      } catch (err) {
+        alert('Failed to open logs directory: ' + (err.message || err));
+      }
+    });
+  }
+
+  // Dismiss cache complete button
+  const dismissCacheCompleteBtn = document.getElementById('dismissCacheCompleteBtn');
+  if (dismissCacheCompleteBtn) {
+    dismissCacheCompleteBtn.addEventListener('click', () => {
+      document.getElementById('cacheRefreshCompleteBanner').classList.add('hidden');
+    });
+  }
+
+  // Check for Monday cache refresh complete on app load
+  checkMondayCacheRefreshComplete();
+
 });

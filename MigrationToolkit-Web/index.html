@@ -57,6 +57,13 @@
       <button type="button" class="btn btn-subtle" id="dismissCacheReminderBtn" style="margin-left:8px;">Dismiss</button>
     </div>
 
+    <!-- Cache Refresh Complete Banner (shown first open after 8am Monday) -->
+    <div class="update-banner hidden" id="cacheRefreshCompleteBanner" style="background: linear-gradient(135deg, #e6ffe6 0%, #ccffcc 100%);">
+      <span class="update-banner-text" id="cacheRefreshCompleteText">✅ Monday cache refresh completed</span>
+      <button type="button" class="update-banner-btn" id="viewCacheLogsBtn" style="background: linear-gradient(135deg, #28a745, #218838);">View Logs</button>
+      <button type="button" class="btn btn-subtle" id="dismissCacheCompleteBtn" style="margin-left:8px;">Dismiss</button>
+    </div>
+
     <!-- Main Layout with Sidebar -->
     <div class="main-layout">
       <!-- Sidebar Navigation -->
@@ -2663,7 +2670,7 @@
     </div>
   </div>
 
-  <script src="renderer.js?v=2.9.196"></script>
+  <script src="renderer.js?v=2.9.208"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">
