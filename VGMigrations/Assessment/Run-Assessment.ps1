@@ -206,7 +206,7 @@ else {
 # -----------------------------------------------------------------------
 # Temporary context call to derive VBUName via the shared TLD-strip logic in Common.psm1
 # (VBUName is folder/file naming only - derived from the first domain entered)
-$vbuName      = (New-AssessmentContext -VBUDomains $vbuDomains -VBUIds $vbuIds -VBUSearchTerms $vbuSearchTerms -RawPath 'TEMP').VBUName
+$vbuName      = (New-AssessmentContext -VBUDomain $vbuDomains[0] -RawPath 'TEMP').VBUName
 $timestamp    = Get-Date -Format 'yyyyMMdd-HHmm'
 
 if ($OutputPath) {

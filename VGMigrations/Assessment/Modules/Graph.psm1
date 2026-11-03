@@ -35,7 +35,6 @@ $script:LicenseFriendlyNames = @{
 
     # Microsoft 365 Business
     'SPB'                           = 'Microsoft 365 Business Premium'
-    'O365_BUSINESS_PREMIUM'         = 'Microsoft 365 Business Standard'
     'SMB_BUSINESS_PREMIUM'          = 'Microsoft 365 Business Premium'
     'BUSINESS_ESSENTIALS'           = 'Microsoft 365 Business Basic'
     'SMB_BUSINESS_ESSENTIALS'       = 'Microsoft 365 Business Basic'

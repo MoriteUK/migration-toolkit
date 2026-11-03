@@ -1,7 +1,12 @@
 {
-  "version": "2.9.201",
+  "version": "2.9.202",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.202",
+      "date": "2026-11-03",
+      "changes": "Fix duplicate key and parameter errors in Run-Assessment.ps1: Remove duplicate 'O365_BUSINESS_PREMIUM' key from Graph.psm1 license map (was defined twice with different values). Fix temporary New-AssessmentContext call at line 209 to use -VBUDomain (singular) instead of -VBUDomains (plural) to match function signature."
+    },
     {
       "version": "2.9.201",
       "date": "2026-11-03",
