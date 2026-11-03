@@ -29,11 +29,12 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Task names with staggered start times
-# Staggered to avoid overlapping authentication/API calls and reduce throttling
+# Staggered to complete all caches by 8am Monday morning
+# Based on typical durations: SharePoint ~1hr, Teams ~5hrs, DGs ~1hr
 $tasks = @{
-    'SharePoint Sites Cache'     = @{ Script = 'Update-SharePointSitesCache.ps1';     Time = '3:00AM' }
-    'Teams Channels Cache'       = @{ Script = 'Update-TeamsChannelsCache.ps1';       Time = '4:00AM' }
-    'Distribution Groups Cache'  = @{ Script = 'Update-DistributionGroupsCache.ps1';  Time = '5:00AM' }
+    'SharePoint Sites Cache'     = @{ Script = 'Update-SharePointSitesCache.ps1';     Time = '12:30AM' }
+    'Teams Channels Cache'       = @{ Script = 'Update-TeamsChannelsCache.ps1';       Time = '1:30AM' }
+    'Distribution Groups Cache'  = @{ Script = 'Update-DistributionGroupsCache.ps1';  Time = '6:30AM' }
 }
 
 $taskFolder = '\FlyMigration'
@@ -66,10 +67,10 @@ Write-Host "║  Schedule Automatic Cache Refresh - Staggered Start      ║" -F
 Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "SharePoint Admin URL: $SharePointAdminUrl" -ForegroundColor White
-Write-Host "Schedule:             Every Monday (staggered)" -ForegroundColor White
-Write-Host "  • SharePoint Sites:      3:00 AM" -ForegroundColor DarkGray
-Write-Host "  • Teams Channels:        4:00 AM" -ForegroundColor DarkGray
-Write-Host "  • Distribution Groups:   5:00 AM" -ForegroundColor DarkGray
+Write-Host "Schedule:             Every Monday (staggered - finish by 8am)" -ForegroundColor White
+Write-Host "  • SharePoint Sites:     12:30 AM  (est. finish ~1:30 AM)" -ForegroundColor DarkGray
+Write-Host "  • Teams Channels:        1:30 AM  (est. finish ~6:30 AM)" -ForegroundColor DarkGray
+Write-Host "  • Distribution Groups:   6:30 AM  (est. finish ~7:30 AM)" -ForegroundColor DarkGray
 Write-Host "Run as:               $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
 Write-Host ""
 
@@ -147,12 +148,14 @@ Write-Host "║  Scheduled Tasks Created Successfully                     ║" -
 Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 Write-Host "Tasks run every Monday (staggered) as $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
-Write-Host "  • SharePoint Sites:      3:00 AM" -ForegroundColor Green
-Write-Host "  • Teams Channels:        4:00 AM" -ForegroundColor Green
-Write-Host "  • Distribution Groups:   5:00 AM" -ForegroundColor Green
+Write-Host "  • SharePoint Sites:     12:30 AM  → finish ~1:30 AM" -ForegroundColor Green
+Write-Host "  • Teams Channels:        1:30 AM  → finish ~6:30 AM" -ForegroundColor Green
+Write-Host "  • Distribution Groups:   6:30 AM  → finish ~7:30 AM" -ForegroundColor Green
 Write-Host ""
-Write-Host "Staggered start times prevent:" -ForegroundColor Yellow
-Write-Host "  - Simultaneous authentication conflicts" -ForegroundColor DarkGray
+Write-Host "All caches refreshed by 8:00 AM Monday morning!" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Staggered timing prevents:" -ForegroundColor Yellow
+Write-Host "  - Overlapping long-running tasks" -ForegroundColor DarkGray
 Write-Host "  - API throttling from parallel requests" -ForegroundColor DarkGray
 Write-Host "  - High CPU/memory load spikes" -ForegroundColor DarkGray
 Write-Host ""

@@ -1,7 +1,12 @@
 {
-  "version": "2.9.206",
+  "version": "2.9.207",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.207",
+      "date": "2026-11-03",
+      "changes": "Schedule-CacheRefresh.ps1: Adjust timing to finish all caches by 8am Monday. SharePoint Sites at 12:30am (finish ~1:30am), Teams Channels at 1:30am (finish ~6:30am), Distribution Groups at 6:30am (finish ~7:30am). Based on observed durations: SharePoint ~1hr, Teams ~5hrs for 14,592 teams, DGs ~1hr. All caches fresh and ready for Monday morning assessments."
+    },
     {
       "version": "2.9.206",
       "date": "2026-11-03",
