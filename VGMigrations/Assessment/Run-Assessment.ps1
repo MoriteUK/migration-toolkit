@@ -204,8 +204,21 @@ Import-Module (Join-Path $moduleRoot 'Workbook.psm1')      -Force -DisableNameCh
 # -----------------------------------------------------------------------
 if ($isNonInteractive) {
     # Running from Electron - use provided parameters
+    Write-Host "[DEBUG] Building arrays from parameters (isNonInteractive = $isNonInteractive)" -ForegroundColor Cyan
+    Write-Host "  VbuSearchTerm before array wrap = '$VbuSearchTerm' (type: $($VbuSearchTerm.GetType().Name), length: $($VbuSearchTerm.Length))" -ForegroundColor Cyan
+
     $vbuDomains     = @($VbuDomain)
     $vbuSearchTerms = if ($VbuSearchTerm) { @($VbuSearchTerm) } else { @() }
+
+    Write-Host "  After wrapping in array:" -ForegroundColor Cyan
+    Write-Host "    vbuSearchTerms type  = $($vbuSearchTerms.GetType().Name)" -ForegroundColor Cyan
+    Write-Host "    vbuSearchTerms.Count = $($vbuSearchTerms.Count)" -ForegroundColor Cyan
+    Write-Host "    vbuSearchTerms       = @($($vbuSearchTerms -join ', '))" -ForegroundColor Cyan
+    if ($vbuSearchTerms.Count -gt 0) {
+        Write-Host "    vbuSearchTerms[0] type = $($vbuSearchTerms[0].GetType().Name)" -ForegroundColor Cyan
+        Write-Host "    vbuSearchTerms[0] value = '$($vbuSearchTerms[0])' (length: $($vbuSearchTerms[0].Length))" -ForegroundColor Cyan
+    }
+
     $vbuIds         = if ($VbuId) { @($VbuId) } else { @() }
     $spoAdminUrl    = if ($SharePointAdminUrl) { $SharePointAdminUrl } else { 'https://ourvolaris-admin.sharepoint.com' }
 }
