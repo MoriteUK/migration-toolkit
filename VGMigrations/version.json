@@ -1,11 +1,11 @@
 {
-  "version": "2.9.211",
+  "version": "2.9.212",
   "releaseDate": "2026-11-03",
   "changelog": [
     {
-      "version": "2.9.211",
+      "version": "2.9.212",
       "date": "2026-11-03",
-      "changes": "DEBUG: Add detailed array construction logging. Shows VbuSearchTerm before and after wrapping in @() operator, including type, count, and first element details. Logs in cyan at the exact point where array is built to identify where 'Prima' (length 5) becomes 'P' (length 1). More granular than v2.9.210 to pinpoint the exact line causing character array conversion."
+      "changes": "FIX: Search term truncation bug. Changed array construction from @($VbuSearchTerm) to ,$VbuSearchTerm (comma operator). The @ operator was returning the String itself instead of wrapping it in an array, causing 'Prima'[0] to return 'P' (first character) instead of 'Prima' (whole string). This affected all assessments run from Electron - search terms were truncated to first character only, matching far too many objects. Now correctly creates single-element arrays. Removed debug logging from v2.9.210-211."
     },
     {
       "version": "2.9.210",

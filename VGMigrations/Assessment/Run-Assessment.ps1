@@ -8,14 +8,6 @@ param(
     [string]$OutputPath
 )
 
-# DEBUG: Log received parameters
-Write-Host "[DEBUG] Received parameters:" -ForegroundColor Magenta
-Write-Host "  VbuDomain       = '$VbuDomain' (length: $($VbuDomain.Length))" -ForegroundColor Magenta
-Write-Host "  VbuSearchTerm   = '$VbuSearchTerm' (length: $($VbuSearchTerm.Length), type: $($VbuSearchTerm.GetType().Name))" -ForegroundColor Magenta
-Write-Host "  VbuId           = '$VbuId'" -ForegroundColor Magenta
-Write-Host "  SharePointAdminUrl = '$SharePointAdminUrl'" -ForegroundColor Magenta
-Write-Host "  OutputPath      = '$OutputPath'" -ForegroundColor Magenta
-
 # Define module root before any imports
 $moduleRoot = Join-Path $PSScriptRoot 'Modules'
 
@@ -204,22 +196,10 @@ Import-Module (Join-Path $moduleRoot 'Workbook.psm1')      -Force -DisableNameCh
 # -----------------------------------------------------------------------
 if ($isNonInteractive) {
     # Running from Electron - use provided parameters
-    Write-Host "[DEBUG] Building arrays from parameters (isNonInteractive = $isNonInteractive)" -ForegroundColor Cyan
-    Write-Host "  VbuSearchTerm before array wrap = '$VbuSearchTerm' (type: $($VbuSearchTerm.GetType().Name), length: $($VbuSearchTerm.Length))" -ForegroundColor Cyan
-
-    $vbuDomains     = @($VbuDomain)
-    $vbuSearchTerms = if ($VbuSearchTerm) { @($VbuSearchTerm) } else { @() }
-
-    Write-Host "  After wrapping in array:" -ForegroundColor Cyan
-    Write-Host "    vbuSearchTerms type  = $($vbuSearchTerms.GetType().Name)" -ForegroundColor Cyan
-    Write-Host "    vbuSearchTerms.Count = $($vbuSearchTerms.Count)" -ForegroundColor Cyan
-    Write-Host "    vbuSearchTerms       = @($($vbuSearchTerms -join ', '))" -ForegroundColor Cyan
-    if ($vbuSearchTerms.Count -gt 0) {
-        Write-Host "    vbuSearchTerms[0] type = $($vbuSearchTerms[0].GetType().Name)" -ForegroundColor Cyan
-        Write-Host "    vbuSearchTerms[0] value = '$($vbuSearchTerms[0])' (length: $($vbuSearchTerms[0].Length))" -ForegroundColor Cyan
-    }
-
-    $vbuIds         = if ($VbuId) { @($VbuId) } else { @() }
+    # FIX: Use comma operator to force array creation (@ operator returns String as-is when given a single string)
+    $vbuDomains     = if ($VbuDomain) { ,$VbuDomain } else { @() }
+    $vbuSearchTerms = if ($VbuSearchTerm) { ,$VbuSearchTerm } else { @() }
+    $vbuIds         = if ($VbuId) { ,$VbuId } else { @() }
     $spoAdminUrl    = if ($SharePointAdminUrl) { $SharePointAdminUrl } else { 'https://ourvolaris-admin.sharepoint.com' }
 }
 else {
@@ -273,13 +253,6 @@ catch {
 # -----------------------------------------------------------------------
 # Assessment context
 # -----------------------------------------------------------------------
-# DEBUG: Log arrays before creating context
-Write-Host "[DEBUG] Before creating context:" -ForegroundColor Magenta
-Write-Host "  vbuDomains      = @($($vbuDomains -join ', '))" -ForegroundColor Magenta
-Write-Host "  vbuSearchTerms  = @($($vbuSearchTerms -join ', '))" -ForegroundColor Magenta
-Write-Host "  vbuSearchTerms[0] = '$($vbuSearchTerms[0])' (length: $($vbuSearchTerms[0].Length))" -ForegroundColor Magenta
-Write-Host "  vbuIds          = @($($vbuIds -join ', '))" -ForegroundColor Magenta
-
 $ctx = New-AssessmentContext `
     -VBUDomain      $vbuDomains[0] `
     -VBUId          $(if ($vbuIds.Count -gt 0) { $vbuIds[0] } else { '' }) `
