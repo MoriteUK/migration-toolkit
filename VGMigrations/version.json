@@ -1,7 +1,12 @@
 {
-  "version": "2.9.204",
+  "version": "2.9.205",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.205",
+      "date": "2026-11-03",
+      "changes": "Add Schedule-CacheRefresh.ps1: Automated Monday 3am cache refresh via Windows Task Scheduler. Creates scheduled tasks for Update-SharePointSitesCache.ps1, Update-TeamsChannelsCache.ps1, and Update-DistributionGroupsCache.ps1. Tasks run as current user with saved credentials, allow battery operation, run if missed, and have 4-hour timeout. Includes -Uninstall switch to remove tasks. Replaces manual Monday morning cache refresh with fully automated weekly schedule."
+    },
     {
       "version": "2.9.204",
       "date": "2026-11-03",
