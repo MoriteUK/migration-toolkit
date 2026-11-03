@@ -17,14 +17,20 @@ $script:EXOMailboxProperties = @(
 
 <#
 .SYNOPSIS
-    Retrieves all VBU-scoped mailboxes of the four recipient types in a single server-side filtered Get-EXOMailbox call.
+    Retrieves all VBU-scoped mailboxes, preferring cache over live query.
 .DESCRIPTION
-    The server-side -like filter cannot express a word boundary, so it deliberately
+    Checks for Mailboxes-All.json cache first (< 7 days old). If found, loads from cache and
+    filters in memory. Otherwise, queries Exchange Online live with server-side filtering.
+
+    The live query's server-side -like filter cannot express a word boundary, so it deliberately
     over-includes and a client-side pass then trims the CustomAttribute6 substring false
     positives - e.g. a mailbox tagged 'Ceramics' surfacing for the search term 'amic'.
     The trim only ever removes CustomAttribute6-only hits: a mailbox that also qualifies
     via CustomAttribute7 (exact VBU ID) or whose UPN/addresses carry the VBU domain is
     always kept, as is one with a blank CustomAttribute6.
+
+    Cache includes mailbox statistics and permissions (FullAccess, SendAs) which are returned
+    directly without additional queries.
 #>
 function Get-AllMailboxesRaw {
     param([PSCustomObject]$Context)
@@ -32,6 +38,34 @@ function Get-AllMailboxesRaw {
     $t      = $Context.VBUSearchTerm
     $d      = $Context.VBUDomain
     $i      = $Context.VBUId
+    $mbCache = if ($Context.CacheFolder) { Join-Path $Context.CacheFolder 'Mailboxes-All.json' } else { '' }
+
+    # Try cache first
+    if ($mbCache -and (Test-Path $mbCache)) {
+        $cacheAge = (Get-Date) - (Get-Item $mbCache).LastWriteTime
+        if ($cacheAge.TotalDays -lt 7) {
+            Write-Host ($PREFIX_INFO + "Loading mailboxes from cache ($([math]::Round($cacheAge.TotalDays, 1)) days old)...") -ForegroundColor DarkGray
+
+            $allMailboxes = @(Get-Content $mbCache -Raw | ConvertFrom-Json)
+            $kept = @($allMailboxes | Where-Object {
+                $ca6 = "$($_.CustomAttribute6)"
+                $addresses = @($_.EmailAddresses -split '\|') + @($_.UserPrincipalName) + @($_.PrimarySmtpAddress)
+
+                # Same filtering logic as live query
+                $ca6Ok = [string]::IsNullOrWhiteSpace($ca6) -or (Test-WholeWordMatch -Text $ca6 -Term $t)
+                $byId  = (-not [string]::IsNullOrWhiteSpace($i)) -and ("$($_.CustomAttribute7)" -eq $i)
+                $byDomain = @($addresses | Where-Object { $_ -and $_ -like "*$d*" }).Count -gt 0
+
+                $ca6Ok -or $byId -or $byDomain
+            })
+
+            Write-Host ($PREFIX_OK + "Filtered to $($kept.Count) mailboxes from cache") -ForegroundColor Green
+            return $kept
+        }
+    }
+
+    # No cache or cache stale - query live
+    Write-Host ($PREFIX_INFO + 'Querying mailboxes live (no cache)...') -ForegroundColor DarkGray
     $filter = "(CustomAttribute6 -like '*$t*') -or (CustomAttribute7 -eq '$i') -or " +
               "(UserPrincipalName -like '*$t*')"
 
@@ -82,7 +116,16 @@ function Build-MailboxRecords {
         $sizeBytes    = [long]0
         $lastLogon    = $null
 
-        if ($needStats) {
+        # Check if statistics are already present (from cache)
+        if ($mb.PSObject.Properties['ItemCount'] -and $null -ne $mb.ItemCount) {
+            # Using cached statistics
+            $itemCount = $mb.ItemCount
+            $sizeGB    = $mb.SizeGB
+            $sizeBytes = $mb.SizeBytes
+            $lastLogon = $mb.LastLogon
+        }
+        elseif ($needStats) {
+            # No cached stats - query live
             try {
                 $stats     = Get-EXOMailboxStatistics -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop
                 $itemCount = $stats.ItemCount
@@ -97,7 +140,12 @@ function Build-MailboxRecords {
             catch { }
         }
 
-        $emailAddresses = ($mb.EmailAddresses | Sort-Object) -join '|'
+        # Handle EmailAddresses - could be pipe-delimited string (from cache) or array (from live query)
+        $emailAddresses = if ($mb.EmailAddresses -is [string]) {
+            $mb.EmailAddresses
+        } else {
+            ($mb.EmailAddresses | Sort-Object) -join '|'
+        }
 
         if ($RecipientType -eq 'UserMailbox') {
             $records.Add([PSCustomObject]@{
@@ -659,8 +707,179 @@ function Update-DistributionGroupsCacheFile {
     Write-Host ($PREFIX_OK + "Cached $($ddgs.Length) dynamic distribution groups") -ForegroundColor Green
 }
 
+<#
+.SYNOPSIS
+    Refreshes the tenant-wide mailbox cache including statistics and permissions.
+.DESCRIPTION
+    Caches:
+    - All mailboxes (User, Shared, Room, Equipment) with properties
+    - Statistics for User and Shared mailboxes (item count, size, last logon)
+    - FullAccess permissions (who can open each mailbox)
+    - SendAs permissions (who can send as each mailbox)
+
+    Creates:
+    - Mailboxes-All.json - array of mailbox objects with embedded statistics and permissions
+#>
+function Update-MailboxesCacheFile {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CacheFolder
+    )
+
+    # Step 1: Get all mailboxes
+    Write-Host ($PREFIX_INFO + 'Collecting all mailboxes...') -ForegroundColor DarkGray
+    $allMailboxes = @(Get-EXOMailbox `
+        -RecipientTypeDetails UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox `
+        -ResultSize Unlimited `
+        -Properties $script:EXOMailboxProperties `
+        -ErrorAction Stop)
+    Write-Host ($PREFIX_OK + "Found $($allMailboxes.Count) mailboxes") -ForegroundColor Green
+
+    # Step 2: Get statistics for User and Shared mailboxes
+    Write-Host ($PREFIX_INFO + 'Collecting mailbox statistics (User + Shared only)...') -ForegroundColor DarkGray
+    $statsHash = @{}
+    $needsStats = @($allMailboxes | Where-Object { $_.RecipientTypeDetails -in @('UserMailbox', 'SharedMailbox') })
+
+    $processed = 0
+    foreach ($mb in $needsStats) {
+        $processed++
+        if ($processed % 100 -eq 0) {
+            Write-Host ($PREFIX_INFO + "  ...$processed / $($needsStats.Count) mailboxes") -ForegroundColor DarkGray
+        }
+
+        try {
+            $stats = Get-EXOMailboxStatistics -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop
+            $statsHash[$mb.ExchangeGuid.ToString()] = @{
+                ItemCount   = $stats.ItemCount
+                SizeGB      = Convert-SizeToGB -Value $stats.TotalItemSize
+                SizeBytes   = Convert-SizeToBytes -Value $stats.TotalItemSize
+                LastLogon   = if ($stats.PSObject.Properties['LastLogonTime']) {
+                    $stats.LastLogonTime
+                } elseif ($stats.PSObject.Properties['LastUserActionTime']) {
+                    $stats.LastUserActionTime
+                } else { $null }
+            }
+        }
+        catch {
+            # Stats unavailable - leave empty
+        }
+    }
+    Write-Host ($PREFIX_OK + "Retrieved statistics for $($statsHash.Count) mailboxes") -ForegroundColor Green
+
+    # Step 3: Get FullAccess permissions for all mailboxes
+    Write-Host ($PREFIX_INFO + 'Collecting FullAccess permissions...') -ForegroundColor DarkGray
+    $fullAccessHash = @{}
+    $processed = 0
+    foreach ($mb in $allMailboxes) {
+        $processed++
+        if ($processed % 100 -eq 0) {
+            Write-Host ($PREFIX_INFO + "  ...$processed / $($allMailboxes.Count) mailboxes") -ForegroundColor DarkGray
+        }
+
+        try {
+            $perms = @(Get-MailboxPermission -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop |
+                Where-Object {
+                    $_.User -notlike 'NT AUTHORITY\SELF' -and
+                    $_.User -notlike 'S-1-5-*' -and
+                    $_.IsInherited -eq $false -and
+                    $_.AccessRights -contains 'FullAccess'
+                } | ForEach-Object {
+                    [PSCustomObject]@{
+                        User         = $_.User.ToString()
+                        AccessRights = ($_.AccessRights | Sort-Object) -join ','
+                    }
+                })
+            if ($perms.Count -gt 0) {
+                $fullAccessHash[$mb.ExchangeGuid.ToString()] = $perms
+            }
+        }
+        catch {
+            # Permissions unavailable - leave empty
+        }
+    }
+    Write-Host ($PREFIX_OK + "Found FullAccess permissions on $($fullAccessHash.Count) mailboxes") -ForegroundColor Green
+
+    # Step 4: Get SendAs permissions for all mailboxes
+    Write-Host ($PREFIX_INFO + 'Collecting SendAs permissions...') -ForegroundColor DarkGray
+    $sendAsHash = @{}
+    $processed = 0
+    foreach ($mb in $allMailboxes) {
+        $processed++
+        if ($processed % 100 -eq 0) {
+            Write-Host ($PREFIX_INFO + "  ...$processed / $($allMailboxes.Count) mailboxes") -ForegroundColor DarkGray
+        }
+
+        try {
+            $perms = @(Get-RecipientPermission -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop |
+                Where-Object {
+                    $_.Trustee -notlike 'NT AUTHORITY\SELF' -and
+                    $_.Trustee -notlike 'S-1-5-*' -and
+                    $_.AccessRights -contains 'SendAs'
+                } | ForEach-Object {
+                    [PSCustomObject]@{
+                        Trustee      = $_.Trustee.ToString()
+                        AccessRights = ($_.AccessRights | Sort-Object) -join ','
+                    }
+                })
+            if ($perms.Count -gt 0) {
+                $sendAsHash[$mb.ExchangeGuid.ToString()] = $perms
+            }
+        }
+        catch {
+            # Permissions unavailable - leave empty
+        }
+    }
+    Write-Host ($PREFIX_OK + "Found SendAs permissions on $($sendAsHash.Count) mailboxes") -ForegroundColor Green
+
+    # Step 5: Build combined records
+    Write-Host ($PREFIX_INFO + 'Building cache records...') -ForegroundColor DarkGray
+    $records = [System.Collections.Generic.List[PSCustomObject]]::new()
+    foreach ($mb in $allMailboxes) {
+        $guid = $mb.ExchangeGuid.ToString()
+        $stats = $statsHash[$guid]
+        $fullAccess = $fullAccessHash[$guid]
+        $sendAs = $sendAsHash[$guid]
+
+        $record = [PSCustomObject]@{
+            DisplayName           = $mb.DisplayName
+            UserPrincipalName     = $mb.UserPrincipalName
+            PrimarySmtpAddress    = if ($mb.PrimarySmtpAddress) { $mb.PrimarySmtpAddress.ToString() } else { '' }
+            EmailAddresses        = if ($mb.EmailAddresses) { ($mb.EmailAddresses | Sort-Object) -join '|' } else { '' }
+            Alias                 = $mb.Alias
+            RecipientTypeDetails  = $mb.RecipientTypeDetails.ToString()
+            ExchangeGuid          = $guid
+            Database              = $mb.Database
+            LitigationHoldEnabled = $mb.LitigationHoldEnabled
+            ArchiveStatus         = $mb.ArchiveStatus.ToString()
+            WhenCreated           = $mb.WhenCreated
+            WhenMailboxCreated    = $mb.WhenMailboxCreated
+            ProhibitSendQuota     = if ($mb.ProhibitSendQuota) { $mb.ProhibitSendQuota.ToString() } else { '' }
+            ProhibitSendReceiveQuota = if ($mb.ProhibitSendReceiveQuota) { $mb.ProhibitSendReceiveQuota.ToString() } else { '' }
+            ForwardingSmtpAddress = $mb.ForwardingSmtpAddress
+            GrantSendOnBehalfTo   = if ($mb.GrantSendOnBehalfTo) { ($mb.GrantSendOnBehalfTo | ForEach-Object { $_.ToString() }) -join '|' } else { '' }
+            CustomAttribute6      = $mb.CustomAttribute6
+            CustomAttribute7      = $mb.CustomAttribute7
+            # Statistics (null if not retrieved)
+            ItemCount             = if ($stats) { $stats.ItemCount } else { $null }
+            SizeGB                = if ($stats) { $stats.SizeGB } else { 0 }
+            SizeBytes             = if ($stats) { $stats.SizeBytes } else { 0 }
+            LastLogon             = if ($stats) { $stats.LastLogon } else { $null }
+            # Permissions
+            FullAccessPermissions = if ($fullAccess) { $fullAccess } else { @() }
+            SendAsPermissions     = if ($sendAs) { $sendAs } else { @() }
+        }
+        $records.Add($record)
+    }
+
+    # Step 6: Save to cache file
+    $cacheFile = Join-Path $CacheFolder 'Mailboxes-All.json'
+    $records.ToArray() | ConvertTo-Json -Depth 10 | Set-Content -Path $cacheFile -Encoding UTF8
+    Write-Host ($PREFIX_OK + "Cached $($records.Count) mailboxes with statistics and permissions") -ForegroundColor Green
+    Write-Host ($PREFIX_INFO + "Cache file: $cacheFile") -ForegroundColor DarkGray
+}
+
 # -----------------------------------------------------------------------
 # Exports
 # -----------------------------------------------------------------------
 
-Export-ModuleMember -Function 'Invoke-ExchangeCollection', 'Update-DistributionGroupsCacheFile'
+Export-ModuleMember -Function 'Invoke-ExchangeCollection', 'Update-DistributionGroupsCacheFile', 'Update-MailboxesCacheFile'

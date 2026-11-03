@@ -1,0 +1,87 @@
+GroupDisplayName,GroupEmail,GroupType,MemberDisplayName,MemberEmail,MemberType
+DG Aion Aion Dev Team,aion-dev-team@celcat.com,MailUniversalDistributionGroup,Ethan Andrews,ethan.andrews@celcat.com,UserMailbox
+DG Aion Aion Dev Team,aion-dev-team@celcat.com,MailUniversalDistributionGroup,James Prince,james.prince@celcat.com,UserMailbox
+DG Aion Aion Dev Team,aion-dev-team@celcat.com,MailUniversalDistributionGroup,Kamilla Guba-Zelewska,kamilla.guba-zelewska@celcat.com,UserMailbox
+DG Aion Aion Dev Team,aion-dev-team@celcat.com,MailUniversalDistributionGroup,Barry Brown,barry.brown@celcat.com,UserMailbox
+DG Aion Aion Dev Team,aion-dev-team@celcat.com,MailUniversalDistributionGroup,Rikki Miles,rikki.miles@celcat.com,UserMailbox
+DG Aion Aion Dev Team,aion-dev-team@celcat.com,MailUniversalDistributionGroup,Kyle Richardson,kyle.richardson@celcat.com,UserMailbox
+DG Aion Aion Dev Team,aion-dev-team@celcat.com,MailUniversalDistributionGroup,Ben Beetison,ben.beetison@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,David Wilkes,david.wilkes@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Ethan Andrews,ethan.andrews@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Teddy Blonbou,teddy.blonbou@celcat.fr,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,James Prince,james.prince@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Josselin Lamberti,josselin.lamberti@celcat.fr,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Kelly Ticer,kelly.ticer@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Kamilla Guba-Zelewska,kamilla.guba-zelewska@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Valerie Bennett,valerie.bennett@celcat.fr,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Barry Brown,barry.brown@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Neil Jordan,neil.jordan@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Seddon Kirk,seddon.kirk@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Bunny Lall-Athwal,bunny.lall-athwal@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Chris Loxley-Watkins,chris.loxley-watkins@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,David Sweeney,david.sweeney@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Oisin Teppan,oisin.teppan@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Rikki Miles,rikki.miles@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Patrick Ashe,patrick.ashe@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Todd Wright,todd.wright@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Kyle Richardson,kyle.richardson@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,William Wootton,william.wootton@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Ben Beetison,ben.beetison@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Katherine Storey,katherine.storey@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Yohann Dusserre,yohann.dusserre@celcat.fr,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Katie Oattes,katie.oattes@celcat.com,UserMailbox
+DG CELCAT,celcat.internal@celcat.com,MailUniversalSecurityGroup,Orla Wallis,orla.wallis@celcat.com,UserMailbox
+DG CELCAT Azure Alerts,azure-alerts@celcat.com,MailUniversalDistributionGroup,David Wilkes,david.wilkes@celcat.com,UserMailbox
+DG CELCAT Azure Alerts,azure-alerts@celcat.com,MailUniversalDistributionGroup,Kelly Ticer,kelly.ticer@celcat.com,UserMailbox
+DG CELCAT Azure Alerts,azure-alerts@celcat.com,MailUniversalDistributionGroup,Bunny Lall-Athwal,bunny.lall-athwal@celcat.com,UserMailbox
+DG CELCAT Development,development@celcat.com,MailUniversalDistributionGroup,Ethan Andrews,ethan.andrews@celcat.com,UserMailbox
+DG CELCAT Development,development@celcat.com,MailUniversalDistributionGroup,James Prince,james.prince@celcat.com,UserMailbox
+DG CELCAT Development,development@celcat.com,MailUniversalDistributionGroup,Kamilla Guba-Zelewska,kamilla.guba-zelewska@celcat.com,UserMailbox
+DG CELCAT Development,development@celcat.com,MailUniversalDistributionGroup,Emily Wang,emily.wang@volarisgroup.com,UserMailbox
+DG CELCAT Development,development@celcat.com,MailUniversalDistributionGroup,David Sweeney,david.sweeney@celcat.com,UserMailbox
+DG CELCAT Development,development@celcat.com,MailUniversalDistributionGroup,Rikki Miles,rikki.miles@celcat.com,UserMailbox
+DG CELCAT Development,development@celcat.com,MailUniversalDistributionGroup,Kyle Richardson,kyle.richardson@celcat.com,UserMailbox
+DG CELCAT Development,development@celcat.com,MailUniversalDistributionGroup,Ben Beetison,ben.beetison@celcat.com,UserMailbox
+DG CELCAT Diary Security Group,diarydg@celcat.com,MailUniversalDistributionGroup,Neil Jordan,neil.jordan@celcat.com,UserMailbox
+DG CELCAT Diary Security Group,diarydg@celcat.com,MailUniversalDistributionGroup,SM CELCAT Exchange Admin,administrator@celcat.com,UserMailbox
+DG CELCAT Diary Security Group,diarydg@celcat.com,MailUniversalDistributionGroup,Kyle Richardson,kyle.richardson@celcat.com,UserMailbox
+DG CELCAT File Drop,filedrop@celcat.com,MailUniversalDistributionGroup,Kelly Ticer,kelly.ticer@celcat.com,UserMailbox
+DG CELCAT Front Office,admin@celcat.com,MailUniversalDistributionGroup,Valerie Bennett,valerie.bennett@celcat.fr,UserMailbox
+DG CELCAT Front Office,admin@celcat.com,MailUniversalDistributionGroup,Neil Jordan,neil.jordan@celcat.com,UserMailbox
+DG CELCAT Hosting Billing,hosting.billing@celcat.com,MailUniversalDistributionGroup,Neil Jordan,neil.jordan@celcat.com,UserMailbox
+DG CELCAT Management Team - DL,management-team-dl@celcat.com,MailUniversalDistributionGroup,Teddy Blonbou,teddy.blonbou@celcat.fr,UserMailbox
+DG CELCAT Management Team - DL,management-team-dl@celcat.com,MailUniversalDistributionGroup,Neil Jordan,neil.jordan@celcat.com,UserMailbox
+DG CELCAT nw-alerts@celcat.com,nw-alerts@celcat.com,MailUniversalDistributionGroup,Chris Loxley-Watkins,chris.loxley-watkins@celcat.com,UserMailbox
+DG CELCAT Portal,portal@celcat.com,MailUniversalDistributionGroup,SM CELCAT Tech Support Tickets,support@celcat.com,UserMailbox
+DG CELCAT Sales,sales@celcat.com,MailUniversalDistributionGroup,Neil Jordan,neil.jordan@celcat.com,UserMailbox
+DG CELCAT Sales,sales@celcat.com,MailUniversalDistributionGroup,Seddon Kirk,seddon.kirk@celcat.com,UserMailbox
+DG CELCAT Sales,sales@celcat.com,MailUniversalDistributionGroup,SM CELCAT Exchange Admin,administrator@celcat.com,UserMailbox
+DG CELCAT Sales,sales@celcat.com,MailUniversalDistributionGroup,Oisin Teppan,oisin.teppan@celcat.com,UserMailbox
+DG CELCAT Sales,sales@celcat.com,MailUniversalDistributionGroup,Patrick Ashe,patrick.ashe@celcat.com,UserMailbox
+DG CELCAT Sales,sales@celcat.com,MailUniversalDistributionGroup,Todd Wright,todd.wright@celcat.com,UserMailbox
+DG CELCAT Sales,sales@celcat.com,MailUniversalDistributionGroup,Yohann Dusserre,yohann.dusserre@celcat.fr,UserMailbox
+DG CELCAT Sales,sales@celcat.com,MailUniversalDistributionGroup,Orla Wallis,orla.wallis@celcat.com,UserMailbox
+DG CELCAT Sicknote,sicknote@celcat.com,MailUniversalDistributionGroup,David Wilkes,david.wilkes@celcat.com,UserMailbox
+DG CELCAT Sicknote,sicknote@celcat.com,MailUniversalDistributionGroup,Barbara Sheen,barbara.sheen@kineticsoftware.com,UserMailbox
+DG CELCAT Sicknote,sicknote@celcat.com,MailUniversalDistributionGroup,Neil Jordan,neil.jordan@celcat.com,UserMailbox
+DG CELCAT Sicknote,sicknote@celcat.com,MailUniversalDistributionGroup,Seddon Kirk,seddon.kirk@celcat.com,UserMailbox
+DG CELCAT Sicknote,sicknote@celcat.com,MailUniversalDistributionGroup,David Sweeney,david.sweeney@celcat.com,UserMailbox
+DG CELCAT Sicknote,sicknote@celcat.com,MailUniversalDistributionGroup,Patrick Ashe,patrick.ashe@celcat.com,UserMailbox
+DG CELCAT Sicknote,sicknote@celcat.com,MailUniversalDistributionGroup,Kyle Richardson,kyle.richardson@celcat.com,UserMailbox
+DG CELCAT Sicknote,sicknote@celcat.com,MailUniversalDistributionGroup,Katie Oattes,katie.oattes@celcat.com,UserMailbox
+DG CELCAT Tech Support,techsupport@celcat.com,MailUniversalDistributionGroup,Kelly Ticer,kelly.ticer@celcat.com,UserMailbox
+DG CELCAT Tech Support,techsupport@celcat.com,MailUniversalDistributionGroup,David Sweeney,david.sweeney@celcat.com,UserMailbox
+DG CELCAT Tech Support,techsupport@celcat.com,MailUniversalDistributionGroup,Orla Wallis,orla.wallis@celcat.com,UserMailbox
+DG CELCAT Tech Support Tickets,tickets@celcat.com,MailUniversalDistributionGroup,SM CELCAT Tech Support Tickets,support@celcat.com,UserMailbox
+DG CELCAT Tech Support Tickets,tickets@celcat.com,MailUniversalDistributionGroup,EC CELCAT Tech Support Tickets,celcatcomtickets@celcat.freshdesk.com,MailContact
+DG CELCAT Tech Support Tickets,tickets@celcat.com,MailUniversalDistributionGroup,David Sweeney,david.sweeney@celcat.com,UserMailbox
+DG CELCAT TechTickets,techtickets@celcat.com,MailUniversalDistributionGroup,David Wilkes,david.wilkes@celcat.com,UserMailbox
+DG CELCAT TechTickets,techtickets@celcat.com,MailUniversalDistributionGroup,SM CELCAT Exchange Admin,administrator@celcat.com,UserMailbox
+DG CELCAT TempMonitor,tempmonitor@celcat.com,MailUniversalDistributionGroup,SM CELCAT IT Dept,it@celcat.com,SharedMailbox
+DG CELCAT Testing,Testing@celcat.com,MailUniversalDistributionGroup,Barry Brown,barry.brown@celcat.com,UserMailbox
+DG CELCAT Testing,Testing@celcat.com,MailUniversalDistributionGroup,David Sweeney,david.sweeney@celcat.com,UserMailbox
+DG CELCAT Testing,Testing@celcat.com,MailUniversalDistributionGroup,Rikki Miles,rikki.miles@celcat.com,UserMailbox
+DG CELCAT Training,Training2@celcat.com,MailUniversalDistributionGroup,Neil Jordan,neil.jordan@celcat.com,UserMailbox
+DG CELCAT Training,Training2@celcat.com,MailUniversalDistributionGroup,Katherine Storey,katherine.storey@celcat.com,UserMailbox
+DG CELCAT TrainingMail,Training@celcat.com,MailUniversalDistributionGroup,Neil Jordan,neil.jordan@celcat.com,UserMailbox
+DG CELCAT TrainingMail,Training@celcat.com,MailUniversalDistributionGroup,Katherine Storey,katherine.storey@celcat.com,UserMailbox

@@ -30,11 +30,12 @@ $ErrorActionPreference = 'Stop'
 
 # Task names with staggered start times
 # Staggered to complete all caches by 8am Monday morning
-# Based on typical durations: SharePoint ~1hr, Teams ~5hrs, DGs ~1hr
+# Based on typical durations: SharePoint ~1hr, Teams ~5hrs, DGs ~1hr, Mailboxes ~2-3hrs
 $tasks = @{
     'SharePoint Sites Cache'     = @{ Script = 'Update-SharePointSitesCache.ps1';     Time = '12:30AM' }
     'Teams Channels Cache'       = @{ Script = 'Update-TeamsChannelsCache.ps1';       Time = '1:30AM' }
     'Distribution Groups Cache'  = @{ Script = 'Update-DistributionGroupsCache.ps1';  Time = '6:30AM' }
+    'Exchange Mailboxes Cache'   = @{ Script = 'Update-MailboxesCache.ps1';           Time = '7:30AM' }
 }
 
 $taskFolder = '\FlyMigration'
@@ -67,10 +68,11 @@ Write-Host "║  Schedule Automatic Cache Refresh - Staggered Start      ║" -F
 Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "SharePoint Admin URL: $SharePointAdminUrl" -ForegroundColor White
-Write-Host "Schedule:             Every Monday (staggered - finish by 8am)" -ForegroundColor White
+Write-Host "Schedule:             Every Monday (staggered - finish by 11am)" -ForegroundColor White
 Write-Host "  • SharePoint Sites:     12:30 AM  (est. finish ~1:30 AM)" -ForegroundColor DarkGray
 Write-Host "  • Teams Channels:        1:30 AM  (est. finish ~6:30 AM)" -ForegroundColor DarkGray
 Write-Host "  • Distribution Groups:   6:30 AM  (est. finish ~7:30 AM)" -ForegroundColor DarkGray
+Write-Host "  • Exchange Mailboxes:    7:30 AM  (est. finish ~10:30 AM)" -ForegroundColor DarkGray
 Write-Host "Run as:               $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
 Write-Host ""
 
@@ -151,8 +153,9 @@ Write-Host "Tasks run every Monday (staggered) as $env:USERDOMAIN\$env:USERNAME"
 Write-Host "  • SharePoint Sites:     12:30 AM  → finish ~1:30 AM" -ForegroundColor Green
 Write-Host "  • Teams Channels:        1:30 AM  → finish ~6:30 AM" -ForegroundColor Green
 Write-Host "  • Distribution Groups:   6:30 AM  → finish ~7:30 AM" -ForegroundColor Green
+Write-Host "  • Exchange Mailboxes:    7:30 AM  → finish ~10:30 AM" -ForegroundColor Green
 Write-Host ""
-Write-Host "All caches refreshed by 8:00 AM Monday morning!" -ForegroundColor Yellow
+Write-Host "All caches refreshed by 11:00 AM Monday morning!" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Staggered timing prevents:" -ForegroundColor Yellow
 Write-Host "  - Overlapping long-running tasks" -ForegroundColor DarkGray

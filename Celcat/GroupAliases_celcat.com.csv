@@ -1,0 +1,7 @@
+"PrimarySmtpAddress","Alias","GroupType"
+"admin@celcat.com","adminfrontoffice@celcat.com","MailUniversalDistributionGroup"
+"development@celcat.com","development-dl@celcat.com","MailUniversalDistributionGroup"
+"management-team-dl@celcat.com","management-team@celcat.com","MailUniversalDistributionGroup"
+"testing@celcat.com","testers@celcat.com","MailUniversalDistributionGroup"
+"training@celcat.com","trainingmail@celcat.com","MailUniversalDistributionGroup"
+"training2@celcat.com","trainingdept@celcat.com","MailUniversalDistributionGroup"
