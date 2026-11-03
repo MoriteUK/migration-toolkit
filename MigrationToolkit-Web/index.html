@@ -482,73 +482,39 @@
         </p>
 
         <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Source Tenant</h3>
+          <h3 class="form-card-title">Cache Refresh</h3>
+          <p class="form-help">
+            Refreshes all discovery caches (SharePoint Sites, Teams Channels, Distribution Groups, and Exchange Mailboxes).
+            Caches are automatically refreshed every Monday morning via scheduled tasks, but you can manually trigger a refresh here when needed.
+          </p>
+
           <div class="form-group-tight">
             <label class="form-label">SPO Admin URL</label>
             <input type="text" class="form-input form-input-compact" id="cacheSharePointAdminUrl"
                    placeholder="https://ourvolaris-admin.sharepoint.com">
-            <small class="form-help">Same value (or default) M365 Discovery uses - keys all three caches to this source tenant.</small>
+            <small class="form-help">Keys all caches to this source tenant (same value Run Assessment uses).</small>
           </div>
-          <div class="form-actions" style="margin-top:4px;">
-            <button type="button" class="btn btn-success btn-xs" id="refreshAllCachesBtn">
-              🔁 Refresh Everything
-            </button>
-          </div>
-          <small class="form-help">Runs all four refreshes below one after another (SharePoint → Teams → Distribution Groups → Mailboxes), each in its own sign-in window, sharing the log underneath. Mailboxes cache can take 2-3 hours on large tenants.</small>
-          <div id="refreshAllCachesLog" class="hidden" style="margin-top:12px;">
-            <pre id="refreshAllCachesLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
-          </div>
-        </div>
 
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">SharePoint Sites (+ OneDrive)</h3>
-          <p class="form-help">Walks every site in the tenant via Get-SPOSite -Limit All. Requires Microsoft.Online.SharePoint.PowerShell.</p>
-          <div class="form-actions">
-            <button type="button" class="btn btn-success btn-xs" id="refreshSpoSitesCacheBtn">
-              ▶ Refresh SharePoint Sites Cache
+          <div class="form-actions" style="margin-top:12px;">
+            <button type="button" class="btn btn-success" id="refreshAllCachesBtn">
+              🔁 Refresh All Caches
             </button>
           </div>
-          <div id="refreshSpoSitesCacheLog" class="hidden" style="margin-top:12px;">
-            <pre id="refreshSpoSitesCacheLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
-          </div>
-        </div>
 
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Teams Channels &amp; Members</h3>
-          <p class="form-help">Walks every Team, every channel (incl. private/shared membership), tenant-wide via Microsoft Graph. Its own sign-in window.</p>
-          <div class="form-actions">
-            <button type="button" class="btn btn-success btn-xs" id="refreshTeamsChannelsCacheBtn">
-              ▶ Refresh Teams Channels Cache
-            </button>
+          <div class="form-help" style="margin-top:12px; padding:12px; background:#EFF6FF; border-left:3px solid #3B82F6; border-radius:4px;">
+            <strong>What gets refreshed:</strong>
+            <ul style="margin:8px 0 0 20px;">
+              <li><strong>SharePoint Sites & OneDrive</strong> - All sites via Get-SPOSite (~1 hour)</li>
+              <li><strong>Teams Channels & Members</strong> - All teams and channels via Microsoft Graph (~5 hours for large tenants)</li>
+              <li><strong>Distribution Groups</strong> - All DGs with members via Exchange Online (~1 hour)</li>
+              <li><strong>Exchange Mailboxes</strong> - All mailboxes with statistics and permissions (~2-3 hours)</li>
+            </ul>
+            <p style="margin:8px 0 0 0;"><strong>Total time:</strong> Can take 8-10 hours on large tenants. Each refresh opens its own sign-in window.</p>
           </div>
-          <div id="refreshTeamsChannelsCacheLog" class="hidden" style="margin-top:12px;">
-            <pre id="refreshTeamsChannelsCacheLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
-          </div>
-        </div>
 
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Distribution Groups &amp; Members</h3>
-          <p class="form-help">Walks every distribution group and mail-enabled security group, tenant-wide, with members, via Exchange Online. Optional - Discovery falls back to a live per-VBU query if this cache is missing or more than 14 days old, so it's safe to skip. Its own sign-in window.</p>
-          <div class="form-actions">
-            <button type="button" class="btn btn-success btn-xs" id="refreshDLsCacheBtn">
-              ▶ Refresh Distribution Groups Cache
-            </button>
-          </div>
-          <div id="refreshDLsCacheLog" class="hidden" style="margin-top:12px;">
-            <pre id="refreshDLsCacheLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
-          </div>
-        </div>
-
-        <div class="form-card form-card-compact">
-          <h3 class="form-card-title">Exchange Mailboxes, Statistics &amp; Permissions</h3>
-          <p class="form-help">Caches ALL mailboxes with statistics (size, item count) and permissions (FullAccess, SendAs). Can take 2-3 hours on large tenants. Separate sign-in.</p>
-          <div class="form-actions">
-            <button type="button" class="btn btn-success btn-xs" id="refreshMailboxesCacheBtn">
-              ▶ Refresh Mailboxes Cache
-            </button>
-          </div>
-          <div id="refreshMailboxesCacheLog" class="hidden" style="margin-top:12px;">
-            <pre id="refreshMailboxesCacheLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          <div id="refreshAllCachesLog" class="hidden" style="margin-top:16px;">
+            <h4 style="margin:0 0 8px 0; font-size:13px; font-weight:600; color:#374151;">Refresh Log</h4>
+            <pre id="refreshAllCachesLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:500px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0;"></pre>
           </div>
         </div>
       </div>
@@ -2683,7 +2649,7 @@
     </div>
   </div>
 
-  <script src="renderer.js?v=2.9.216"></script>
+  <script src="renderer.js?v=2.9.217"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">

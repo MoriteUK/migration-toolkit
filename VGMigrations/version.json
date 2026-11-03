@@ -1,7 +1,12 @@
 {
-  "version": "2.9.216",
+  "version": "2.9.217",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.217",
+      "date": "2026-11-03",
+      "changes": "GUI: Simplify Discovery Cache view - remove individual cache cards. Now shows single 'Refresh All Caches' button that runs all 4 caches in sequence (SharePoint, Teams, DGs, Mailboxes). Cleaner UI since individual buttons not needed with scheduled weekly refresh + ad-hoc 'Refresh All' option. Removed: refreshSpoSitesCacheBtn, refreshTeamsChannelsCacheBtn, refreshDLsCacheBtn, refreshMailboxesCacheBtn handlers. Shows detailed breakdown of what gets refreshed (duration estimates) in help text. Total time: 8-10 hours on large tenants."
+    },
     {
       "version": "2.9.216",
       "date": "2026-11-03",

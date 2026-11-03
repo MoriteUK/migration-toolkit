@@ -3958,9 +3958,7 @@ document.addEventListener('DOMContentLoaded', () => {
       logSection.classList.remove('hidden');
       logOutput.textContent = '';
 
-      const allButtons = [refreshAllCachesBtn, refreshSpoSitesCacheBtn, refreshTeamsChannelsCacheBtn, refreshDLsCacheBtn, refreshMailboxesCacheBtn]
-        .filter(Boolean);
-      allButtons.forEach((b) => { b.disabled = true; });
+      refreshAllCachesBtn.disabled = true;
       refreshAllCachesBtn.textContent = 'Running…';
 
       const steps = [
@@ -3991,8 +3989,8 @@ document.addEventListener('DOMContentLoaded', () => {
         logOutput.textContent += allOk ? '\n✓ All caches refreshed\n' : '\n✗ Finished with errors — see above\n';
       } finally {
         window.electronAPI.offPsOutput();
-        allButtons.forEach((b) => { b.disabled = false; });
-        refreshAllCachesBtn.textContent = '🔁 Refresh Everything';
+        refreshAllCachesBtn.disabled = false;
+        refreshAllCachesBtn.textContent = '🔁 Refresh All Caches';
       }
     });
   }
