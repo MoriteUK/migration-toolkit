@@ -28,11 +28,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Task names
+# Task names with staggered start times
+# Staggered to avoid overlapping authentication/API calls and reduce throttling
 $tasks = @{
-    'SharePoint Sites Cache'     = 'Update-SharePointSitesCache.ps1'
-    'Teams Channels Cache'       = 'Update-TeamsChannelsCache.ps1'
-    'Distribution Groups Cache'  = 'Update-DistributionGroupsCache.ps1'
+    'SharePoint Sites Cache'     = @{ Script = 'Update-SharePointSitesCache.ps1';     Time = '3:00AM' }
+    'Teams Channels Cache'       = @{ Script = 'Update-TeamsChannelsCache.ps1';       Time = '4:00AM' }
+    'Distribution Groups Cache'  = @{ Script = 'Update-DistributionGroupsCache.ps1';  Time = '5:00AM' }
 }
 
 $taskFolder = '\FlyMigration'
@@ -61,11 +62,14 @@ if (-not $SharePointAdminUrl) {
 }
 
 Write-Host "`n╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║  Schedule Automatic Cache Refresh - Every Monday 3am     ║" -ForegroundColor Cyan
+Write-Host "║  Schedule Automatic Cache Refresh - Staggered Start      ║" -ForegroundColor Cyan
 Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "SharePoint Admin URL: $SharePointAdminUrl" -ForegroundColor White
-Write-Host "Schedule:             Every Monday at 3:00 AM" -ForegroundColor White
+Write-Host "Schedule:             Every Monday (staggered)" -ForegroundColor White
+Write-Host "  • SharePoint Sites:      3:00 AM" -ForegroundColor DarkGray
+Write-Host "  • Teams Channels:        4:00 AM" -ForegroundColor DarkGray
+Write-Host "  • Distribution Groups:   5:00 AM" -ForegroundColor DarkGray
 Write-Host "Run as:               $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
 Write-Host ""
 
@@ -83,7 +87,9 @@ catch {
 
 # Create scheduled tasks
 foreach ($taskName in $tasks.Keys) {
-    $scriptName = $tasks[$taskName]
+    $taskConfig = $tasks[$taskName]
+    $scriptName = $taskConfig.Script
+    $startTime  = $taskConfig.Time
     $scriptPath = Join-Path $PSScriptRoot $scriptName
 
     if (-not (Test-Path $scriptPath)) {
@@ -91,7 +97,7 @@ foreach ($taskName in $tasks.Keys) {
         continue
     }
 
-    Write-Host "Creating task: $taskName..." -ForegroundColor Cyan
+    Write-Host "Creating task: $taskName ($startTime)..." -ForegroundColor Cyan
 
     # Task action - run PowerShell 7 with the cache refresh script
     $action = New-ScheduledTaskAction `
@@ -99,8 +105,8 @@ foreach ($taskName in $tasks.Keys) {
         -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -SharePointAdminUrl `"$SharePointAdminUrl`"" `
         -WorkingDirectory $PSScriptRoot
 
-    # Trigger - Every Monday at 3:00 AM
-    $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 3:00AM
+    # Trigger - Every Monday at the specified time
+    $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At $startTime
 
     # Settings
     $settings = New-ScheduledTaskSettingsSet `
@@ -140,7 +146,15 @@ Write-Host "╔═════════════════════�
 Write-Host "║  Scheduled Tasks Created Successfully                     ║" -ForegroundColor Green
 Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
-Write-Host "Tasks will run every Monday at 3:00 AM as $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
+Write-Host "Tasks run every Monday (staggered) as $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
+Write-Host "  • SharePoint Sites:      3:00 AM" -ForegroundColor Green
+Write-Host "  • Teams Channels:        4:00 AM" -ForegroundColor Green
+Write-Host "  • Distribution Groups:   5:00 AM" -ForegroundColor Green
+Write-Host ""
+Write-Host "Staggered start times prevent:" -ForegroundColor Yellow
+Write-Host "  - Simultaneous authentication conflicts" -ForegroundColor DarkGray
+Write-Host "  - API throttling from parallel requests" -ForegroundColor DarkGray
+Write-Host "  - High CPU/memory load spikes" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "To view tasks:" -ForegroundColor Yellow
 Write-Host "  1. Open Task Scheduler (taskschd.msc)" -ForegroundColor Gray
