@@ -3382,6 +3382,30 @@ document.addEventListener('DOMContentLoaded', () => {
     assessmentLogPre.scrollTop = assessmentLogPre.scrollHeight;
   }
 
+  // Auto-fill search term from domain (strips TLD like Get-VBUName in Common.psm1)
+  if (assessmentDomain && assessmentSearchTerm) {
+    assessmentDomain.addEventListener('blur', () => {
+      const domain = assessmentDomain.value?.trim();
+      if (!domain || assessmentSearchTerm.value?.trim()) return; // Skip if empty domain or search term already filled
+
+      const parts = domain.split('.');
+      if (parts.length < 2) {
+        assessmentSearchTerm.value = domain;
+        return;
+      }
+
+      const second = parts[parts.length - 2];
+      // Compound ccTLD: second-to-last segment is 3 chars or fewer (e.g. mydomain.co.uk)
+      // Strip two trailing segments (.co.uk)
+      if (second.length <= 3 && parts.length > 2) {
+        assessmentSearchTerm.value = parts.slice(0, parts.length - 2).join('.');
+      } else {
+        // Single TLD: strip last segment only (e.g. contoso.com → contoso)
+        assessmentSearchTerm.value = parts.slice(0, parts.length - 1).join('.');
+      }
+    });
+  }
+
   if (assessmentOutputBrowse) {
     assessmentOutputBrowse.addEventListener('click', async () => {
       const result = await window.electronAPI.showOpenDialog({ properties: ['openDirectory'] });

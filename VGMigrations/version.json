@@ -1,7 +1,12 @@
 {
-  "version": "2.9.208",
+  "version": "2.9.209",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.209",
+      "date": "2026-11-03",
+      "changes": "Assessment: Auto-fill search term from domain. When you enter a domain like 'across.co.uk' and tab out, the search term field now automatically fills with 'across' (strips TLD using the same Get-VBUName logic). Prevents accidentally searching for just 'a' instead of the full company name. Only fills when the search term field is empty, so you can still manually override if needed."
+    },
     {
       "version": "2.9.208",
       "date": "2026-11-03",
