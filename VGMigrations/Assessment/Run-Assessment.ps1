@@ -270,8 +270,21 @@ if (-not (Get-Module -ListAvailable -Name 'Microsoft.Online.SharePoint.PowerShel
 Write-SectionHeader 'Authentication'
 
 # SPO must connect first - Exchange and Graph WAM tokens conflict with SPO auth if they connect before it
-if (-not $ctx.SkipSharePoint) {
-    Write-Host ($PREFIX_INFO + 'Connecting to SharePoint Online...') -ForegroundColor DarkGray
+# Check if we have fresh cache before attempting to connect
+$spoSitesCache  = if ($cacheFolder) { Join-Path $cacheFolder 'SharePointSites-All.json' } else { '' }
+$oneDrivesCache = if ($cacheFolder) { Join-Path $cacheFolder 'OneDrives-All.json' } else { '' }
+$hasFreshSPOCache = $false
+
+if ($spoSitesCache -and (Test-Path $spoSitesCache) -and (Test-Path $oneDrivesCache)) {
+    $cacheAge = (Get-Date) - (Get-Item $spoSitesCache).LastWriteTime
+    if ($cacheAge.TotalDays -lt 7) {
+        $hasFreshSPOCache = $true
+        Write-Host ($PREFIX_INFO + "SharePoint cache available ($([math]::Round($cacheAge.TotalDays, 1)) days old) - skipping connection") -ForegroundColor DarkGray
+    }
+}
+
+if (-not $ctx.SkipSharePoint -and -not $hasFreshSPOCache) {
+    Write-Host ($PREFIX_INFO + 'Connecting to SharePoint Online (no cache)...') -ForegroundColor DarkGray
     try {
         Connect-SPOService -Url $ctx.SPOAdminUrl -ErrorAction Stop
         Write-Host ($PREFIX_OK + 'SharePoint Online connected') -ForegroundColor Green

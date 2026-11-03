@@ -1,7 +1,12 @@
 {
-  "version": "2.9.203",
+  "version": "2.9.204",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.204",
+      "date": "2026-11-03",
+      "changes": "Skip SharePoint connection when cache is available: Check for SharePointSites-All.json and OneDrives-All.json cache (< 7 days old) before attempting Connect-SPOService. If cache exists, skip connection entirely and use cached data. Avoids WAM/MSAL authentication errors when cached data is sufficient. Assessment completes faster and doesn't require SharePoint authentication when cache is fresh."
+    },
     {
       "version": "2.9.203",
       "date": "2026-11-03",
