@@ -66,6 +66,8 @@ function Get-AllMailboxesRaw {
 
     # No cache or cache stale - query live
     Write-Host ($PREFIX_INFO + 'Querying mailboxes live (no cache)...') -ForegroundColor DarkGray
+    Write-Host ($PREFIX_WARN + 'This can take 10-30 minutes on large tenants - please wait...') -ForegroundColor Yellow
+    Write-Host ($PREFIX_INFO + 'TIP: Run Update-MailboxesCache.ps1 to create a cache for faster future assessments') -ForegroundColor DarkGray
     $filter = "(CustomAttribute6 -like '*$t*') -or (CustomAttribute7 -eq '$i') -or " +
               "(UserPrincipalName -like '*$t*')"
 
@@ -74,6 +76,8 @@ function Get-AllMailboxesRaw {
         -ResultSize Unlimited `
         -Properties $script:EXOMailboxProperties `
         -ErrorAction Stop)
+
+    Write-Host ($PREFIX_OK + "Retrieved $($raw.Count) mailboxes from Exchange Online") -ForegroundColor Green
 
     $kept = @($raw | Where-Object {
         $ca6 = "$($_.CustomAttribute6)"

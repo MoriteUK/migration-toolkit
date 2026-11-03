@@ -1,7 +1,12 @@
 {
-  "version": "2.9.213",
+  "version": "2.9.214",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.214",
+      "date": "2026-11-03",
+      "changes": "Exchange: Add progress messages for live mailbox queries. When no cache exists, displays warning that live query can take 10-30 minutes on large tenants and suggests running Update-MailboxesCache.ps1 to create cache. Shows count of mailboxes retrieved after query completes. Prevents confusion when assessment appears to hang during slow Exchange queries on tenants with 1000s of mailboxes."
+    },
     {
       "version": "2.9.213",
       "date": "2026-11-03",
