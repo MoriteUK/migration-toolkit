@@ -1,7 +1,12 @@
 {
-  "version": "2.9.209",
+  "version": "2.9.210",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.210",
+      "date": "2026-11-03",
+      "changes": "DEBUG: Add parameter logging to Run-Assessment.ps1. Logs received parameters (VbuDomain, VbuSearchTerm, VbuId, SharePointAdminUrl, OutputPath) at script start and logs the arrays (vbuDomains, vbuSearchTerms, vbuIds) before creating context. Shows parameter lengths and types to diagnose why search term 'Prima' is being truncated to 'p'. Temporary debugging version to identify the root cause."
+    },
     {
       "version": "2.9.209",
       "date": "2026-11-03",

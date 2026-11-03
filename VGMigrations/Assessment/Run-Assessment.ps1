@@ -8,6 +8,14 @@ param(
     [string]$OutputPath
 )
 
+# DEBUG: Log received parameters
+Write-Host "[DEBUG] Received parameters:" -ForegroundColor Magenta
+Write-Host "  VbuDomain       = '$VbuDomain' (length: $($VbuDomain.Length))" -ForegroundColor Magenta
+Write-Host "  VbuSearchTerm   = '$VbuSearchTerm' (length: $($VbuSearchTerm.Length), type: $($VbuSearchTerm.GetType().Name))" -ForegroundColor Magenta
+Write-Host "  VbuId           = '$VbuId'" -ForegroundColor Magenta
+Write-Host "  SharePointAdminUrl = '$SharePointAdminUrl'" -ForegroundColor Magenta
+Write-Host "  OutputPath      = '$OutputPath'" -ForegroundColor Magenta
+
 # Define module root before any imports
 $moduleRoot = Join-Path $PSScriptRoot 'Modules'
 
@@ -252,6 +260,13 @@ catch {
 # -----------------------------------------------------------------------
 # Assessment context
 # -----------------------------------------------------------------------
+# DEBUG: Log arrays before creating context
+Write-Host "[DEBUG] Before creating context:" -ForegroundColor Magenta
+Write-Host "  vbuDomains      = @($($vbuDomains -join ', '))" -ForegroundColor Magenta
+Write-Host "  vbuSearchTerms  = @($($vbuSearchTerms -join ', '))" -ForegroundColor Magenta
+Write-Host "  vbuSearchTerms[0] = '$($vbuSearchTerms[0])' (length: $($vbuSearchTerms[0].Length))" -ForegroundColor Magenta
+Write-Host "  vbuIds          = @($($vbuIds -join ', '))" -ForegroundColor Magenta
+
 $ctx = New-AssessmentContext `
     -VBUDomain      $vbuDomains[0] `
     -VBUId          $(if ($vbuIds.Count -gt 0) { $vbuIds[0] } else { '' }) `
