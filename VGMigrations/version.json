@@ -1,7 +1,12 @@
 {
-  "version": "2.9.210",
+  "version": "2.9.211",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.211",
+      "date": "2026-11-03",
+      "changes": "DEBUG: Add detailed array construction logging. Shows VbuSearchTerm before and after wrapping in @() operator, including type, count, and first element details. Logs in cyan at the exact point where array is built to identify where 'Prima' (length 5) becomes 'P' (length 1). More granular than v2.9.210 to pinpoint the exact line causing character array conversion."
+    },
     {
       "version": "2.9.210",
       "date": "2026-11-03",
