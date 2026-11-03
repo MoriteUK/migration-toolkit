@@ -1,7 +1,12 @@
 {
-  "version": "2.9.200",
+  "version": "2.9.201",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.201",
+      "date": "2026-11-03",
+      "changes": "Fix Test-Prerequisites blocking assessment: Make Context parameter optional (defaults to null). The function was called before context creation in Run-Assessment.ps1, causing it to prompt for the mandatory parameter and block execution. Now only sets SkipSharePoint on context if context is provided."
+    },
     {
       "version": "2.9.200",
       "date": "2026-11-03",

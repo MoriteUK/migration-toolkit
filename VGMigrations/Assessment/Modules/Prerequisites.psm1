@@ -56,7 +56,7 @@ function Install-Prerequisites {
 function Test-Prerequisites {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][PSCustomObject]$Context
+        [PSCustomObject]$Context = $null
     )
 
     Write-SectionHeader 'Prerequisites'
@@ -107,7 +107,7 @@ function Test-Prerequisites {
         }
         catch {
             Write-Host ($PREFIX_WARN + 'SPO module install failed - SharePoint collection will be skipped') -ForegroundColor Yellow
-            $Context.SkipSharePoint = $true
+            if ($Context) { $Context.SkipSharePoint = $true }
         }
     }
     else {
