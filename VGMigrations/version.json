@@ -1,7 +1,12 @@
 {
-  "version": "2.9.217",
+  "version": "2.9.218",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.218",
+      "date": "2026-11-03",
+      "changes": "Exchange: Add progress messages for mailbox statistics collection. Shows 'Getting statistics for X UserMailbox/SharedMailbox mailboxes...' then progress every 100 mailboxes with timestamp and percentage (e.g. '800 / 14,523 (6%)'). Prevents assessment from appearing hung during 20-40 minute statistics collection phase for large tenants. Without cache, getting statistics for 10,000+ mailboxes can take 30+ minutes with no output - now shows it's progressing."
+    },
     {
       "version": "2.9.217",
       "date": "2026-11-03",

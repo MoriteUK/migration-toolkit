@@ -115,8 +115,19 @@ function Build-MailboxRecords {
 
     $needStats = $RecipientType -in @('UserMailbox', 'SharedMailbox')
     $records   = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $mailboxes = @($RawMailboxes | Where-Object { $_.RecipientTypeDetails -eq $RecipientType })
 
-    foreach ($mb in ($RawMailboxes | Where-Object { $_.RecipientTypeDetails -eq $RecipientType })) {
+    if ($needStats -and $mailboxes.Count -gt 0) {
+        Write-Host (Get-TimestampPrefix ($PREFIX_INFO + "Getting statistics for $($mailboxes.Count) $RecipientType mailboxes...")) -ForegroundColor DarkGray
+    }
+
+    $processed = 0
+    foreach ($mb in $mailboxes) {
+        $processed++
+        if ($needStats -and $processed % 100 -eq 0) {
+            $pct = [math]::Round(($processed / $mailboxes.Count) * 100)
+            Write-Host (Get-TimestampPrefix ($PREFIX_INFO + "  $processed / $($mailboxes.Count) ($pct%)")) -ForegroundColor DarkGray
+        }
         $itemCount    = $null
         $sizeGB       = [double]0
         $sizeBytes    = [long]0
