@@ -44,7 +44,7 @@ function Get-AllMailboxesRaw {
     if ($mbCache -and (Test-Path $mbCache)) {
         $cacheAge = (Get-Date) - (Get-Item $mbCache).LastWriteTime
         if ($cacheAge.TotalDays -lt 7) {
-            Write-Host ($PREFIX_INFO + "Loading mailboxes from cache ($([math]::Round($cacheAge.TotalDays, 1)) days old)...") -ForegroundColor DarkGray
+            Write-Host (Get-TimestampPrefix ($PREFIX_INFO + "Loading mailboxes from cache ($([math]::Round($cacheAge.TotalDays, 1)) days old)...")) -ForegroundColor DarkGray
 
             $allMailboxes = @(Get-Content $mbCache -Raw | ConvertFrom-Json)
             $kept = @($allMailboxes | Where-Object {
@@ -59,25 +59,27 @@ function Get-AllMailboxesRaw {
                 $ca6Ok -or $byId -or $byDomain
             })
 
-            Write-Host ($PREFIX_OK + "Filtered to $($kept.Count) mailboxes from cache") -ForegroundColor Green
+            Write-Host (Get-TimestampPrefix ($PREFIX_OK + "Filtered to $($kept.Count) mailboxes from cache")) -ForegroundColor Green
             return $kept
         }
     }
 
     # No cache or cache stale - query live
-    Write-Host ($PREFIX_INFO + 'Querying mailboxes live (no cache)...') -ForegroundColor DarkGray
-    Write-Host ($PREFIX_WARN + 'This can take 10-30 minutes on large tenants - please wait...') -ForegroundColor Yellow
-    Write-Host ($PREFIX_INFO + 'TIP: Run Update-MailboxesCache.ps1 to create a cache for faster future assessments') -ForegroundColor DarkGray
+    Write-Host (Get-TimestampPrefix ($PREFIX_INFO + 'Querying mailboxes live (no cache)...')) -ForegroundColor DarkGray
+    Write-Host (Get-TimestampPrefix ($PREFIX_WARN + 'This can take 10-30 minutes on large tenants - please wait...')) -ForegroundColor Yellow
+    Write-Host (Get-TimestampPrefix ($PREFIX_INFO + 'TIP: Run Update-MailboxesCache.ps1 to create a cache for faster future assessments')) -ForegroundColor DarkGray
     $filter = "(CustomAttribute6 -like '*$t*') -or (CustomAttribute7 -eq '$i') -or " +
               "(UserPrincipalName -like '*$t*')"
 
+    $queryStart = Get-Date
     $raw = @(Get-EXOMailbox -Filter $filter `
         -RecipientTypeDetails UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox `
         -ResultSize Unlimited `
         -Properties $script:EXOMailboxProperties `
         -ErrorAction Stop)
+    $queryDuration = (Get-Date) - $queryStart
 
-    Write-Host ($PREFIX_OK + "Retrieved $($raw.Count) mailboxes from Exchange Online") -ForegroundColor Green
+    Write-Host (Get-TimestampPrefix ($PREFIX_OK + "Retrieved $($raw.Count) mailboxes from Exchange Online (took $([math]::Round($queryDuration.TotalMinutes, 1)) min)")) -ForegroundColor Green
 
     $kept = @($raw | Where-Object {
         $ca6 = "$($_.CustomAttribute6)"

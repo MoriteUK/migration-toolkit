@@ -7,6 +7,13 @@ $script:PREFIX_FAIL    = '[FAIL] '
 $script:PREFIX_SKIP    = '[--]   '
 $script:PREFIX_INFO    = '[>>]   '
 $script:PREFIX_PENDING = '[ ]    '
+
+# Add timestamp to any message (format: HH:mm:ss)
+function Get-TimestampPrefix {
+    param([string]$Prefix = '')
+    $time = Get-Date -Format 'HH:mm:ss'
+    return "[$time] $Prefix"
+}
 #endregion
 
 #region Module-scope state
@@ -386,6 +393,7 @@ Export-ModuleMember -Function @(
     'Write-ProgressLine'
     'Write-SectionHeader'
     'Test-WholeWordMatch'
+    'Get-TimestampPrefix'
 ) -Variable @(
     'PREFIX_OK'
     'PREFIX_WARN'

@@ -1,7 +1,12 @@
 {
-  "version": "2.9.214",
+  "version": "2.9.215",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.215",
+      "date": "2026-11-03",
+      "changes": "Add timestamps to Exchange mailbox query messages. All mailbox-related messages now show [HH:mm:ss] timestamp prefix so you can see exactly how long each step takes. Shows query duration after completion (e.g. 'took 12.3 min'). Added Get-TimestampPrefix function to Common.psm1 for generating timestamp prefixes. Makes it easy to identify slow operations and verify the assessment is still progressing."
+    },
     {
       "version": "2.9.214",
       "date": "2026-11-03",
