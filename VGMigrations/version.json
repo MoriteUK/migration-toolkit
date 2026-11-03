@@ -1,7 +1,12 @@
 {
-  "version": "2.9.202",
+  "version": "2.9.203",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.203",
+      "date": "2026-11-03",
+      "changes": "Fix Graph authentication failure: Add Ensure-GraphModules.ps1 call to Run-Assessment.ps1 to pin Microsoft.Graph modules to v2.33.0 (last version before mandatory WAM). Fixes 'Method not found: BaseAbstractApplicationBuilder.WithLogging' error caused by MSAL assembly version mismatch. Removes Microsoft.Graph.Authentication from hard-fail imports since it's now loaded by Ensure-GraphModules."
+    },
     {
       "version": "2.9.202",
       "date": "2026-11-03",

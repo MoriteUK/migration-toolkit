@@ -153,11 +153,20 @@ Import-Module (Join-Path $moduleRoot 'Prerequisites.psm1') -Force -DisableNameCh
 Test-Prerequisites
 
 # -----------------------------------------------------------------------
+# Pin Microsoft.Graph modules to v2.33.0 to avoid WAM/MSAL issues
+# -----------------------------------------------------------------------
+. (Join-Path (Split-Path $PSScriptRoot -Parent) 'Ensure-GraphModules.ps1') -GraphModules @(
+    'Microsoft.Graph.Groups'
+    'Microsoft.Graph.Teams'
+    'Microsoft.Graph.Users'
+    'Microsoft.Graph.DeviceManagement'
+)
+
+# -----------------------------------------------------------------------
 # Service modules - hard-fail (all required except SPO)
 # -----------------------------------------------------------------------
 Import-Module ActiveDirectory                  -DisableNameChecking -ErrorAction Stop
 Import-Module ExchangeOnlineManagement         -DisableNameChecking -ErrorAction Stop
-Import-Module Microsoft.Graph.Authentication   -DisableNameChecking -ErrorAction Stop
 Import-Module ImportExcel                      -DisableNameChecking -ErrorAction Stop
 
 # SharePoint - soft-fail (installable by Test-Prerequisites; missing sets SkipSharePoint)
