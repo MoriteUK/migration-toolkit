@@ -1,7 +1,12 @@
 {
-  "version": "2.9.215",
+  "version": "2.9.216",
   "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.216",
+      "date": "2026-11-03",
+      "changes": "GUI: Add Exchange Mailboxes cache to Discovery Cache view. New card 'Exchange Mailboxes, Statistics & Permissions' with individual refresh button. Added to 'Refresh Everything' flow (4th step after DGs). Allows ad-hoc mailbox cache updates without waiting for Monday schedule. NOTE: Mailbox cache already runs weekly via Schedule-CacheRefresh.ps1 at 7:30am Monday (added in v2.9.213). index.html: Added refreshMailboxesCacheBtn card. renderer.js: Added button handler and included in refreshAllCachesBtn steps array."
+    },
     {
       "version": "2.9.215",
       "date": "2026-11-03",

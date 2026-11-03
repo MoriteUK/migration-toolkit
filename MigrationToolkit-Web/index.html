@@ -494,7 +494,7 @@
               🔁 Refresh Everything
             </button>
           </div>
-          <small class="form-help">Runs all three refreshes below one after another (SharePoint → Teams → Distribution Groups), each in its own sign-in window, sharing the log underneath.</small>
+          <small class="form-help">Runs all four refreshes below one after another (SharePoint → Teams → Distribution Groups → Mailboxes), each in its own sign-in window, sharing the log underneath. Mailboxes cache can take 2-3 hours on large tenants.</small>
           <div id="refreshAllCachesLog" class="hidden" style="margin-top:12px;">
             <pre id="refreshAllCachesLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
@@ -536,6 +536,19 @@
           </div>
           <div id="refreshDLsCacheLog" class="hidden" style="margin-top:12px;">
             <pre id="refreshDLsCacheLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
+          </div>
+        </div>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Exchange Mailboxes, Statistics &amp; Permissions</h3>
+          <p class="form-help">Caches ALL mailboxes with statistics (size, item count) and permissions (FullAccess, SendAs). Can take 2-3 hours on large tenants. Separate sign-in.</p>
+          <div class="form-actions">
+            <button type="button" class="btn btn-success btn-xs" id="refreshMailboxesCacheBtn">
+              ▶ Refresh Mailboxes Cache
+            </button>
+          </div>
+          <div id="refreshMailboxesCacheLog" class="hidden" style="margin-top:12px;">
+            <pre id="refreshMailboxesCacheLogPre" style="background:#1a1b2e; color:#cdd6f4; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12px; line-height:1.5; padding:14px 16px; border-radius:6px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin:0; min-height:80px;"></pre>
           </div>
         </div>
       </div>
@@ -2670,7 +2683,7 @@
     </div>
   </div>
 
-  <script src="renderer.js?v=2.9.209"></script>
+  <script src="renderer.js?v=2.9.216"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">

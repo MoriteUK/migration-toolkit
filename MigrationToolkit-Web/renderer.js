@@ -3914,7 +3914,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── Discovery - Refresh Everything (SharePoint → Teams → Distribution Groups) ──
+  // ── Discovery - Refresh Mailboxes Cache ──────────────────────────────────────
+  const refreshMailboxesCacheBtn = document.getElementById('refreshMailboxesCacheBtn');
+  if (refreshMailboxesCacheBtn) {
+    refreshMailboxesCacheBtn.addEventListener('click', async () => {
+      const url = document.getElementById('cacheSharePointAdminUrl').value.trim();
+      if (!url) { alert('Please enter the SPO Admin URL (used here only as the cache key).'); return; }
+
+      const logSection = document.getElementById('refreshMailboxesCacheLog');
+      const logOutput  = document.getElementById('refreshMailboxesCacheLogPre');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      refreshMailboxesCacheBtn.disabled = true;
+      refreshMailboxesCacheBtn.textContent = 'Running…';
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('Update-MailboxesCache.ps1', ['-SharePointAdminUrl', url]);
+        logOutput.textContent += result.success ? '\n✓ Done\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        refreshMailboxesCacheBtn.disabled = false;
+        refreshMailboxesCacheBtn.textContent = '▶ Refresh Mailboxes Cache';
+      }
+    });
+  }
+
+  // ── Discovery - Refresh Everything (SharePoint → Teams → Distribution Groups → Mailboxes) ──
   const refreshAllCachesBtn = document.getElementById('refreshAllCachesBtn');
   if (refreshAllCachesBtn) {
     refreshAllCachesBtn.addEventListener('click', async () => {
@@ -3926,15 +3958,16 @@ document.addEventListener('DOMContentLoaded', () => {
       logSection.classList.remove('hidden');
       logOutput.textContent = '';
 
-      const allButtons = [refreshAllCachesBtn, refreshSpoSitesCacheBtn, refreshTeamsChannelsCacheBtn, refreshDLsCacheBtn]
+      const allButtons = [refreshAllCachesBtn, refreshSpoSitesCacheBtn, refreshTeamsChannelsCacheBtn, refreshDLsCacheBtn, refreshMailboxesCacheBtn]
         .filter(Boolean);
       allButtons.forEach((b) => { b.disabled = true; });
       refreshAllCachesBtn.textContent = 'Running…';
 
       const steps = [
-        { script: 'Update-SharePointSitesCache.ps1',    label: 'SharePoint Sites (+ OneDrive)' },
-        { script: 'Update-TeamsChannelsCache.ps1',       label: 'Teams Channels & Members' },
-        { script: 'Update-DistributionGroupsCache.ps1',  label: 'Distribution Groups & Members' }
+        { script: 'Update-SharePointSitesCache.ps1',      label: 'SharePoint Sites (+ OneDrive)' },
+        { script: 'Update-TeamsChannelsCache.ps1',        label: 'Teams Channels & Members' },
+        { script: 'Update-DistributionGroupsCache.ps1',   label: 'Distribution Groups & Members' },
+        { script: 'Update-MailboxesCache.ps1',            label: 'Exchange Mailboxes, Statistics & Permissions' }
       ];
 
       window.electronAPI.onPsOutput((text) => {
