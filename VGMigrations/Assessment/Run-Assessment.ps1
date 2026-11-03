@@ -229,8 +229,16 @@ Write-Host ($PREFIX_OK + "Output folder: $assessFolder") -ForegroundColor Green
 # -----------------------------------------------------------------------
 # Cache folder (for tenant-wide caches)
 # -----------------------------------------------------------------------
-$cacheRootPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'Assessment\Cache'
-$cacheFolder   = Get-DiscoveryCacheFolder -SharePointAdminUrl $spoAdminUrl -CacheRoot $cacheRootPath
+$cacheFolder = ''
+try {
+    $cacheRootPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'Assessment\Cache'
+    if (Get-Command Get-DiscoveryCacheFolder -ErrorAction SilentlyContinue) {
+        $cacheFolder = Get-DiscoveryCacheFolder -SharePointAdminUrl $spoAdminUrl -CacheRoot $cacheRootPath
+    }
+}
+catch {
+    Write-Host ($PREFIX_WARN + "Cache folder calculation failed - will use live queries: $($_.Exception.Message)") -ForegroundColor Yellow
+}
 
 # -----------------------------------------------------------------------
 # Assessment context

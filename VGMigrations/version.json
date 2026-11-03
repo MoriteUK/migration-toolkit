@@ -1,7 +1,12 @@
 {
-  "version": "2.9.199",
-  "releaseDate": "2026-11-02",
+  "version": "2.9.200",
+  "releaseDate": "2026-11-03",
   "changelog": [
+    {
+      "version": "2.9.200",
+      "date": "2026-11-03",
+      "changes": "Fix Run-Assessment.ps1 silent failure: Add error handling around Get-DiscoveryCacheFolder call with fallback to empty cache folder (uses live queries). Check if function exists before calling it. Prevents assessment from failing silently if cache folder calculation fails."
+    },
     {
       "version": "2.9.199",
       "date": "2026-11-02",
