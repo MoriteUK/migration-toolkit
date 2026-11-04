@@ -1,7 +1,12 @@
 {
-  "version": "2.9.221",
+  "version": "2.9.222",
   "releaseDate": "2026-11-04",
   "changelog": [
+    {
+      "version": "2.9.222",
+      "date": "2026-11-04",
+      "changes": "GUI: Added export scripts to Migration menu. Three new options: Export X500 Addresses (export-x500.ps1), Export Aliases (export-aliases.ps1), and Export Group Aliases (export-group-aliases.ps1). Each opens in a separate PowerShell window for easy pre-migration data export. Cache-busted renderer.js to v2.9.221."
+    },
     {
       "version": "2.9.221",
       "date": "2026-11-04",
