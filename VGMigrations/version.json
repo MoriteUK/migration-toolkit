@@ -1,7 +1,12 @@
 {
-  "version": "2.9.220",
+  "version": "2.9.221",
   "releaseDate": "2026-11-04",
   "changelog": [
+    {
+      "version": "2.9.221",
+      "date": "2026-11-04",
+      "changes": "Updated cache refresh timing estimates to reflect incremental updates. UI and Schedule-CacheRefresh.ps1 now show: SharePoint ~10min, Teams ~30min, DGs ~10min, Exchange ~2hrs (total ~3.5hrs incremental vs 24-31hrs first run). X500 export: Added -DomainFilter parameter to export-x500.ps1 to filter by domain suffix (e.g., celcat.com). Output filename includes domain (SourceX500_celcat.com.csv) for easy identification and troubleshooting."
+    },
     {
       "version": "2.9.220",
       "date": "2026-11-04",

@@ -504,12 +504,12 @@
           <div class="form-help" style="margin-top:12px; padding:12px; background:#EFF6FF; border-left:3px solid #3B82F6; border-radius:4px;">
             <strong>What gets refreshed:</strong>
             <ul style="margin:8px 0 0 20px;">
-              <li><strong>SharePoint Sites & OneDrive</strong> - All sites via Get-SPOSite (~1 hour)</li>
-              <li><strong>Teams Channels & Members</strong> - All teams and channels via Microsoft Graph (~5 hours for large tenants)</li>
-              <li><strong>Distribution Groups</strong> - All DGs with members via Exchange Online (~1 hour)</li>
-              <li><strong>Exchange Mailboxes</strong> - All mailboxes with statistics and permissions (~2-3 hours)</li>
+              <li><strong>SharePoint Sites & OneDrive</strong> - All sites via Get-SPOSite (~10 min incremental)</li>
+              <li><strong>Teams Channels & Members</strong> - All teams and channels via Microsoft Graph (~30 min incremental)</li>
+              <li><strong>Distribution Groups</strong> - All DGs with members via Exchange Online (~10 min incremental)</li>
+              <li><strong>Exchange Mailboxes</strong> - All mailboxes with statistics and permissions (~2 hours incremental)</li>
             </ul>
-            <p style="margin:8px 0 0 0;"><strong>Total time:</strong> Can take 8-10 hours on large tenants. Each refresh opens its own sign-in window.</p>
+            <p style="margin:8px 0 0 0;"><strong>Total time:</strong> ~3.5 hours (incremental). First run takes 24-31 hours on large/throttled tenants. Each refresh opens its own sign-in window.</p>
           </div>
 
           <div id="refreshAllCachesLog" class="hidden" style="margin-top:16px;">

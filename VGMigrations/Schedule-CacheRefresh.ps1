@@ -29,9 +29,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Task names with staggered start times
-# Staggered to complete all caches within 48 hours (Saturday 5am - Monday 5am)
-# Based on observed durations on heavily throttled tenants:
-#   SharePoint ~1hr, Teams ~5hrs, DGs ~1hr, Mailboxes ~24-30hrs (with 3s/mailbox throttling)
+# Incremental updates complete in ~3.5 hours (first run: 24-31 hours)
+# Incremental timings: SharePoint ~10min, Teams ~30min, DGs ~10min, Mailboxes ~2hrs
 $tasks = @{
     'SharePoint Sites Cache'     = @{ Script = 'Update-SharePointSitesCache.ps1';     Time = '5:00AM'; Day = 'Saturday' }
     'Teams Channels Cache'       = @{ Script = 'Update-TeamsChannelsCache.ps1';       Time = '6:00AM'; Day = 'Saturday' }
@@ -69,11 +68,11 @@ Write-Host "║  Schedule Automatic Cache Refresh - Staggered Start      ║" -F
 Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "SharePoint Admin URL: $SharePointAdminUrl" -ForegroundColor White
-Write-Host "Schedule:             Every Saturday (48-hour window)" -ForegroundColor White
-Write-Host "  • SharePoint Sites:     Saturday  5:00 AM  (est. finish ~6:00 AM)" -ForegroundColor DarkGray
-Write-Host "  • Teams Channels:       Saturday  6:00 AM  (est. finish ~11:00 AM)" -ForegroundColor DarkGray
-Write-Host "  • Distribution Groups:  Saturday 11:00 AM  (est. finish ~12:00 PM)" -ForegroundColor DarkGray
-Write-Host "  • Exchange Mailboxes:   Saturday 12:00 PM  (est. finish Sunday ~12:00 PM)" -ForegroundColor DarkGray
+Write-Host "Schedule:             Every Saturday (incremental updates)" -ForegroundColor White
+Write-Host "  • SharePoint Sites:     Saturday  5:00 AM  (est. finish ~5:10 AM)" -ForegroundColor DarkGray
+Write-Host "  • Teams Channels:       Saturday  6:00 AM  (est. finish ~6:30 AM)" -ForegroundColor DarkGray
+Write-Host "  • Distribution Groups:  Saturday 11:00 AM  (est. finish ~11:10 AM)" -ForegroundColor DarkGray
+Write-Host "  • Exchange Mailboxes:   Saturday 12:00 PM  (est. finish ~2:00 PM)" -ForegroundColor DarkGray
 Write-Host "Run as:               $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
 Write-Host ""
 
@@ -152,16 +151,17 @@ Write-Host "║  Scheduled Tasks Created Successfully                     ║" -
 Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 Write-Host "Tasks run every Saturday (staggered) as $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
-Write-Host "  • SharePoint Sites:     Saturday  5:00 AM  → finish ~6:00 AM" -ForegroundColor Green
-Write-Host "  • Teams Channels:       Saturday  6:00 AM  → finish ~11:00 AM" -ForegroundColor Green
-Write-Host "  • Distribution Groups:  Saturday 11:00 AM  → finish ~12:00 PM" -ForegroundColor Green
-Write-Host "  • Exchange Mailboxes:   Saturday 12:00 PM  → finish Sunday ~12:00 PM" -ForegroundColor Green
+Write-Host "  • SharePoint Sites:     Saturday  5:00 AM  → finish ~5:10 AM" -ForegroundColor Green
+Write-Host "  • Teams Channels:       Saturday  6:00 AM  → finish ~6:30 AM" -ForegroundColor Green
+Write-Host "  • Distribution Groups:  Saturday 11:00 AM  → finish ~11:10 AM" -ForegroundColor Green
+Write-Host "  • Exchange Mailboxes:   Saturday 12:00 PM  → finish ~2:00 PM" -ForegroundColor Green
 Write-Host ""
-Write-Host "All caches refreshed by Sunday 12:00 PM (48-hour window)!" -ForegroundColor Yellow
+Write-Host "All caches refreshed by ~2:00 PM Saturday (incremental updates)!" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "Saturday schedule benefits:" -ForegroundColor Yellow
-Write-Host "  - 48-hour window accommodates heavily throttled tenants" -ForegroundColor DarkGray
-Write-Host "  - Mailbox cache has ~24 hours to complete (3s/mailbox throttling)" -ForegroundColor DarkGray
+Write-Host "Incremental cache benefits:" -ForegroundColor Yellow
+Write-Host "  - Only updates NEW/MODIFIED/DELETED items (90% faster)" -ForegroundColor DarkGray
+Write-Host "  - Typical weekly refresh: ~3.5 hours (down from 24-31 hours)" -ForegroundColor DarkGray
+Write-Host "  - First run still takes 24-31 hours to build initial cache" -ForegroundColor DarkGray
 Write-Host "  - Fresh caches ready for Monday morning assessments" -ForegroundColor DarkGray
 Write-Host "  - Staggered timing prevents overlapping tasks and API spikes" -ForegroundColor DarkGray
 Write-Host ""

@@ -25,30 +25,77 @@
     Also export MailUser objects (e.g. users already migrated / hybrid remote mailboxes).
 
 .PARAMETER OutputPath
-    CSV path. Default: .\SourceX500_<timestamp>.csv
+    CSV path. Default: .\SourceX500_<domain>.csv (when filtering) or .\SourceX500.csv
+
+.PARAMETER DomainFilter
+    Only export recipients with PrimarySmtpAddress or UserPrincipalName matching this domain suffix (e.g., 'celcat.com').
+    Matches are case-insensitive.
 
 .PARAMETER SkipConnect
     Don't call Connect-ExchangeOnline (use an existing session).
 
 .EXAMPLE
     .\Export-SourceX500.ps1
+    # Exports to SourceX500.csv
+
+.EXAMPLE
+    .\Export-SourceX500.ps1 -DomainFilter celcat.com
+    # Exports to SourceX500_celcat.com.csv
+
+.EXAMPLE
+    .\Export-SourceX500.ps1 -DomainFilter celcat.com -IncludeGroups -IncludeMailUsers
+    # Exports celcat.com mailboxes, groups, and mail users to SourceX500_celcat.com.csv
+
 .EXAMPLE
     .\Export-SourceX500.ps1 -IncludeGroups -IncludeMailUsers -OutputPath C:\Temp\src_x500.csv
+    # Custom output path
 #>
 [CmdletBinding()]
 param(
     [string[]]$RecipientTypes = @('UserMailbox', 'SharedMailbox', 'RoomMailbox', 'EquipmentMailbox'),
     [switch]$IncludeGroups,
     [switch]$IncludeMailUsers,
-    [string]$OutputPath = ".\SourceX500_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv",
+    [string]$DomainFilter,
+    [string]$OutputPath,
     [switch]$SkipConnect
 )
 
 Import-Module ExchangeOnlineManagement -ErrorAction Stop
 
+# Set default output path - include domain in filename if filtering
+if (-not $OutputPath) {
+    if ($DomainFilter) {
+        $cleanDomain = $DomainFilter.TrimStart('@')
+        $OutputPath = ".\SourceX500_$cleanDomain.csv"
+    } else {
+        $OutputPath = ".\SourceX500.csv"
+    }
+}
+
 if (-not $SkipConnect) {
     Write-Host 'Connecting to SOURCE Exchange Online...' -ForegroundColor Cyan
     Connect-ExchangeOnline -ShowBanner:$false -ErrorAction Stop
+}
+
+# Filter function - checks if recipient matches domain filter
+function Test-DomainMatch {
+    param($Recipient)
+
+    if (-not $DomainFilter) { return $true }
+
+    $domain = $DomainFilter.TrimStart('@').ToLowerInvariant()
+
+    # Check PrimarySmtpAddress
+    if ($Recipient.PrimarySmtpAddress -and $Recipient.PrimarySmtpAddress.ToString().ToLowerInvariant().EndsWith("@$domain")) {
+        return $true
+    }
+
+    # Check UserPrincipalName
+    if ($Recipient.UserPrincipalName -and $Recipient.UserPrincipalName.ToLowerInvariant().EndsWith("@$domain")) {
+        return $true
+    }
+
+    return $false
 }
 
 # Builds a row with the LegacyExchangeDN + any existing X500s, de-duplicated (case-insensitive)
@@ -86,29 +133,61 @@ function New-X500Row {
 
 $results = New-Object System.Collections.Generic.List[object]
 
+if ($DomainFilter) {
+    Write-Host "Domain filter: @$($DomainFilter.TrimStart('@'))" -ForegroundColor Yellow
+}
+
 Write-Host "Reading mailboxes ($($RecipientTypes -join ', '))..." -ForegroundColor Cyan
 $mailboxes = @(Get-EXOMailbox -ResultSize Unlimited -RecipientTypeDetails $RecipientTypes `
         -Properties LegacyExchangeDN, EmailAddresses, DisplayName, Alias, UserPrincipalName, PrimarySmtpAddress)
-Write-Host "  $($mailboxes.Count) mailbox(es)."
-foreach ($m in $mailboxes) { $results.Add((New-X500Row -Recipient $m -ObjectType 'Mailbox')) }
+Write-Host "  Retrieved $($mailboxes.Count) mailbox(es)."
+
+# Apply domain filter
+$filteredMailboxes = @($mailboxes | Where-Object { Test-DomainMatch -Recipient $_ })
+if ($DomainFilter) {
+    Write-Host "  After domain filter: $($filteredMailboxes.Count) mailbox(es)." -ForegroundColor Yellow
+}
+
+foreach ($m in $filteredMailboxes) { $results.Add((New-X500Row -Recipient $m -ObjectType 'Mailbox')) }
 
 if ($IncludeMailUsers) {
     Write-Host 'Reading mail users...' -ForegroundColor Cyan
     $mailUsers = @(Get-MailUser -ResultSize Unlimited)
-    Write-Host "  $($mailUsers.Count) mail user(s)."
-    foreach ($mu in $mailUsers) { $results.Add((New-X500Row -Recipient $mu -ObjectType 'MailUser')) }
+    Write-Host "  Retrieved $($mailUsers.Count) mail user(s)."
+
+    # Apply domain filter
+    $filteredMailUsers = @($mailUsers | Where-Object { Test-DomainMatch -Recipient $_ })
+    if ($DomainFilter) {
+        Write-Host "  After domain filter: $($filteredMailUsers.Count) mail user(s)." -ForegroundColor Yellow
+    }
+
+    foreach ($mu in $filteredMailUsers) { $results.Add((New-X500Row -Recipient $mu -ObjectType 'MailUser')) }
 }
 
 if ($IncludeGroups) {
     Write-Host 'Reading distribution / mail-enabled security groups...' -ForegroundColor Cyan
     $dgs = @(Get-DistributionGroup -ResultSize Unlimited)
-    Write-Host "  $($dgs.Count) group(s)."
-    foreach ($g in $dgs) { $results.Add((New-X500Row -Recipient $g -ObjectType 'DistributionGroup')) }
+    Write-Host "  Retrieved $($dgs.Count) group(s)."
+
+    # Apply domain filter
+    $filteredDgs = @($dgs | Where-Object { Test-DomainMatch -Recipient $_ })
+    if ($DomainFilter) {
+        Write-Host "  After domain filter: $($filteredDgs.Count) group(s)." -ForegroundColor Yellow
+    }
+
+    foreach ($g in $filteredDgs) { $results.Add((New-X500Row -Recipient $g -ObjectType 'DistributionGroup')) }
 
     Write-Host 'Reading Microsoft 365 groups...' -ForegroundColor Cyan
     $ugs = @(Get-UnifiedGroup -ResultSize Unlimited)
-    Write-Host "  $($ugs.Count) group(s)."
-    foreach ($g in $ugs) { $results.Add((New-X500Row -Recipient $g -ObjectType 'UnifiedGroup')) }
+    Write-Host "  Retrieved $($ugs.Count) group(s)."
+
+    # Apply domain filter
+    $filteredUgs = @($ugs | Where-Object { Test-DomainMatch -Recipient $_ })
+    if ($DomainFilter) {
+        Write-Host "  After domain filter: $($filteredUgs.Count) group(s)." -ForegroundColor Yellow
+    }
+
+    foreach ($g in $filteredUgs) { $results.Add((New-X500Row -Recipient $g -ObjectType 'UnifiedGroup')) }
 }
 
 if ($results.Count -eq 0) {
