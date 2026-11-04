@@ -110,13 +110,16 @@
             <button type="button" class="sidebar-subitem" data-view="migration-new-dgs">
               <span class="sidebar-sublabel">Create Target DLs</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-script="export-x500.ps1">
+            <button type="button" class="sidebar-subitem" data-view="misc-add-dg-members">
+              <span class="sidebar-sublabel">Add DL Members</span>
+            </button>
+            <button type="button" class="sidebar-subitem" data-view="migration-export-x500">
               <span class="sidebar-sublabel">Export X500 Addresses</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-script="export-aliases.ps1">
+            <button type="button" class="sidebar-subitem" data-view="migration-export-aliases">
               <span class="sidebar-sublabel">Export Aliases</span>
             </button>
-            <button type="button" class="sidebar-subitem" data-script="export-group-aliases.ps1">
+            <button type="button" class="sidebar-subitem" data-view="migration-export-group-aliases">
               <span class="sidebar-sublabel">Export Group Aliases</span>
             </button>
           </div>
@@ -222,9 +225,6 @@
           <div class="sidebar-submenu" id="submenu-misc">
             <button type="button" class="sidebar-subitem" data-view="discovery-cache">
               <span class="sidebar-sublabel">Refresh Discovery Cache</span>
-            </button>
-            <button type="button" class="sidebar-subitem" data-view="misc-add-dg-members">
-              <span class="sidebar-sublabel">Add DL Members</span>
             </button>
             <button type="button" class="sidebar-subitem" data-view="misc-teams">
               <span class="sidebar-sublabel">Set Teams Owners</span>
@@ -1328,6 +1328,134 @@
         <div class="log-section hidden" id="updateDgDomainLog">
           <h3 class="form-card-title">Output</h3>
           <div class="log-output" id="updateDgDomainLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Migration - Export X500 Addresses -->
+      <div id="migrationExportX500View" class="view-container hidden">
+        <h2 class="view-title">Export X500 Addresses</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Export LegacyExchangeDN and X500 Proxy Addresses</h3>
+          <p class="form-help">Exports the LegacyExchangeDN and every existing X500 proxy address for all recipients in the SOURCE Exchange Online tenant to CSV, ready to stamp onto the matching objects in the target. This prevents broken Outlook autocomplete and meeting responses after migration.</p>
+
+          <div class="form-group">
+            <label class="form-label">Domain Filter <span style="font-weight:400;color:#6B7280">(optional — e.g., celcat.com)</span></label>
+            <input type="text" class="form-input form-input-compact" id="exportX500Domain" placeholder="Leave blank to export all recipients">
+            <small class="form-help">Only export recipients with PrimarySmtpAddress or UPN matching this domain suffix</small>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Output File <span style="font-weight:400;color:#6B7280">(optional)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="exportX500OutputPath" placeholder="Auto-generated: SourceX500_domain.csv">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv">Browse</button>
+            </div>
+            <small class="form-help">Leave blank for default: SourceX500_&lt;domain&gt;.csv or SourceX500.csv</small>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="exportX500IncludeGroups">
+              <span>Include Distribution Groups and Microsoft 365 Groups</span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:4px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="exportX500IncludeMailUsers">
+              <span>Include MailUser objects (already migrated / hybrid remote mailboxes)</span>
+            </label>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="exportX500RunBtn">▶ Run Export</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="exportX500Log">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="exportX500LogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Migration - Export Aliases -->
+      <div id="migrationExportAliasesView" class="view-container hidden">
+        <h2 class="view-title">Export Aliases</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Export Secondary SMTP Aliases</h3>
+          <p class="form-help">Exports all secondary SMTP aliases for specified domains to a CSV, one alias per line. The primary address itself is not repeated as an alias. X500, SIP, SPO and onmicrosoft.com addresses are excluded.</p>
+
+          <div class="form-group">
+            <label class="form-label">Domains <span style="font-weight:400;color:#6B7280">(comma-separated, e.g., example.com,examplegroup.com)</span></label>
+            <input type="text" class="form-input form-input-compact" id="exportAliasesDomains" placeholder="example.com,examplegroup.com">
+            <small class="form-help">Exact domain names to export. Leave blank to use search pattern or be prompted.</small>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Search Pattern <span style="font-weight:400;color:#6B7280">(optional wildcard pattern, e.g., *example*)</span></label>
+            <input type="text" class="form-input form-input-compact" id="exportAliasesPattern" placeholder="*example*">
+            <small class="form-help">Wildcard pattern to auto-detect domains from accepted domains list. Only used if Domains is blank.</small>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Output File <span style="font-weight:400;color:#6B7280">(optional)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="exportAliasesOutputPath" placeholder="Auto-generated: EmailAliases_timestamp.csv">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv">Browse</button>
+            </div>
+            <small class="form-help">Leave blank for default: EmailAliases_&lt;timestamp&gt;.csv</small>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="exportAliasesRunBtn">▶ Run Export</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="exportAliasesLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="exportAliasesLogOutput"></div>
+        </div>
+      </div>
+
+      <!-- Migration - Export Group Aliases -->
+      <div id="migrationExportGroupAliasesView" class="view-container hidden">
+        <h2 class="view-title">Export Group Aliases</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Export Distribution Group Secondary SMTP Aliases</h3>
+          <p class="form-help">Exports all secondary SMTP aliases for groups on specified domains to a CSV, one alias per line. Includes GroupType column to indicate which cmdlet to use when adding the alias back (Set-DistributionGroup, Set-DynamicDistributionGroup, or Set-UnifiedGroup).</p>
+
+          <div class="form-group">
+            <label class="form-label">Domains <span style="font-weight:400;color:#6B7280">(comma-separated, e.g., example.com,examplegroup.com)</span></label>
+            <input type="text" class="form-input form-input-compact" id="exportGroupAliasesDomains" placeholder="example.com,examplegroup.com">
+            <small class="form-help">Exact domain names to export. Leave blank to use search pattern or be prompted.</small>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Search Pattern <span style="font-weight:400;color:#6B7280">(optional wildcard pattern, e.g., *example*)</span></label>
+            <input type="text" class="form-input form-input-compact" id="exportGroupAliasesPattern" placeholder="*example*">
+            <small class="form-help">Wildcard pattern to auto-detect domains from accepted domains list. Only used if Domains is blank.</small>
+          </div>
+
+          <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Output File <span style="font-weight:400;color:#6B7280">(optional)</span></label>
+            <div class="input-with-button">
+              <input type="text" class="form-input form-input-compact" id="exportGroupAliasesOutputPath" placeholder="Auto-generated: GroupAliases_timestamp.csv">
+              <button type="button" class="btn btn-secondary btn-compact" data-extensions="csv">Browse</button>
+            </div>
+            <small class="form-help">Leave blank for default: GroupAliases_&lt;timestamp&gt;.csv</small>
+          </div>
+
+          <div class="form-actions" style="margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+            <button type="button" class="btn btn-primary btn-xs" id="exportGroupAliasesRunBtn">▶ Run Export</button>
+          </div>
+        </div>
+
+        <div class="log-section hidden" id="exportGroupAliasesLog">
+          <h3 class="form-card-title">Output</h3>
+          <div class="log-output" id="exportGroupAliasesLogOutput"></div>
         </div>
       </div>
 
@@ -2658,7 +2786,7 @@
     </div>
   </div>
 
-  <script src="renderer.js?v=2.9.221"></script>
+  <script src="renderer.js?v=2.9.223"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">

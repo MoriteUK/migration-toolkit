@@ -1982,6 +1982,9 @@ function switchView(viewName) {
     'post-migration-enable-ca': 'postMigrationEnableCaView',
     'migration-new-dgs': 'migrationNewDgsView',
     'migration-update-dg-domain': 'migrationUpdateDgDomainView',
+    'migration-export-x500': 'migrationExportX500View',
+    'migration-export-aliases': 'migrationExportAliasesView',
+    'migration-export-group-aliases': 'migrationExportGroupAliasesView',
     'misc-add-dg-members': 'miscAddDgMembersView',
     'misc-dl-external-senders': 'miscDLExternalSendersView',
     'misc-assign-licenses': 'miscAssignLicensesView',
@@ -4071,6 +4074,122 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         updateDgDomainRunBtn.disabled = false;
         updateDgDomainRunBtn.textContent = '▶ Run';
+      }
+    });
+  }
+
+  // ── Migration - Export X500 Addresses ────────────────────────────────────────
+  const exportX500RunBtn = document.getElementById('exportX500RunBtn');
+  if (exportX500RunBtn) {
+    exportX500RunBtn.addEventListener('click', async () => {
+      const domain = document.getElementById('exportX500Domain').value.trim();
+      const outputPath = document.getElementById('exportX500OutputPath').value.trim();
+      const includeGroups = document.getElementById('exportX500IncludeGroups').checked;
+      const includeMailUsers = document.getElementById('exportX500IncludeMailUsers').checked;
+
+      const logSection = document.getElementById('exportX500Log');
+      const logOutput = document.getElementById('exportX500LogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      exportX500RunBtn.disabled = true;
+      exportX500RunBtn.textContent = 'Running…';
+
+      const args = [];
+      if (domain) args.push('-DomainFilter', domain);
+      if (outputPath) args.push('-OutputPath', outputPath);
+      if (includeGroups) args.push('-IncludeGroups');
+      if (includeMailUsers) args.push('-IncludeMailUsers');
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('export-x500.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Export complete\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        exportX500RunBtn.disabled = false;
+        exportX500RunBtn.textContent = '▶ Run Export';
+      }
+    });
+  }
+
+  // ── Migration - Export Aliases ────────────────────────────────────────────────
+  const exportAliasesRunBtn = document.getElementById('exportAliasesRunBtn');
+  if (exportAliasesRunBtn) {
+    exportAliasesRunBtn.addEventListener('click', async () => {
+      const domains = document.getElementById('exportAliasesDomains').value.trim();
+      const pattern = document.getElementById('exportAliasesPattern').value.trim();
+      const outputPath = document.getElementById('exportAliasesOutputPath').value.trim();
+
+      const logSection = document.getElementById('exportAliasesLog');
+      const logOutput = document.getElementById('exportAliasesLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      exportAliasesRunBtn.disabled = true;
+      exportAliasesRunBtn.textContent = 'Running…';
+
+      const args = [];
+      if (domains) args.push('-Domains', domains);
+      if (pattern) args.push('-SearchPattern', pattern);
+      if (outputPath) args.push('-OutputPath', outputPath);
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('export-aliases.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Export complete\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        exportAliasesRunBtn.disabled = false;
+        exportAliasesRunBtn.textContent = '▶ Run Export';
+      }
+    });
+  }
+
+  // ── Migration - Export Group Aliases ──────────────────────────────────────────
+  const exportGroupAliasesRunBtn = document.getElementById('exportGroupAliasesRunBtn');
+  if (exportGroupAliasesRunBtn) {
+    exportGroupAliasesRunBtn.addEventListener('click', async () => {
+      const domains = document.getElementById('exportGroupAliasesDomains').value.trim();
+      const pattern = document.getElementById('exportGroupAliasesPattern').value.trim();
+      const outputPath = document.getElementById('exportGroupAliasesOutputPath').value.trim();
+
+      const logSection = document.getElementById('exportGroupAliasesLog');
+      const logOutput = document.getElementById('exportGroupAliasesLogOutput');
+      logSection.classList.remove('hidden');
+      logOutput.textContent = '';
+
+      exportGroupAliasesRunBtn.disabled = true;
+      exportGroupAliasesRunBtn.textContent = 'Running…';
+
+      const args = [];
+      if (domains) args.push('-Domains', domains);
+      if (pattern) args.push('-SearchPattern', pattern);
+      if (outputPath) args.push('-OutputPath', outputPath);
+
+      window.electronAPI.onPsOutput((text) => {
+        logOutput.textContent += text;
+        logOutput.scrollTop = logOutput.scrollHeight;
+      });
+      try {
+        const result = await runStreamingScript('export-group-aliases.ps1', args);
+        logOutput.textContent += result.success ? '\n✓ Export complete\n' : `\n✗ Failed (exit ${result.code})\n`;
+      } catch (err) {
+        logOutput.textContent += `\nError: ${err.message || err}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        exportGroupAliasesRunBtn.disabled = false;
+        exportGroupAliasesRunBtn.textContent = '▶ Run Export';
       }
     });
   }

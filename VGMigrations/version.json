@@ -1,7 +1,12 @@
 {
-  "version": "2.9.222",
+  "version": "2.9.223",
   "releaseDate": "2026-11-04",
   "changelog": [
+    {
+      "version": "2.9.223",
+      "date": "2026-11-04",
+      "changes": "GUI: Export scripts now run inline with streaming output. Added full parameter forms for Export X500 Addresses, Export Aliases, and Export Group Aliases in Migration menu. Each has input fields for all parameters and runs within the GUI with real-time output. Moved 'Add DL Members' from Misc Scripts to Migration menu (below Create Target DLs). Cache-busted renderer.js to v2.9.223."
+    },
     {
       "version": "2.9.222",
       "date": "2026-11-04",
