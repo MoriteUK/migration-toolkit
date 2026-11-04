@@ -29,13 +29,14 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Task names with staggered start times
-# Staggered to complete all caches by 8am Monday morning
-# Based on typical durations: SharePoint ~1hr, Teams ~5hrs, DGs ~1hr, Mailboxes ~2-3hrs
+# Staggered to complete all caches within 48 hours (Saturday 5am - Monday 5am)
+# Based on observed durations on heavily throttled tenants:
+#   SharePoint ~1hr, Teams ~5hrs, DGs ~1hr, Mailboxes ~24-30hrs (with 3s/mailbox throttling)
 $tasks = @{
-    'SharePoint Sites Cache'     = @{ Script = 'Update-SharePointSitesCache.ps1';     Time = '12:30AM' }
-    'Teams Channels Cache'       = @{ Script = 'Update-TeamsChannelsCache.ps1';       Time = '1:30AM' }
-    'Distribution Groups Cache'  = @{ Script = 'Update-DistributionGroupsCache.ps1';  Time = '6:30AM' }
-    'Exchange Mailboxes Cache'   = @{ Script = 'Update-MailboxesCache.ps1';           Time = '7:30AM' }
+    'SharePoint Sites Cache'     = @{ Script = 'Update-SharePointSitesCache.ps1';     Time = '5:00AM'; Day = 'Saturday' }
+    'Teams Channels Cache'       = @{ Script = 'Update-TeamsChannelsCache.ps1';       Time = '6:00AM'; Day = 'Saturday' }
+    'Distribution Groups Cache'  = @{ Script = 'Update-DistributionGroupsCache.ps1';  Time = '11:00AM'; Day = 'Saturday' }
+    'Exchange Mailboxes Cache'   = @{ Script = 'Update-MailboxesCache.ps1';           Time = '12:00PM'; Day = 'Saturday' }
 }
 
 $taskFolder = '\FlyMigration'
@@ -68,11 +69,11 @@ Write-Host "║  Schedule Automatic Cache Refresh - Staggered Start      ║" -F
 Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "SharePoint Admin URL: $SharePointAdminUrl" -ForegroundColor White
-Write-Host "Schedule:             Every Monday (staggered - finish by 11am)" -ForegroundColor White
-Write-Host "  • SharePoint Sites:     12:30 AM  (est. finish ~1:30 AM)" -ForegroundColor DarkGray
-Write-Host "  • Teams Channels:        1:30 AM  (est. finish ~6:30 AM)" -ForegroundColor DarkGray
-Write-Host "  • Distribution Groups:   6:30 AM  (est. finish ~7:30 AM)" -ForegroundColor DarkGray
-Write-Host "  • Exchange Mailboxes:    7:30 AM  (est. finish ~10:30 AM)" -ForegroundColor DarkGray
+Write-Host "Schedule:             Every Saturday (48-hour window)" -ForegroundColor White
+Write-Host "  • SharePoint Sites:     Saturday  5:00 AM  (est. finish ~6:00 AM)" -ForegroundColor DarkGray
+Write-Host "  • Teams Channels:       Saturday  6:00 AM  (est. finish ~11:00 AM)" -ForegroundColor DarkGray
+Write-Host "  • Distribution Groups:  Saturday 11:00 AM  (est. finish ~12:00 PM)" -ForegroundColor DarkGray
+Write-Host "  • Exchange Mailboxes:   Saturday 12:00 PM  (est. finish Sunday ~12:00 PM)" -ForegroundColor DarkGray
 Write-Host "Run as:               $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
 Write-Host ""
 
@@ -108,8 +109,9 @@ foreach ($taskName in $tasks.Keys) {
         -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -SharePointAdminUrl `"$SharePointAdminUrl`"" `
         -WorkingDirectory $PSScriptRoot
 
-    # Trigger - Every Monday at the specified time
-    $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At $startTime
+    # Trigger - Every Saturday at the specified time
+    $dayOfWeek = if ($taskConfig.Day) { $taskConfig.Day } else { 'Saturday' }
+    $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $dayOfWeek -At $startTime
 
     # Settings
     $settings = New-ScheduledTaskSettingsSet `
@@ -134,7 +136,7 @@ foreach ($taskName in $tasks.Keys) {
             -Trigger $trigger `
             -Settings $settings `
             -Principal $principal `
-            -Description "Automatic cache refresh for Migration Toolkit - runs every Monday at 3am" `
+            -Description "Automatic cache refresh for Migration Toolkit - runs every Saturday (48hr window)" `
             -Force
 
         Write-Host "  ✓ Created successfully" -ForegroundColor Green
@@ -149,18 +151,19 @@ Write-Host "╔═════════════════════�
 Write-Host "║  Scheduled Tasks Created Successfully                     ║" -ForegroundColor Green
 Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
-Write-Host "Tasks run every Monday (staggered) as $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
-Write-Host "  • SharePoint Sites:     12:30 AM  → finish ~1:30 AM" -ForegroundColor Green
-Write-Host "  • Teams Channels:        1:30 AM  → finish ~6:30 AM" -ForegroundColor Green
-Write-Host "  • Distribution Groups:   6:30 AM  → finish ~7:30 AM" -ForegroundColor Green
-Write-Host "  • Exchange Mailboxes:    7:30 AM  → finish ~10:30 AM" -ForegroundColor Green
+Write-Host "Tasks run every Saturday (staggered) as $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
+Write-Host "  • SharePoint Sites:     Saturday  5:00 AM  → finish ~6:00 AM" -ForegroundColor Green
+Write-Host "  • Teams Channels:       Saturday  6:00 AM  → finish ~11:00 AM" -ForegroundColor Green
+Write-Host "  • Distribution Groups:  Saturday 11:00 AM  → finish ~12:00 PM" -ForegroundColor Green
+Write-Host "  • Exchange Mailboxes:   Saturday 12:00 PM  → finish Sunday ~12:00 PM" -ForegroundColor Green
 Write-Host ""
-Write-Host "All caches refreshed by 11:00 AM Monday morning!" -ForegroundColor Yellow
+Write-Host "All caches refreshed by Sunday 12:00 PM (48-hour window)!" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "Staggered timing prevents:" -ForegroundColor Yellow
-Write-Host "  - Overlapping long-running tasks" -ForegroundColor DarkGray
-Write-Host "  - API throttling from parallel requests" -ForegroundColor DarkGray
-Write-Host "  - High CPU/memory load spikes" -ForegroundColor DarkGray
+Write-Host "Saturday schedule benefits:" -ForegroundColor Yellow
+Write-Host "  - 48-hour window accommodates heavily throttled tenants" -ForegroundColor DarkGray
+Write-Host "  - Mailbox cache has ~24 hours to complete (3s/mailbox throttling)" -ForegroundColor DarkGray
+Write-Host "  - Fresh caches ready for Monday morning assessments" -ForegroundColor DarkGray
+Write-Host "  - Staggered timing prevents overlapping tasks and API spikes" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "To view tasks:" -ForegroundColor Yellow
 Write-Host "  1. Open Task Scheduler (taskschd.msc)" -ForegroundColor Gray
