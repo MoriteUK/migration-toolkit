@@ -129,16 +129,72 @@ if ($Domain) {
     Write-Host 'Connecting to Microsoft Graph...'
 }
 try {
-    $connectParams = @{
-        Scopes      = 'Device.ReadWrite.All','Directory.ReadWrite.All'
-        NoWelcome   = $true
-        ErrorAction = 'Stop'
+    # Check if already connected with the right scopes
+    $context = Get-MgContext
+    $requiredScopes = @('Device.ReadWrite.All', 'Directory.ReadWrite.All')
+    $needsReconnect = $false
+
+    if ($context) {
+        # Check if we have the required scopes
+        $hasScopes = $true
+        foreach ($scope in $requiredScopes) {
+            if ($scope -notin $context.Scopes) {
+                $hasScopes = $false
+                break
+            }
+        }
+
+        if (-not $hasScopes) {
+            Write-Host 'Existing Graph connection does not have required scopes. Re-connecting...' -ForegroundColor Yellow
+            Disconnect-MgGraph -ErrorAction SilentlyContinue
+            $needsReconnect = $true
+        }
+        elseif ($Domain -and $context.TenantId -ne $Domain) {
+            Write-Host "Connected to wrong tenant ($($context.TenantId)). Re-connecting to $Domain..." -ForegroundColor Yellow
+            Disconnect-MgGraph -ErrorAction SilentlyContinue
+            $needsReconnect = $true
+        }
+        else {
+            Write-Host "Already connected to Graph with required scopes." -ForegroundColor Green
+        }
     }
-    if ($Domain) { $connectParams['TenantId'] = $Domain }
-    Connect-MgGraph @connectParams
-    Write-Host 'Connected.'
+    else {
+        $needsReconnect = $true
+    }
+
+    if ($needsReconnect) {
+        $connectParams = @{
+            Scopes      = $requiredScopes
+            NoWelcome   = $true
+            ErrorAction = 'Stop'
+        }
+        if ($Domain) { $connectParams['TenantId'] = $Domain }
+        Connect-MgGraph @connectParams
+
+        # Verify connection succeeded
+        $context = Get-MgContext
+        if (-not $context) {
+            throw "Connection failed - no context returned"
+        }
+
+        # Verify scopes were granted
+        $missingScopes = @()
+        foreach ($scope in $requiredScopes) {
+            if ($scope -notin $context.Scopes) {
+                $missingScopes += $scope
+            }
+        }
+
+        if ($missingScopes.Count -gt 0) {
+            throw "Required scopes not granted: $($missingScopes -join ', '). Please consent to all requested permissions."
+        }
+
+        Write-Host "Connected to tenant: $($context.TenantId)" -ForegroundColor Green
+        Write-Host "Authenticated as: $($context.Account)" -ForegroundColor Green
+    }
 } catch {
-    Write-Host "ERROR: Could not connect to Microsoft Graph: $($_.Exception.Message.Split([Environment]::NewLine)[0])"
+    Write-Host "ERROR: Could not connect to Microsoft Graph: $($_.Exception.Message.Split([Environment]::NewLine)[0])" -ForegroundColor Red
+    Write-Host "Required scopes: $($requiredScopes -join ', ')" -ForegroundColor Yellow
     exit 1
 }
 

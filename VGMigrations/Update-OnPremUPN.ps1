@@ -584,8 +584,22 @@ function Show-UpdateOnPremUPNUI {
             $newUPN = $currentUPN -replace [regex]::Escape($src) + '$', $tgt
 
             try {
-                # Find AD user
-                $adUser = Get-ADUser -Filter "UserPrincipalName -eq '$currentUPN'" -Properties proxyAddresses, mail -ErrorAction Stop
+                # Try multiple search strategies to find the user
+                $adUser = $null
+
+                # 1. Try exact UPN match first
+                $adUser = Get-ADUser -Filter "UserPrincipalName -eq '$currentUPN'" -Properties proxyAddresses, mail -ErrorAction SilentlyContinue
+
+                # 2. If not found, try by SamAccountName (username part before @)
+                if (-not $adUser) {
+                    $samAccount = $currentUPN.Split('@')[0]
+                    $adUser = Get-ADUser -Filter "SamAccountName -eq '$samAccount'" -Properties proxyAddresses, mail -ErrorAction SilentlyContinue
+                }
+
+                # 3. If still not found, try by proxyAddresses or mail attribute
+                if (-not $adUser) {
+                    $adUser = Get-ADUser -Filter "proxyAddresses -like '*$currentUPN*' -or mail -eq '$currentUPN'" -Properties proxyAddresses, mail -ErrorAction SilentlyContinue
+                }
 
                 if (-not $adUser) {
                     Write-Log "NOT FOUND: $currentUPN" 'ERROR'
@@ -774,9 +788,25 @@ if ($CSVFolder -and $SourceDomain -and $TargetDomain) {
         $current = $u.UserPrincipalName
         $new     = $current -replace ([regex]::Escape($src) + '$'), $tgt
         try {
-            $adUser = Get-ADUser -Filter "UserPrincipalName -eq '$current'" -Properties proxyAddresses,mail -ErrorAction Stop
+            # Try multiple search strategies to find the user
+            $adUser = $null
+
+            # 1. Try exact UPN match first
+            $adUser = Get-ADUser -Filter "UserPrincipalName -eq '$current'" -Properties proxyAddresses,mail -ErrorAction SilentlyContinue
+
+            # 2. If not found, try by SamAccountName (username part before @)
             if (-not $adUser) {
-                Write-Host "NOT FOUND in AD: $current"
+                $samAccount = $current.Split('@')[0]
+                $adUser = Get-ADUser -Filter "SamAccountName -eq '$samAccount'" -Properties proxyAddresses,mail -ErrorAction SilentlyContinue
+            }
+
+            # 3. If still not found, try by proxyAddresses or mail attribute
+            if (-not $adUser) {
+                $adUser = Get-ADUser -Filter "proxyAddresses -like '*$current*' -or mail -eq '$current'" -Properties proxyAddresses,mail -ErrorAction SilentlyContinue
+            }
+
+            if (-not $adUser) {
+                Write-Host "NOT FOUND in AD: $current" -ForegroundColor Yellow
                 $failed++
                 continue
             }

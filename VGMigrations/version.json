@@ -1,7 +1,12 @@
 {
-  "version": "2.9.223",
-  "releaseDate": "2026-11-04",
+  "version": "2.9.224",
+  "releaseDate": "2026-11-05",
   "changelog": [
+    {
+      "version": "2.9.224",
+      "date": "2026-11-05",
+      "changes": "FIX: Retire-Devices now properly verifies Graph connection with required scopes before retiring devices. Checks if already connected, validates scopes (Device.ReadWrite.All, Directory.ReadWrite.All), verifies correct tenant, and shows clear errors if permissions not consented. FIX: Update-OnPremUPN now finds users by SamAccountName, proxyAddresses, or mail attribute when exact UPN doesn't match (fixes 'NOT FOUND' errors). NEW: Remove-DomainReferences.ps1 - comprehensive on-prem AD domain cleanup script. Removes domain from users/groups/contacts proxyAddresses, mail, targetAddress, and UPN. Supports -Credential, -SearchBase, -Server, -WhatIf. Replaces primary addresses with @ourvolaris.onmicrosoft.com. Preserves X500 addresses."
+    },
     {
       "version": "2.9.223",
       "date": "2026-11-04",
