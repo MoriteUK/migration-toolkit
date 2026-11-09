@@ -297,12 +297,48 @@ function registerIPCHandlers() {
       const cacheFolder = path.join(PS_SCRIPT_PATH, 'Assessment', 'Cache', hash);
       const statusFile = path.join(cacheFolder, 'CacheStatus.json');
 
-      if (!fs.existsSync(statusFile)) {
+      // Try to read the tracking file first
+      if (fs.existsSync(statusFile)) {
+        const statusData = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+        return { success: true, status: statusData };
+      }
+
+      // Fallback: check actual cache file modification times (for backward compatibility)
+      if (!fs.existsSync(cacheFolder)) {
         return { success: true, status: null };
       }
 
-      const statusData = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
-      return { success: true, status: statusData };
+      const cacheFiles = {
+        'SharePointSites': 'SharePointSites-All.json',
+        'TeamsChannels': 'TeamsChannels-All.json',
+        'DistributionGroups': 'DistributionGroups-All.json',
+        'Mailboxes': 'Mailboxes-All.json'
+      };
+
+      const status = {};
+      let hasAnyCache = false;
+
+      for (const [cacheType, fileName] of Object.entries(cacheFiles)) {
+        const filePath = path.join(cacheFolder, fileName);
+        if (fs.existsSync(filePath)) {
+          const stats = fs.statSync(filePath);
+          const mtime = stats.mtime;
+          status[cacheType] = {
+            LastCompleted: mtime.toISOString(),
+            LastCompletedLocal: mtime.toLocaleString('en-GB', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            }).replace(',', '')
+          };
+          hasAnyCache = true;
+        }
+      }
+
+      return { success: true, status: hasAnyCache ? status : null };
     } catch (error) {
       return { success: false, error: error.message };
     }

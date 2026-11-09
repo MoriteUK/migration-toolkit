@@ -1,7 +1,12 @@
 {
-  "version": "2.9.226",
+  "version": "2.9.227",
   "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.227",
+      "date": "2026-11-09",
+      "changes": "BACKWARD COMPATIBILITY: Cache status now checks actual cache file modification times as fallback. If CacheStatus.json doesn't exist yet (caches refreshed before v2.9.225), reads the modification timestamp directly from SharePointSites-All.json, TeamsChannels-All.json, DistributionGroups-All.json, and Mailboxes-All.json files. This allows you to see when scheduled weekend cache refreshes completed even before the tracking feature was added. Future cache refreshes will create CacheStatus.json for more accurate tracking."
+    },
     {
       "version": "2.9.226",
       "date": "2026-11-09",
