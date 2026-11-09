@@ -5287,10 +5287,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (viewCacheLogsBtn) {
     viewCacheLogsBtn.addEventListener('click', async () => {
       try {
-        const logDir = 'C:\\Users\\' + process.env.USERNAME + '\\AppData\\Roaming\\FlyMigration\\Logs';
-
-        // Open the logs directory in Explorer
-        await window.electronAPI.executeCommand('explorer.exe', [logDir]);
+        const result = await window.electronAPI.openLogs();
+        if (!result.success) {
+          alert('Failed to open logs folder: ' + result.error);
+        }
       } catch (err) {
         alert('Failed to open logs directory: ' + (err.message || err));
       }

@@ -1,7 +1,12 @@
 {
-  "version": "2.9.230",
+  "version": "2.9.231",
   "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.231",
+      "date": "2026-11-09",
+      "changes": "FIX: Monday cache refresh banner 'View Logs' button. Was throwing 'process is not defined' JavaScript error when clicked. Fixed to use proper IPC call (window.electronAPI.openLogs) instead of trying to access process.env.USERNAME in renderer context. Now opens %APPDATA%\\FlyMigration\\Logs correctly."
+    },
     {
       "version": "2.9.230",
       "date": "2026-11-09",
