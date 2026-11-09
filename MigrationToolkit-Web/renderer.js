@@ -1635,23 +1635,27 @@ async function loadCacheStatus() {
   try {
     const urlInput = document.getElementById('cacheSharePointAdminUrl');
     const statusDisplay = document.getElementById('cacheStatusDisplay');
+    const lastUpdatedSpan = document.getElementById('cacheLastUpdated');
 
-    if (!urlInput || !statusDisplay) return;
+    if (!urlInput) return;
 
     const url = urlInput.value.trim();
     if (!url) {
-      statusDisplay.classList.add('hidden');
+      if (statusDisplay) statusDisplay.classList.add('hidden');
+      if (lastUpdatedSpan) lastUpdatedSpan.textContent = '';
       return;
     }
 
     const result = await window.electronAPI.getCacheStatus(url);
 
     if (!result.success || !result.status) {
-      statusDisplay.classList.add('hidden');
+      if (statusDisplay) statusDisplay.classList.add('hidden');
+      if (lastUpdatedSpan) lastUpdatedSpan.textContent = '';
       return;
     }
 
-    // Update each cache type's timestamp
+    // Find the most recent completion timestamp
+    let mostRecent = null;
     const cacheTypes = {
       'SharePointSites': 'cacheStatusSharePoint',
       'TeamsChannels': 'cacheStatusTeams',
@@ -1660,16 +1664,42 @@ async function loadCacheStatus() {
     };
 
     for (const [cacheType, elementId] of Object.entries(cacheTypes)) {
-      const element = document.getElementById(elementId);
-      if (element) {
-        const span = element.querySelector('.cache-timestamp');
-        if (span && result.status[cacheType]) {
-          span.textContent = result.status[cacheType].LastCompletedLocal || 'Never';
+      if (result.status[cacheType] && result.status[cacheType].LastCompleted) {
+        const timestamp = new Date(result.status[cacheType].LastCompleted);
+        if (!mostRecent || timestamp > mostRecent) {
+          mostRecent = timestamp;
+        }
+      }
+
+      // Update detailed status display
+      if (statusDisplay) {
+        const element = document.getElementById(elementId);
+        if (element) {
+          const span = element.querySelector('.cache-timestamp');
+          if (span && result.status[cacheType]) {
+            span.textContent = result.status[cacheType].LastCompletedLocal || 'Never';
+          }
         }
       }
     }
 
-    statusDisplay.classList.remove('hidden');
+    // Update "Last updated" text near heading
+    if (lastUpdatedSpan) {
+      if (mostRecent) {
+        const dateStr = mostRecent.toLocaleString('en-GB', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        lastUpdatedSpan.textContent = `— Last updated: ${dateStr}`;
+      } else {
+        lastUpdatedSpan.textContent = '';
+      }
+    }
+
+    if (statusDisplay) statusDisplay.classList.remove('hidden');
   } catch (error) {
     console.error('Error loading cache status:', error);
   }

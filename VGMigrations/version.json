@@ -1,7 +1,12 @@
 {
-  "version": "2.9.225",
+  "version": "2.9.226",
   "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.226",
+      "date": "2026-11-09",
+      "changes": "UI: Added prominent 'Last updated' date next to Cache Refresh heading. Shows most recent cache completion timestamp (newest of all 4 cache types) in green text next to the heading. Format: '— Last updated: DD/MM/YYYY HH:MM'. Makes it immediately obvious when caches were last refreshed without having to expand the detailed status panel."
+    },
     {
       "version": "2.9.225",
       "date": "2026-11-09",
