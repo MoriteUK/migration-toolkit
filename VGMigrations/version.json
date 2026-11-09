@@ -1,7 +1,12 @@
 {
-  "version": "2.9.232",
+  "version": "2.9.233",
   "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.233",
+      "date": "2026-11-09",
+      "changes": "FIX: Assessment Exchange connection now explicitly imports required cmdlets. Added -CommandName parameter to Connect-ExchangeOnline with list of all Exchange cmdlets needed (Get-EXOMailbox, Get-EXOMailboxStatistics, Get-EXOMailboxPermission, Get-EXORecipient, Get-EXORecipientPermission, Get-Mailbox, Get-MailboxPermission, Get-DistributionGroup, Get-DistributionGroupMember, Get-MailContact, Get-RecipientPermission, Get-TransportRule). Fixes 'Get-MailContact is not recognized' error that was preventing mail contacts collection. ExchangeOnlineManagement v3+ requires explicit cmdlet imports via -CommandName."
+    },
     {
       "version": "2.9.232",
       "date": "2026-11-09",

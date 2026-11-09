@@ -318,7 +318,14 @@ if (-not $ctx.SkipSharePoint -and -not $hasFreshSPOCache) {
 }
 
 Write-Host ($PREFIX_INFO + 'Connecting to Exchange Online...') -ForegroundColor DarkGray
-Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -ErrorAction Stop
+$exoCmdlets = @(
+    'Get-EXOMailbox', 'Get-EXOMailboxStatistics', 'Get-EXOMailboxPermission',
+    'Get-EXORecipient', 'Get-EXORecipientPermission',
+    'Get-Mailbox', 'Get-MailboxPermission', 'Get-MailboxStatistics',
+    'Get-DistributionGroup', 'Get-DistributionGroupMember',
+    'Get-MailContact', 'Get-RecipientPermission', 'Get-TransportRule'
+)
+Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -CommandName $exoCmdlets -ErrorAction Stop
 Write-Host ($PREFIX_OK + 'Exchange Online connected') -ForegroundColor Green
 
 $skipGraph  = $false
