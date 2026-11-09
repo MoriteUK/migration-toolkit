@@ -504,6 +504,16 @@
             <small class="form-help">Keys all caches to this source tenant (same value Run Assessment uses).</small>
           </div>
 
+          <div id="cacheStatusDisplay" class="hidden" style="margin-top:12px; padding:12px; background:#F0FDF4; border-left:3px solid #10B981; border-radius:4px;">
+            <strong style="color:#059669;">Last Cache Refresh:</strong>
+            <ul style="margin:8px 0 0 20px; font-size:12px; color:#065F46;">
+              <li id="cacheStatusSharePoint"><strong>SharePoint Sites:</strong> <span class="cache-timestamp">Never</span></li>
+              <li id="cacheStatusTeams"><strong>Teams Channels:</strong> <span class="cache-timestamp">Never</span></li>
+              <li id="cacheStatusDLs"><strong>Distribution Groups:</strong> <span class="cache-timestamp">Never</span></li>
+              <li id="cacheStatusMailboxes"><strong>Exchange Mailboxes:</strong> <span class="cache-timestamp">Never</span></li>
+            </ul>
+          </div>
+
           <div class="form-actions" style="margin-top:12px;">
             <button type="button" class="btn btn-success" id="refreshAllCachesBtn">
               🔁 Refresh All Caches

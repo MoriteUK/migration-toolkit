@@ -78,6 +78,7 @@ catch {
 
 try {
     Update-SharePointSitesCacheFile -CacheFolder $cacheFolder | Out-Null
+    Update-CacheCompletionStatus -CacheFolder $cacheFolder -CacheType 'SharePointSites'
     Write-Host ''
     Write-Host ($PREFIX_OK + "Cache refreshed: $cacheFolder") -ForegroundColor Green
 }

@@ -376,6 +376,58 @@ function Test-WholeWordMatch {
     return [regex]::Match($Text, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase).Success
 }
 
+function Update-CacheCompletionStatus {
+    <#
+    .SYNOPSIS
+        Records the completion timestamp for a cache type
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$CacheFolder,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('SharePointSites', 'TeamsChannels', 'DistributionGroups', 'Mailboxes')]
+        [string]$CacheType
+    )
+
+    $statusFile = Join-Path $CacheFolder 'CacheStatus.json'
+
+    # Load existing status or create new
+    $status = if (Test-Path $statusFile) {
+        Get-Content $statusFile -Raw | ConvertFrom-Json -AsHashtable
+    } else {
+        @{}
+    }
+
+    # Update timestamp for this cache type
+    $status[$CacheType] = @{
+        LastCompleted = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss')
+        LastCompletedLocal = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    }
+
+    # Save updated status
+    $status | ConvertTo-Json -Depth 5 | Set-Content -Path $statusFile -Encoding UTF8
+}
+
+function Get-CacheCompletionStatus {
+    <#
+    .SYNOPSIS
+        Reads the cache completion status file
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$CacheFolder
+    )
+
+    $statusFile = Join-Path $CacheFolder 'CacheStatus.json'
+
+    if (Test-Path $statusFile) {
+        return Get-Content $statusFile -Raw | ConvertFrom-Json
+    }
+
+    return $null
+}
+
 # -----------------------------------------------------------------------
 # Exports
 # -----------------------------------------------------------------------
@@ -394,6 +446,8 @@ Export-ModuleMember -Function @(
     'Write-SectionHeader'
     'Test-WholeWordMatch'
     'Get-TimestampPrefix'
+    'Update-CacheCompletionStatus'
+    'Get-CacheCompletionStatus'
 ) -Variable @(
     'PREFIX_OK'
     'PREFIX_WARN'

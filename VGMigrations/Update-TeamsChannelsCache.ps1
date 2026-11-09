@@ -77,6 +77,7 @@ catch {
 
 try {
     Update-TeamsChannelsCacheFile -CacheFolder $cacheFolder | Out-Null
+    Update-CacheCompletionStatus -CacheFolder $cacheFolder -CacheType 'TeamsChannels'
     Write-Host ''
     Write-Host ($PREFIX_OK + "Cache refreshed: $cacheFolder") -ForegroundColor Green
 }

@@ -1622,8 +1622,56 @@ async function loadDiscoveryCacheDefaults() {
     input.value = (config.success && config.config && config.config.SharePointAdminUrl)
       ? config.config.SharePointAdminUrl
       : 'https://ourvolaris-admin.sharepoint.com';
+
+    // Load cache status after setting the URL
+    await loadCacheStatus();
   } catch (error) {
     console.error('Error loading Discovery Cache defaults:', error);
+  }
+}
+
+// Load and display cache completion status
+async function loadCacheStatus() {
+  try {
+    const urlInput = document.getElementById('cacheSharePointAdminUrl');
+    const statusDisplay = document.getElementById('cacheStatusDisplay');
+
+    if (!urlInput || !statusDisplay) return;
+
+    const url = urlInput.value.trim();
+    if (!url) {
+      statusDisplay.classList.add('hidden');
+      return;
+    }
+
+    const result = await window.electronAPI.getCacheStatus(url);
+
+    if (!result.success || !result.status) {
+      statusDisplay.classList.add('hidden');
+      return;
+    }
+
+    // Update each cache type's timestamp
+    const cacheTypes = {
+      'SharePointSites': 'cacheStatusSharePoint',
+      'TeamsChannels': 'cacheStatusTeams',
+      'DistributionGroups': 'cacheStatusDLs',
+      'Mailboxes': 'cacheStatusMailboxes'
+    };
+
+    for (const [cacheType, elementId] of Object.entries(cacheTypes)) {
+      const element = document.getElementById(elementId);
+      if (element) {
+        const span = element.querySelector('.cache-timestamp');
+        if (span && result.status[cacheType]) {
+          span.textContent = result.status[cacheType].LastCompletedLocal || 'Never';
+        }
+      }
+    }
+
+    statusDisplay.classList.remove('hidden');
+  } catch (error) {
+    console.error('Error loading cache status:', error);
   }
 }
 
@@ -3994,7 +4042,18 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.offPsOutput();
         refreshAllCachesBtn.disabled = false;
         refreshAllCachesBtn.textContent = '🔁 Refresh All Caches';
+
+        // Reload cache status to show new completion timestamps
+        await loadCacheStatus();
       }
+    });
+  }
+
+  // ── Discovery Cache - Reload status when URL changes ─────────────────────────
+  const cacheUrlInput = document.getElementById('cacheSharePointAdminUrl');
+  if (cacheUrlInput) {
+    cacheUrlInput.addEventListener('blur', async () => {
+      await loadCacheStatus();
     });
   }
 

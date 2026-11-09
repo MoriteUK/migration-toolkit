@@ -63,6 +63,7 @@ catch {
 
 try {
     Update-MailboxesCacheFile -CacheFolder $cacheFolder | Out-Null
+    Update-CacheCompletionStatus -CacheFolder $cacheFolder -CacheType 'Mailboxes'
     Write-Host ''
     Write-Host ($PREFIX_OK + "Cache refreshed: $cacheFolder") -ForegroundColor Green
     Write-Host ''

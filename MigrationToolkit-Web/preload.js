@@ -50,5 +50,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
 
   // Read VBU CSV file for domain dropdown
-  readVbuCsv: (filePath) => ipcRenderer.invoke('read-vbu-csv', filePath)
+  readVbuCsv: (filePath) => ipcRenderer.invoke('read-vbu-csv', filePath),
+
+  // Get discovery cache completion status
+  getCacheStatus: (sharePointAdminUrl) => ipcRenderer.invoke('get-cache-status', sharePointAdminUrl)
 });

@@ -70,6 +70,7 @@ catch {
 
 try {
     Update-DistributionGroupsCacheFile -CacheFolder $cacheFolder | Out-Null
+    Update-CacheCompletionStatus -CacheFolder $cacheFolder -CacheType 'DistributionGroups'
     Write-Host ''
     Write-Host ($PREFIX_OK + "Cache refreshed: $cacheFolder") -ForegroundColor Green
 }

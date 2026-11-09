@@ -1,7 +1,12 @@
 {
-  "version": "2.9.224",
-  "releaseDate": "2026-11-05",
+  "version": "2.9.225",
+  "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.225",
+      "date": "2026-11-09",
+      "changes": "FEATURE: Discovery Cache now tracks and displays last completion timestamps. Added CacheStatus.json tracking file that records when each cache (SharePoint Sites, Teams Channels, Distribution Groups, Exchange Mailboxes) was last refreshed. UI shows last completion date/time for each cache type in a status display on the Refresh Discovery Cache view. Status updates automatically after running cache refresh and when changing the SPO Admin URL. Helps verify scheduled cache refreshes completed successfully and see cache freshness at a glance. Common.psm1: Added Update-CacheCompletionStatus and Get-CacheCompletionStatus functions. All Update-*Cache.ps1 scripts now record completion timestamp. main.js: Added get-cache-status IPC handler. renderer.js: Added loadCacheStatus function."
+    },
     {
       "version": "2.9.224",
       "date": "2026-11-05",

@@ -283,6 +283,31 @@ function registerIPCHandlers() {
     }
   });
 
+  ipcMain.handle('get-cache-status', async (event, sharePointAdminUrl) => {
+    try {
+      const fs = require('fs');
+      const crypto = require('crypto');
+
+      // Calculate cache folder hash (same logic as PowerShell Get-DiscoveryCacheFolder)
+      const hash = crypto.createHash('sha256')
+        .update(sharePointAdminUrl.toLowerCase())
+        .digest('hex')
+        .substring(0, 16);
+
+      const cacheFolder = path.join(PS_SCRIPT_PATH, 'Assessment', 'Cache', hash);
+      const statusFile = path.join(cacheFolder, 'CacheStatus.json');
+
+      if (!fs.existsSync(statusFile)) {
+        return { success: true, status: null };
+      }
+
+      const statusData = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+      return { success: true, status: statusData };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('save-config', async (event, config) => {
     try {
       const configPath = path.join(process.env.APPDATA, 'FlyMigration', 'config.json');
