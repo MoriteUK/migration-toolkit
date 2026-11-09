@@ -1659,6 +1659,7 @@ async function loadCacheStatus() {
     const cacheTypes = {
       'SharePointSites': 'cacheStatusSharePoint',
       'TeamsChannels': 'cacheStatusTeams',
+      'EntraUsersAndGroups': 'cacheStatusEntra',
       'DistributionGroups': 'cacheStatusDLs',
       'Mailboxes': 'cacheStatusMailboxes'
     };

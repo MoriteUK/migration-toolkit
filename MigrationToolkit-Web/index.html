@@ -512,6 +512,7 @@
             <ul style="margin:8px 0 0 20px; font-size:12px; color:#065F46;">
               <li id="cacheStatusSharePoint"><strong>SharePoint Sites:</strong> <span class="cache-timestamp">Never</span></li>
               <li id="cacheStatusTeams"><strong>Teams Channels:</strong> <span class="cache-timestamp">Never</span></li>
+              <li id="cacheStatusEntra"><strong>Entra Users & Groups:</strong> <span class="cache-timestamp">Never</span></li>
               <li id="cacheStatusDLs"><strong>Distribution Groups:</strong> <span class="cache-timestamp">Never</span></li>
               <li id="cacheStatusMailboxes"><strong>Exchange Mailboxes:</strong> <span class="cache-timestamp">Never</span></li>
             </ul>
@@ -528,10 +529,11 @@
             <ul style="margin:8px 0 0 20px;">
               <li><strong>SharePoint Sites & OneDrive</strong> - All sites via Get-SPOSite (~10 min incremental)</li>
               <li><strong>Teams Channels & Members</strong> - All teams and channels via Microsoft Graph (~30 min incremental)</li>
+              <li><strong>Entra Users & M365 Groups</strong> - All users and groups via Microsoft Graph (~20 min)</li>
               <li><strong>Distribution Groups</strong> - All DGs with members via Exchange Online (~10 min incremental)</li>
               <li><strong>Exchange Mailboxes</strong> - All mailboxes with statistics and permissions (~2 hours incremental)</li>
             </ul>
-            <p style="margin:8px 0 0 0;"><strong>Total time:</strong> ~3.5 hours (incremental). First run takes 24-31 hours on large/throttled tenants. Each refresh opens its own sign-in window.</p>
+            <p style="margin:8px 0 0 0;"><strong>Total time:</strong> ~4 hours. First run takes 24-31 hours on large/throttled tenants. Each refresh opens its own sign-in window.</p>
           </div>
 
           <div id="refreshAllCachesLog" class="hidden" style="margin-top:16px;">
@@ -2799,7 +2801,7 @@
     </div>
   </div>
 
-  <script src="renderer.js?v=2.9.231"></script>
+  <script src="renderer.js?v=2.9.232"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">

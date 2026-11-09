@@ -386,7 +386,7 @@ function Update-CacheCompletionStatus {
         [string]$CacheFolder,
 
         [Parameter(Mandatory)]
-        [ValidateSet('SharePointSites', 'TeamsChannels', 'DistributionGroups', 'Mailboxes')]
+        [ValidateSet('SharePointSites', 'TeamsChannels', 'DistributionGroups', 'Mailboxes', 'EntraUsersAndGroups')]
         [string]$CacheType
     )
 

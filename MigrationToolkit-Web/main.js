@@ -311,6 +311,7 @@ function registerIPCHandlers() {
       const cacheFiles = {
         'SharePointSites': 'SharePointSites-All.json',
         'TeamsChannels': 'TeamsChannels-All.json',
+        'EntraUsersAndGroups': 'EntraUsers-All.json',
         'DistributionGroups': 'DistributionGroups-All.json',
         'Mailboxes': 'Mailboxes-All.json'
       };

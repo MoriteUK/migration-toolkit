@@ -29,11 +29,12 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Task names with staggered start times
-# Incremental updates complete in ~3.5 hours (first run: 24-31 hours)
-# Incremental timings: SharePoint ~10min, Teams ~30min, DGs ~10min, Mailboxes ~2hrs
+# Incremental updates complete in ~4 hours (first run: 24-31 hours)
+# Incremental timings: SharePoint ~10min, Teams ~30min, Entra ~20min, DGs ~10min, Mailboxes ~2hrs
 $tasks = @{
     'SharePoint Sites Cache'     = @{ Script = 'Update-SharePointSitesCache.ps1';     Time = '5:00AM'; Day = 'Saturday' }
     'Teams Channels Cache'       = @{ Script = 'Update-TeamsChannelsCache.ps1';       Time = '6:00AM'; Day = 'Saturday' }
+    'Entra Users & Groups Cache' = @{ Script = 'Update-EntraCache.ps1';               Time = '7:00AM'; Day = 'Saturday' }
     'Distribution Groups Cache'  = @{ Script = 'Update-DistributionGroupsCache.ps1';  Time = '11:00AM'; Day = 'Saturday' }
     'Exchange Mailboxes Cache'   = @{ Script = 'Update-MailboxesCache.ps1';           Time = '12:00PM'; Day = 'Saturday' }
 }
@@ -71,6 +72,7 @@ Write-Host "SharePoint Admin URL: $SharePointAdminUrl" -ForegroundColor White
 Write-Host "Schedule:             Every Saturday (incremental updates)" -ForegroundColor White
 Write-Host "  • SharePoint Sites:     Saturday  5:00 AM  (est. finish ~5:10 AM)" -ForegroundColor DarkGray
 Write-Host "  • Teams Channels:       Saturday  6:00 AM  (est. finish ~6:30 AM)" -ForegroundColor DarkGray
+Write-Host "  • Entra Users & Groups: Saturday  7:00 AM  (est. finish ~7:20 AM)" -ForegroundColor DarkGray
 Write-Host "  • Distribution Groups:  Saturday 11:00 AM  (est. finish ~11:10 AM)" -ForegroundColor DarkGray
 Write-Host "  • Exchange Mailboxes:   Saturday 12:00 PM  (est. finish ~2:00 PM)" -ForegroundColor DarkGray
 Write-Host "Run as:               $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
@@ -153,14 +155,15 @@ Write-Host ""
 Write-Host "Tasks run every Saturday (staggered) as $env:USERDOMAIN\$env:USERNAME" -ForegroundColor White
 Write-Host "  • SharePoint Sites:     Saturday  5:00 AM  → finish ~5:10 AM" -ForegroundColor Green
 Write-Host "  • Teams Channels:       Saturday  6:00 AM  → finish ~6:30 AM" -ForegroundColor Green
+Write-Host "  • Entra Users & Groups: Saturday  7:00 AM  → finish ~7:20 AM" -ForegroundColor Green
 Write-Host "  • Distribution Groups:  Saturday 11:00 AM  → finish ~11:10 AM" -ForegroundColor Green
 Write-Host "  • Exchange Mailboxes:   Saturday 12:00 PM  → finish ~2:00 PM" -ForegroundColor Green
 Write-Host ""
-Write-Host "All caches refreshed by ~2:00 PM Saturday (incremental updates)!" -ForegroundColor Yellow
+Write-Host "All caches refreshed by ~2:00 PM Saturday!" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "Incremental cache benefits:" -ForegroundColor Yellow
-Write-Host "  - Only updates NEW/MODIFIED/DELETED items (90% faster)" -ForegroundColor DarkGray
-Write-Host "  - Typical weekly refresh: ~3.5 hours (down from 24-31 hours)" -ForegroundColor DarkGray
+Write-Host "Cache benefits:" -ForegroundColor Yellow
+Write-Host "  - Exchange/SharePoint/Teams: Incremental updates (90% faster)" -ForegroundColor DarkGray
+Write-Host "  - Typical weekly refresh: ~4 hours (down from 24-31 hours first run)" -ForegroundColor DarkGray
 Write-Host "  - First run still takes 24-31 hours to build initial cache" -ForegroundColor DarkGray
 Write-Host "  - Fresh caches ready for Monday morning assessments" -ForegroundColor DarkGray
 Write-Host "  - Staggered timing prevents overlapping tasks and API spikes" -ForegroundColor DarkGray

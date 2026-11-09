@@ -1,7 +1,12 @@
 {
-  "version": "2.9.231",
+  "version": "2.9.232",
   "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.232",
+      "date": "2026-11-09",
+      "changes": "FEATURE: Added Entra ID Users & M365 Groups cache to scheduled tasks. New Update-EntraCache.ps1 script caches all Entra ID users (with UPN, licenses, proxyAddresses, etc.) and all M365 Groups with members via Microsoft Graph. Scheduled to run Saturdays at 7:00 AM (~20 min). This cache allows assessments to run without connecting to Graph for user/group data, significantly speeding up the process. Cache files: EntraUsers-All.json and M365Groups-All.json. Added to Schedule-CacheRefresh.ps1 between Teams and DGs. UI updated to show Entra cache status in Discovery Cache view. Total weekly refresh time now ~4 hours (was ~3.5 hours)."
+    },
     {
       "version": "2.9.231",
       "date": "2026-11-09",
