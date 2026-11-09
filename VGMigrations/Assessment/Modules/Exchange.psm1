@@ -15,6 +15,33 @@ $script:EXOMailboxProperties = @(
 # Private functions
 # -----------------------------------------------------------------------
 
+function Get-SimplifiedExchangeError {
+    <#
+    .SYNOPSIS
+        Simplifies verbose Exchange Online error messages to just the key information
+    #>
+    param([string]$ErrorMessage)
+
+    # Extract the simple error reason from verbose JSON errors
+    if ($ErrorMessage -match "Couldn't find '[^']+' as a recipient") {
+        return "Recipient not found"
+    }
+    elseif ($ErrorMessage -match "couldn't be found on") {
+        return "Object not found"
+    }
+    elseif ($ErrorMessage -match '"code":"([^"]+)"') {
+        return $matches[1]
+    }
+    else {
+        # Fallback: take first sentence or first 100 chars
+        $firstSentence = ($ErrorMessage -split '\.')[0]
+        if ($firstSentence.Length -gt 100) {
+            return $firstSentence.Substring(0, 100) + '...'
+        }
+        return $firstSentence
+    }
+}
+
 <#
 .SYNOPSIS
     Retrieves all VBU-scoped mailboxes, preferring cache over live query.
@@ -388,7 +415,8 @@ function Get-MailboxPermissionData {
             }
         }
         catch {
-            Write-Host ($PREFIX_WARN + "Could not get FullAccess permissions for '$($mb.DisplayName)': " + $_.Exception.Message) -ForegroundColor Yellow
+            $simpleError = Get-SimplifiedExchangeError -ErrorMessage $_.Exception.Message
+            Write-Host ($PREFIX_WARN + "Could not get FullAccess permissions for '$($mb.DisplayName)': $simpleError") -ForegroundColor Yellow
         }
 
         try {
@@ -406,7 +434,8 @@ function Get-MailboxPermissionData {
             }
         }
         catch {
-            Write-Host ($PREFIX_WARN + "Could not get SendAs permissions for '$($mb.DisplayName)': " + $_.Exception.Message) -ForegroundColor Yellow
+            $simpleError = Get-SimplifiedExchangeError -ErrorMessage $_.Exception.Message
+            Write-Host ($PREFIX_WARN + "Could not get SendAs permissions for '$($mb.DisplayName)': $simpleError") -ForegroundColor Yellow
         }
 
         foreach ($delegate in @($mb.GrantSendOnBehalfTo)) {

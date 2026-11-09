@@ -1,7 +1,12 @@
 {
-  "version": "2.9.227",
+  "version": "2.9.228",
   "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.228",
+      "date": "2026-11-09",
+      "changes": "UX: Simplified Exchange permission error messages. Verbose JSON error details from Get-EXOMailboxPermission and Get-EXORecipientPermission are now paraphrased to just the key information. Instead of multi-line JSON with inner exceptions, errors now show as 'Could not get FullAccess permissions for [Name]: Recipient not found'. Added Get-SimplifiedExchangeError function to Exchange.psm1 that extracts the meaningful error reason (NotFound, Object not found, etc.) from verbose Exchange Online API errors."
+    },
     {
       "version": "2.9.227",
       "date": "2026-11-09",
