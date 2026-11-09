@@ -397,54 +397,93 @@ function Get-MailboxPermissionData {
     $total = $Mailboxes.Count
     $processed = 0
 
+    # Check if mailboxes have cached permissions (from Mailboxes-All.json cache)
+    $hasCachedPermissions = $Mailboxes.Count -gt 0 -and
+                           $null -ne $Mailboxes[0].PSObject.Properties['FullAccessPermissions'] -and
+                           $null -ne $Mailboxes[0].PSObject.Properties['SendAsPermissions']
+
+    if ($hasCachedPermissions) {
+        Write-Host (Get-TimestampPrefix ($PREFIX_INFO + 'Using cached permissions from mailbox cache')) -ForegroundColor DarkGray
+    }
+
     foreach ($mb in $Mailboxes) {
         $processed++
         $mailboxType = $mb.RecipientTypeDetails.ToString()
         $mailboxSmtp = $mb.PrimarySmtpAddress.ToString()
         $mailboxUpn  = if ($mailboxType -eq 'UserMailbox') { $mb.UserPrincipalName } else { '' }
 
-        # Show progress every 100 mailboxes
-        if ($processed % 100 -eq 0 -or $processed -eq $total) {
+        # Show progress every 100 mailboxes (or immediately if querying live)
+        if (-not $hasCachedPermissions -and ($processed % 100 -eq 0 -or $processed -eq $total)) {
             $pct = [math]::Round(($processed / $total) * 100, 0)
-            Write-Host (Get-TimestampPrefix ($PREFIX_INFO + "Processing permissions: $processed / $total ($pct%)")) -ForegroundColor DarkGray
+            Write-Host (Get-TimestampPrefix ($PREFIX_INFO + "Querying permissions: $processed / $total ($pct%)")) -ForegroundColor DarkGray
         }
 
-        try {
-            $fullAccess = Get-EXOMailboxPermission -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop |
-                Where-Object { -not $_.IsInherited -and $_.User -ne 'NT AUTHORITY\SELF' -and $_.User -notlike 'S-1-5-*' }
-            foreach ($p in $fullAccess) {
+        # Use cached permissions if available, otherwise query live
+        if ($hasCachedPermissions) {
+            # Process cached FullAccess permissions
+            foreach ($p in $mb.FullAccessPermissions) {
                 $records.Add([PSCustomObject]@{
                     Mailbox        = $mailboxSmtp
                     MailboxUPN     = $mailboxUpn
                     MailboxType    = $mailboxType
-                    Delegate       = Resolve-DelegateIdentity -Value "$($p.User)" -Cache $delegateCache
+                    Delegate       = $p.User
                     PermissionType = 'FullAccess'
-                    AccessRights   = ($p.AccessRights | ForEach-Object { $_.ToString() }) -join '|'
+                    AccessRights   = $p.AccessRights
                 })
             }
-        }
-        catch {
-            $simpleError = Get-SimplifiedExchangeError -ErrorMessage $_.Exception.Message
-            Write-Host ($PREFIX_WARN + "Could not get FullAccess permissions for '$($mb.DisplayName)': $simpleError") -ForegroundColor Yellow
-        }
 
-        try {
-            $sendAs = Get-EXORecipientPermission -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop |
-                Where-Object { -not $_.IsInherited -and $_.AccessRights -contains 'SendAs' -and $_.Trustee -ne 'NT AUTHORITY\SELF' }
-            foreach ($p in $sendAs) {
+            # Process cached SendAs permissions
+            foreach ($p in $mb.SendAsPermissions) {
                 $records.Add([PSCustomObject]@{
                     Mailbox        = $mailboxSmtp
                     MailboxUPN     = $mailboxUpn
                     MailboxType    = $mailboxType
-                    Delegate       = Resolve-DelegateIdentity -Value "$($p.Trustee)" -Cache $delegateCache
+                    Delegate       = $p.Trustee
                     PermissionType = 'SendAs'
-                    AccessRights   = ($p.AccessRights | ForEach-Object { $_.ToString() }) -join '|'
+                    AccessRights   = $p.AccessRights
                 })
             }
         }
-        catch {
-            $simpleError = Get-SimplifiedExchangeError -ErrorMessage $_.Exception.Message
-            Write-Host ($PREFIX_WARN + "Could not get SendAs permissions for '$($mb.DisplayName)': $simpleError") -ForegroundColor Yellow
+        else {
+            # Query FullAccess permissions live
+            try {
+                $fullAccess = Get-EXOMailboxPermission -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop |
+                    Where-Object { -not $_.IsInherited -and $_.User -ne 'NT AUTHORITY\SELF' -and $_.User -notlike 'S-1-5-*' }
+                foreach ($p in $fullAccess) {
+                    $records.Add([PSCustomObject]@{
+                        Mailbox        = $mailboxSmtp
+                        MailboxUPN     = $mailboxUpn
+                        MailboxType    = $mailboxType
+                        Delegate       = Resolve-DelegateIdentity -Value "$($p.User)" -Cache $delegateCache
+                        PermissionType = 'FullAccess'
+                        AccessRights   = ($p.AccessRights | ForEach-Object { $_.ToString() }) -join '|'
+                    })
+                }
+            }
+            catch {
+                $simpleError = Get-SimplifiedExchangeError -ErrorMessage $_.Exception.Message
+                Write-Host ($PREFIX_WARN + "Could not get FullAccess permissions for '$($mb.DisplayName)': $simpleError") -ForegroundColor Yellow
+            }
+
+            # Query SendAs permissions live
+            try {
+                $sendAs = Get-EXORecipientPermission -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop |
+                    Where-Object { -not $_.IsInherited -and $_.AccessRights -contains 'SendAs' -and $_.Trustee -ne 'NT AUTHORITY\SELF' }
+                foreach ($p in $sendAs) {
+                    $records.Add([PSCustomObject]@{
+                        Mailbox        = $mailboxSmtp
+                        MailboxUPN     = $mailboxUpn
+                        MailboxType    = $mailboxType
+                        Delegate       = Resolve-DelegateIdentity -Value "$($p.Trustee)" -Cache $delegateCache
+                        PermissionType = 'SendAs'
+                        AccessRights   = ($p.AccessRights | ForEach-Object { $_.ToString() }) -join '|'
+                    })
+                }
+            }
+            catch {
+                $simpleError = Get-SimplifiedExchangeError -ErrorMessage $_.Exception.Message
+                Write-Host ($PREFIX_WARN + "Could not get SendAs permissions for '$($mb.DisplayName)': $simpleError") -ForegroundColor Yellow
+            }
         }
 
         foreach ($delegate in @($mb.GrantSendOnBehalfTo)) {

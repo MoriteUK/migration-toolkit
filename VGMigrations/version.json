@@ -1,7 +1,12 @@
 {
-  "version": "2.9.229",
+  "version": "2.9.230",
   "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.230",
+      "date": "2026-11-09",
+      "changes": "PERFORMANCE: Assessment now uses cached mailbox permissions instead of re-querying Exchange. When mailboxes are loaded from cache (Mailboxes-All.json < 7 days), permissions (FullAccess, SendAs, SendOnBehalf) are read directly from the cached records instead of calling Get-EXOMailboxPermission and Get-EXORecipientPermission again. This eliminates 20-40 minutes of unnecessary Exchange API calls on large tenants. Assessments with fresh cache now complete in minutes instead of hours. Get-MailboxPermissionData detects cached permissions and shows 'Using cached permissions from mailbox cache' message. Only queries live when cache doesn't exist or has no permission data."
+    },
     {
       "version": "2.9.229",
       "date": "2026-11-09",
