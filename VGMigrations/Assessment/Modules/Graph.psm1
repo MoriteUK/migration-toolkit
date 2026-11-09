@@ -212,7 +212,18 @@ function Get-TeamData {
         ($_.proxyAddresses | Where-Object { $_ -like "*$domain*" })
     }
 
+    $total = $scoped.Count
+    $processed = 0
+
     foreach ($g in $scoped) {
+        $processed++
+
+        # Show progress every 10 teams
+        if ($processed % 10 -eq 0 -or $processed -eq $total) {
+            $pct = [math]::Round(($processed / $total) * 100, 0)
+            Write-Host ($PREFIX_INFO + "  Processing Teams: $processed / $total ($pct%)") -ForegroundColor DarkGray
+        }
+
         $ownerUpns  = Resolve-GroupMemberUpns -GroupId $g.id -RelType 'owners'
         $memberUpns = Resolve-GroupMemberUpns -GroupId $g.id -RelType 'members'
         $siteUrl    = Resolve-GroupSiteUrl   -GroupId $g.id
@@ -275,7 +286,18 @@ function Get-M365GroupData {
         ($_.proxyAddresses | Where-Object { $_ -like "*$domain*" })
     }
 
+    $total = $scoped.Count
+    $processed = 0
+
     foreach ($g in $scoped) {
+        $processed++
+
+        # Show progress every 10 groups
+        if ($processed % 10 -eq 0 -or $processed -eq $total) {
+            $pct = [math]::Round(($processed / $total) * 100, 0)
+            Write-Host ($PREFIX_INFO + "  Processing M365 Groups: $processed / $total ($pct%)") -ForegroundColor DarkGray
+        }
+
         $ownerUpns  = Resolve-GroupMemberUpns -GroupId $g.id -RelType 'owners'
         $memberUpns = Resolve-GroupMemberUpns -GroupId $g.id -RelType 'members'
 

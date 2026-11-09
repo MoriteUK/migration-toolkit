@@ -1,7 +1,12 @@
 {
-  "version": "2.9.233",
+  "version": "2.9.234",
   "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.234",
+      "date": "2026-11-09",
+      "changes": "UX: Added progress indicators to Teams and M365 Groups collection. Shows 'Processing Teams: 50 / 237 (21%)' every 10 items during Graph collection. Applies to Get-TeamData and Get-M365GroupData functions in Graph.psm1. Makes it clear the process is progressing when collecting teams/groups with channels and members, which can take several minutes on large tenants."
+    },
     {
       "version": "2.9.233",
       "date": "2026-11-09",
