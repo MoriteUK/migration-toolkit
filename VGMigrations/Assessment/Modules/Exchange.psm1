@@ -394,11 +394,20 @@ function Get-MailboxPermissionData {
 
     $records = [System.Collections.Generic.List[PSCustomObject]]::new()
     $delegateCache = @{}
+    $total = $Mailboxes.Count
+    $processed = 0
 
     foreach ($mb in $Mailboxes) {
+        $processed++
         $mailboxType = $mb.RecipientTypeDetails.ToString()
         $mailboxSmtp = $mb.PrimarySmtpAddress.ToString()
         $mailboxUpn  = if ($mailboxType -eq 'UserMailbox') { $mb.UserPrincipalName } else { '' }
+
+        # Show progress every 100 mailboxes
+        if ($processed % 100 -eq 0 -or $processed -eq $total) {
+            $pct = [math]::Round(($processed / $total) * 100, 0)
+            Write-Host (Get-TimestampPrefix ($PREFIX_INFO + "Processing permissions: $processed / $total ($pct%)")) -ForegroundColor DarkGray
+        }
 
         try {
             $fullAccess = Get-EXOMailboxPermission -Identity $mb.ExchangeGuid.ToString() -ErrorAction Stop |
@@ -813,13 +822,15 @@ function Update-MailboxesCacheFile {
     Write-Host ($PREFIX_OK + "Retrieved statistics for $($statsHash.Count) mailboxes") -ForegroundColor Green
 
     # Step 3: Get FullAccess permissions for all mailboxes
-    Write-Host ($PREFIX_INFO + 'Collecting FullAccess permissions...') -ForegroundColor DarkGray
+    Write-Host (Get-TimestampPrefix ($PREFIX_INFO + 'Collecting FullAccess permissions...')) -ForegroundColor DarkGray
     $fullAccessHash = @{}
     $processed = 0
+    $total = $allMailboxes.Count
     foreach ($mb in $allMailboxes) {
         $processed++
-        if ($processed % 100 -eq 0) {
-            Write-Host ($PREFIX_INFO + "  ...$processed / $($allMailboxes.Count) mailboxes") -ForegroundColor DarkGray
+        if ($processed % 100 -eq 0 -or $processed -eq $total) {
+            $pct = [math]::Round(($processed / $total) * 100, 0)
+            Write-Host (Get-TimestampPrefix ($PREFIX_INFO + "  $processed / $total ($pct%)")) -ForegroundColor DarkGray
         }
 
         try {
@@ -846,13 +857,15 @@ function Update-MailboxesCacheFile {
     Write-Host ($PREFIX_OK + "Found FullAccess permissions on $($fullAccessHash.Count) mailboxes") -ForegroundColor Green
 
     # Step 4: Get SendAs permissions for all mailboxes
-    Write-Host ($PREFIX_INFO + 'Collecting SendAs permissions...') -ForegroundColor DarkGray
+    Write-Host (Get-TimestampPrefix ($PREFIX_INFO + 'Collecting SendAs permissions...')) -ForegroundColor DarkGray
     $sendAsHash = @{}
     $processed = 0
+    $total = $allMailboxes.Count
     foreach ($mb in $allMailboxes) {
         $processed++
-        if ($processed % 100 -eq 0) {
-            Write-Host ($PREFIX_INFO + "  ...$processed / $($allMailboxes.Count) mailboxes") -ForegroundColor DarkGray
+        if ($processed % 100 -eq 0 -or $processed -eq $total) {
+            $pct = [math]::Round(($processed / $total) * 100, 0)
+            Write-Host (Get-TimestampPrefix ($PREFIX_INFO + "  $processed / $total ($pct%)")) -ForegroundColor DarkGray
         }
 
         try {

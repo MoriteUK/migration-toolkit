@@ -1,7 +1,12 @@
 {
-  "version": "2.9.228",
+  "version": "2.9.229",
   "releaseDate": "2026-11-09",
   "changelog": [
+    {
+      "version": "2.9.229",
+      "date": "2026-11-09",
+      "changes": "UX: Added progress indicators to mailbox permissions collection. Shows 'Processing permissions: 800 / 14,523 (6%)' every 100 mailboxes during assessment and cache refresh. Includes timestamps so you can see when progress updates occur. Applies to: Get-MailboxPermissionData (assessment), FullAccess permissions collection (cache), and SendAs permissions collection (cache). Makes it clear the process is still running and how far along it is."
+    },
     {
       "version": "2.9.228",
       "date": "2026-11-09",
