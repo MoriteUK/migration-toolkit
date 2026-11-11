@@ -3644,10 +3644,11 @@ document.addEventListener('DOMContentLoaded', () => {
   })();
 
   // ── Tenant Baseline Config ────────────────────────────────────────────────
-  const baselineRunBtn       = document.getElementById('baselineRunBtn');
-  const baselineAdminUpn      = document.getElementById('baselineAdminUpn');
-  const baselineBreakGlassUpn = document.getElementById('baselineBreakGlassUpn');
-  const baselineLogPre        = document.getElementById('baselineLogPre');
+  const baselineRunBtn         = document.getElementById('baselineRunBtn');
+  const baselineAdminUpn       = document.getElementById('baselineAdminUpn');
+  const baselineBreakGlassUpn  = document.getElementById('baselineBreakGlassUpn');
+  const baselineEnableCritical = document.getElementById('baselineEnableCritical');
+  const baselineLogPre         = document.getElementById('baselineLogPre');
 
   function appendBaselineLog(text) {
     if (!baselineLogPre) return;
@@ -3669,6 +3670,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const args = ['-Restarted', '-AdminUPN', adminUpn];
       const breakGlassUpn = baselineBreakGlassUpn?.value?.trim();
       if (breakGlassUpn) args.push('-BreakGlassUpn', breakGlassUpn);
+
+      // Add -EnableCriticalPolicies switch if checkbox is checked
+      if (baselineEnableCritical?.checked) {
+        args.push('-EnableCriticalPolicies');
+      }
 
       window.electronAPI.onPsOutput(appendBaselineLog);
       try {

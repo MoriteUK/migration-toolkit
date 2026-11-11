@@ -28,7 +28,11 @@ param(
     # with CA,US,GB,IE ticked. -BreakGlassUpn is an emergency-access account that
     # is excluded from every Conditional Access policy this script creates.
     [string]$TrustedCountries,
-    [string]$BreakGlassUpn
+    [string]$BreakGlassUpn,
+    # Set this to enable critical security policies immediately after creation
+    # (Block Legacy Authentication and Block Device Code Flow). Other policies
+    # remain disabled so you can test them individually before enabling.
+    [switch]$EnableCriticalPolicies
 )
 
 # Default log locations live under the app's own writable log folder (not the
@@ -165,9 +169,10 @@ if (-not $Restarted) {
 
     Write-Host "Launching a new PowerShell 7 session..." -ForegroundColor Green
     $relaunchArgs = @('-NoExit', '-File', "`"$scriptPath`"", '-Restarted', '-LogPath', "`"$LogPath`"")
-    if ($AdminUPN)         { $relaunchArgs += @('-AdminUPN', "`"$AdminUPN`"") }
-    if ($BreakGlassUpn)    { $relaunchArgs += @('-BreakGlassUpn', "`"$BreakGlassUpn`"") }
-    if ($TrustedCountries) { $relaunchArgs += @('-TrustedCountries', "`"$TrustedCountries`"") }
+    if ($AdminUPN)              { $relaunchArgs += @('-AdminUPN', "`"$AdminUPN`"") }
+    if ($BreakGlassUpn)         { $relaunchArgs += @('-BreakGlassUpn', "`"$BreakGlassUpn`"") }
+    if ($TrustedCountries)      { $relaunchArgs += @('-TrustedCountries', "`"$TrustedCountries`"") }
+    if ($EnableCriticalPolicies){ $relaunchArgs += @('-EnableCriticalPolicies') }
     Start-Process pwsh -ArgumentList $relaunchArgs
     exit
 }
@@ -1221,6 +1226,16 @@ try {
     $existingPolicies = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies").value
     $existingNames = $existingPolicies.displayName
 
+    # Policy definitions — all start disabled by default so you can test them before enabling.
+    # Use -EnableCriticalPolicies to auto-enable "Block Legacy Authentication" and
+    # "Block Device Code Flow" immediately after creation (recommended for production).
+    #
+    # "Block Device Code Flow" policy prevents device code phishing attacks where an
+    # attacker tricks a user into entering a code at microsoft.com/devicelogin. This
+    # flow is rarely needed in modern orgs (most apps use browser-based auth now) and
+    # is a common attack vector. The policy uses authenticationFlows.transferMethods
+    # to specifically target device code authentication while leaving other auth methods
+    # (browser, mobile apps, desktop apps with modern auth) unaffected.
     $policies = @(
         '{"displayName":"Block Access Outside Approved Countries","state":"disabled","conditions":{"users":{"includeUsers":["All"]},"applications":{"includeApplications":["All"]},"locations":{"includeLocations":["All"],"excludeLocations":[]}},"grantControls":{"operator":"OR","builtInControls":["block"]}}'
         '{"displayName":"Block Legacy Authentication","state":"disabled","conditions":{"users":{"includeUsers":["All"]},"applications":{"includeApplications":["All"]},"clientAppTypes":["exchangeActiveSync","other"],"locations":{"includeLocations":["All"]}},"grantControls":{"operator":"OR","builtInControls":["block"]}}'
@@ -1232,7 +1247,7 @@ try {
         '{"displayName":"Require MFA for Guest Users - 8hr","state":"disabled","conditions":{"users":{"includeGuestsOrExternalUsers":{"guestOrExternalUserTypes":"internalGuest,b2bCollaborationGuest,b2bCollaborationMember,b2bDirectConnectUser,otherExternalUser,serviceProvider","externalTenants":{"membershipKind":"all"}}},"applications":{"includeApplications":["All"]},"clientAppTypes":["all"],"locations":{"includeLocations":["All"]}},"grantControls":{"operator":"OR","builtInControls":["mfa"]},"sessionControls":{"signInFrequency":{"isEnabled":true,"type":"hours","value":8,"authenticationType":"primaryAndSecondaryAuthentication","frequencyInterval":"timeBased"}}}'
     )
 
-    $createdCount = 0; $skippedCount = 0
+    $createdCount = 0; $skippedCount = 0; $enabledCount = 0
     foreach ($rawJson in $policies) {
         $policyObj = $rawJson | ConvertFrom-Json
         $policyName = $policyObj.displayName
@@ -1259,28 +1274,51 @@ try {
             # misconfigured control can never lock every admin out of the tenant.
             $policyObj.conditions.users | Add-Member -NotePropertyName excludeUsers -NotePropertyValue @($breakGlassId) -Force
         }
+
+        # Auto-enable critical security policies if the switch is set
+        $isCriticalPolicy = $policyName -in @("Block Legacy Authentication", "Block Device Code Flow")
+        if ($EnableCriticalPolicies -and $isCriticalPolicy) {
+            $policyObj.state = "enabled"
+        }
+
         $body = $policyObj | ConvertTo-Json -Depth 10
-        Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies" -Body $body -ContentType "application/json" -ErrorAction Stop
-        Write-Log "[OK] Step 11: Created '$policyName'." "OK"
+        $newPolicy = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies" -Body $body -ContentType "application/json" -ErrorAction Stop
+
+        # Enhanced logging for device code blocking policy
+        if ($policyName -eq "Block Device Code Flow") {
+            $stateNote = if ($EnableCriticalPolicies) { " [ENABLED - blocks device code phishing attacks]" } else { " [disabled - enable manually when ready]" }
+            Write-Log "[OK] Step 11: Created 'Block Device Code Flow' policy$stateNote" "OK"
+            Write-Log "[INFO] Step 11: Device code flow is a common phishing vector. This policy prevents attackers from tricking users into entering codes at microsoft.com/devicelogin." "INFO"
+        } elseif ($policyName -eq "Block Legacy Authentication") {
+            $stateNote = if ($EnableCriticalPolicies) { " [ENABLED]" } else { " [disabled]" }
+            Write-Log "[OK] Step 11: Created '$policyName'$stateNote." "OK"
+        } else {
+            Write-Log "[OK] Step 11: Created '$policyName' [disabled]." "OK"
+        }
+
         $createdCount++
+        if ($EnableCriticalPolicies -and $isCriticalPolicy) { $enabledCount++ }
     }
 
-    # Verify all are disabled
-    $allPolicies = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies").value
-    foreach ($rawJson in $policies) {
-        $name = ($rawJson | ConvertFrom-Json).displayName
-        $policy = $allPolicies | Where-Object { $_.displayName -eq $name }
-        if ($policy -and $policy.state -ne "disabled") {
-            Invoke-MgGraphRequest -Method PATCH -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/$($policy.id)" -Body '{"state":"disabled"}' -ContentType "application/json" -ErrorAction Stop
-            Write-Log "[OK] Step 11: Corrected '$name' to disabled." "OK"
+    # Verify state of policies — if -EnableCriticalPolicies was NOT used, ensure all are disabled
+    if (-not $EnableCriticalPolicies) {
+        $allPolicies = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies").value
+        foreach ($rawJson in $policies) {
+            $name = ($rawJson | ConvertFrom-Json).displayName
+            $policy = $allPolicies | Where-Object { $_.displayName -eq $name }
+            if ($policy -and $policy.state -ne "disabled") {
+                Invoke-MgGraphRequest -Method PATCH -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/$($policy.id)" -Body '{"state":"disabled"}' -ContentType "application/json" -ErrorAction Stop
+                Write-Log "[OK] Step 11: Corrected '$name' to disabled." "OK"
+            }
         }
     }
 
     $bgNote = if ($breakGlassId) { "; break-glass '$BreakGlassUpn' excluded" } elseif ($BreakGlassUpn) { "; break-glass '$BreakGlassUpn' NOT FOUND - no exclusion" } else { "; no break-glass account" }
+    $enabledNote = if ($enabledCount -gt 0) { "; $enabledCount critical policies auto-enabled" } else { "" }
     if ($createdCount -eq 0) {
         Add-Summary 11 "Deploy_Conditional_Access_Policies" "Skipped (all policies already existed)$bgNote"
     } else {
-        Add-Summary 11 "Deploy_Conditional_Access_Policies" "Success ($createdCount created, $skippedCount already existed; countries: $($trustedCountries -join ','))$bgNote"
+        Add-Summary 11 "Deploy_Conditional_Access_Policies" "Success ($createdCount created, $skippedCount already existed; countries: $($trustedCountries -join ','))$bgNote$enabledNote"
     }
 } catch {
     Write-Log "[ERROR] Step 11 failed: $(Get-FullErrorMessage $_)" "ERROR"

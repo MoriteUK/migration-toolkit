@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Migration Toolkit</title>
-  <link rel="stylesheet" href="src/styles/main.css?v=2.9.191">
+  <link rel="stylesheet" href="src/styles/main.css?v=2.9.235">
   <style>
     #avepointConnectionsView .form-card-compact                    { padding: 12px 16px; margin-bottom: 10px; }
     #avepointConnectionsView .form-card-compact .form-card-title   { margin-bottom: 8px; padding-bottom: 6px; }
@@ -1132,7 +1132,7 @@
 
         <div class="form-card form-card-compact">
           <h3 class="form-card-title">Run All Baseline Steps (Entra ID / Intune / Exchange)</h3>
-          <p class="form-help">Runs the full baseline configuration pass (Entra ID user settings, admin consent workflow, Intune MDM scope, dynamic device groups, enrollment restrictions, compliance policies, app protection policies, Conditional Access, EOP/Defender presets, Exchange org settings, LAPS) against the connected tenant. Safe to re-run — every step checks whether it already exists before creating anything. You'll be prompted to sign in twice: once for Microsoft Graph, once for Exchange Online (using the admin UPN below).</p>
+          <p class="form-help">Runs the full baseline configuration pass (Entra ID user settings, admin consent workflow, Intune MDM scope, dynamic device groups, enrollment restrictions, compliance policies, app protection policies, Conditional Access policies including <strong>blocking device code flow</strong> and legacy authentication, EOP/Defender presets, Exchange org settings, LAPS) against the connected tenant. Safe to re-run — every step checks whether it already exists before creating anything. You'll be prompted to sign in twice: once for Microsoft Graph, once for Exchange Online (using the admin UPN below).</p>
 
           <div class="form-group-tight">
             <label class="form-label">Exchange Online Admin UPN</label>
@@ -1146,7 +1146,15 @@
             <small class="form-help">Step 11 — excluded from every Conditional Access policy created, so this account can always sign in if a policy locks everyone else out. Leave blank for none. Step 11 also shows a tick-box list to choose the trusted countries (defaults to CA, US, GB, IE).</small>
           </div>
 
-          <div class="form-actions" style="gap:8px; margin-top:10px; border-top:1px solid #E5E7EB; padding-top:10px;">
+          <div class="form-group-tight" style="border-top:1px solid #E5E7EB; padding-top:10px; margin-top:10px;">
+            <label class="form-checkbox">
+              <input type="checkbox" id="baselineEnableCritical" checked>
+              <span style="font-size:12px;">Auto-enable critical security policies (Block Legacy Auth + Block Device Code Flow)</span>
+            </label>
+            <small class="form-help" style="margin-left:22px;">When checked, the "Block Legacy Authentication" and "Block Device Code Flow" policies are enabled immediately after creation. These are critical security controls that block common attack vectors. Other policies remain disabled for manual testing. <strong>Recommended for production tenants.</strong></small>
+          </div>
+
+          <div class="form-actions" style="gap:8px; margin-top:10px;">
             <button type="button" class="btn btn-success btn-xs" id="baselineRunBtn">
               ▶ Run Baseline Config
             </button>

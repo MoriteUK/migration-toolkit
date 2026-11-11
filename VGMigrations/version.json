@@ -1,7 +1,12 @@
 {
-  "version": "2.9.234",
-  "releaseDate": "2026-11-09",
+  "version": "2.9.235",
+  "releaseDate": "2026-11-11",
   "changelog": [
+    {
+      "version": "2.9.235",
+      "date": "2026-11-11",
+      "changes": "SECURITY: Enhanced Tenant Baseline Config with improved device code flow blocking. Added -EnableCriticalPolicies parameter to auto-enable 'Block Legacy Authentication' and 'Block Device Code Flow' policies immediately after creation (recommended for production). Added GUI checkbox 'Auto-enable critical security policies' (checked by default). Device code flow blocking policy now has enhanced logging explaining it prevents phishing attacks where attackers trick users into entering codes at microsoft.com/devicelogin. Script already included this CA policy since original baseline (Step 11) but it's now more visible with better documentation. Both critical policies are created disabled by default for testing unless -EnableCriticalPolicies is used."
+    },
     {
       "version": "2.9.234",
       "date": "2026-11-09",
