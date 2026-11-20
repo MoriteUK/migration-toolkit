@@ -525,6 +525,18 @@ function Find-FlyDestinationConnection {
 
     $connList = Get-ConnList
 
+    # Debug: show all connections for this prefix with their types
+    $debugConns = $connList | Where-Object { $_.name -and $_.name.ToLower() -like "$prefixLower*" }
+    if ($debugConns) {
+        Write-Host "Found $(@($debugConns).Count) connection(s) for '$prefix':" -ForegroundColor Gray
+        foreach ($dc in $debugConns) {
+            $typeName = switch ($dc.connectionType) {
+                0 {'Exchange'}; 1 {'Teams'}; 2 {'SharePoint'}; 3 {'OneDrive'}; 4 {'Groups'}; 5 {'TeamChat'}; default {"Unknown($($dc.connectionType))"}
+            }
+            Write-Host "  - $($dc.name) [Type: $typeName ($($dc.connectionType))]" -ForegroundColor Gray
+        }
+    }
+
     # Check if any connections exist for this customer prefix
     $existing = $connList | Where-Object { $_.name -and $_.name.ToLower() -like "$prefixLower*" }
 
@@ -543,22 +555,30 @@ function Find-FlyDestinationConnection {
         $_.name -and $_.name.ToLower() -like "$prefixLower*" -and $_.connectionType -eq $expectedType
     } | Select-Object -First 1
 
-    # Fallback: any connection whose name starts with the customer prefix
     if (-not $conn) {
-        $conn = $connList | Where-Object {
+        # Check if connections exist for this prefix at all
+        $anyForPrefix = $connList | Where-Object {
             $_.name -and $_.name.ToLower() -like "$prefixLower*"
-        } | Select-Object -First 1
-    }
+        }
 
-    if (-not $conn) {
         $available = ($connList | Where-Object { $_.name } |
                       Select-Object -ExpandProperty name | Sort-Object -Unique) -join "`n  "
-        $hint = if ($CustomerDomain) {
-            "The connector ran but the connection may not have been created successfully. Check the connector logs."
+
+        if ($anyForPrefix) {
+            # Connections exist but wrong type
+            $found = ($anyForPrefix | Select-Object -ExpandProperty name) -join "`n  "
+            throw ("No $Workload destination connection found for '$prefix'.`n" +
+                   "Found connections for this customer but none match the $Workload workload type:`n  $found`n`n" +
+                   "Expected connection name pattern: '$prefix - $($script:WorkloadToAosLabel[$Workload])'")
         } else {
-            "Add the customer domain in Settings → Customer, then retry."
+            # No connections at all
+            $hint = if ($CustomerDomain) {
+                "The connector ran but the connection may not have been created successfully. Check the connector logs."
+            } else {
+                "Add the customer domain in Settings → Customer, then retry."
+            }
+            throw "No destination connection found for '$prefix' ($Workload).`n$hint`n`nAvailable connections:`n  $available"
         }
-        throw "No destination connection found for '$prefix' ($Workload).`n$hint`n`nAvailable connections:`n  $available"
     }
 
     Write-Host "Using connection: $($conn.name)" -ForegroundColor Green

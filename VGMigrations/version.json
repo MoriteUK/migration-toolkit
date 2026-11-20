@@ -1,7 +1,12 @@
 {
-  "version": "2.9.235",
-  "releaseDate": "2026-11-11",
+  "version": "2.9.236",
+  "releaseDate": "2026-11-20",
   "changelog": [
+    {
+      "version": "2.9.236",
+      "date": "2026-11-20",
+      "changes": "FIX: Removed dangerous connection type fallback in Find-FlyDestinationConnection. The function was using ANY connection with the customer prefix when no connection with the correct workload type was found, causing 'Source and destination platforms are not matched' API errors. Now fails with a specific error message listing the connections found and the expected connection name pattern. Added debug output showing all connections for the customer prefix with their connection types to help diagnose configuration issues."
+    },
     {
       "version": "2.9.235",
       "date": "2026-11-11",
