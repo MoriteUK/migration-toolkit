@@ -537,23 +537,34 @@ function Find-FlyDestinationConnection {
         }
     }
 
-    # Check if any connections exist for this customer prefix
-    $existing = $connList | Where-Object { $_.name -and $_.name.ToLower() -like "$prefixLower*" }
+    # Check if the specific workload connection exists
+    $conn = $connList | Where-Object {
+        $_.name -and $_.name.ToLower() -like "$prefixLower*" -and $_.connectionType -eq $expectedType
+    } | Select-Object -First 1
 
-    if (-not $existing -and $CustomerDomain) {
-        Write-Host "No connections found for '$prefix' — creating via AOS portal..." -ForegroundColor Yellow
+    # If the specific workload is missing and CustomerDomain is provided, auto-create all workloads
+    if (-not $conn -and $CustomerDomain) {
+        $existing = $connList | Where-Object { $_.name -and $_.name.ToLower() -like "$prefixLower*" }
+        if ($existing) {
+            Write-Host "$Workload connection not found — creating missing connections via AOS portal..." -ForegroundColor Yellow
+        } else {
+            Write-Host "No connections found for '$prefix' — creating via AOS portal..." -ForegroundColor Yellow
+        }
+
         $ok = Invoke-FlyConnectorCreate -TenantName $prefix -TenantSearch $CustomerDomain
         if ($ok) {
-            Write-Host "Connections created — re-querying..." -ForegroundColor Cyan
+            Write-Host "Connections ready — re-querying..." -ForegroundColor Cyan
             Start-Sleep -Seconds 3   # brief pause for Fly to index new connections
             $connList = Get-ConnList
         }
     }
 
-    # Best match: name starts with prefix AND correct workload type
-    $conn = $connList | Where-Object {
-        $_.name -and $_.name.ToLower() -like "$prefixLower*" -and $_.connectionType -eq $expectedType
-    } | Select-Object -First 1
+    # Try to find the connection again after auto-create (if it ran)
+    if (-not $conn) {
+        $conn = $connList | Where-Object {
+            $_.name -and $_.name.ToLower() -like "$prefixLower*" -and $_.connectionType -eq $expectedType
+        } | Select-Object -First 1
+    }
 
     if (-not $conn) {
         # Check if connections exist for this prefix at all

@@ -1,7 +1,12 @@
 {
-  "version": "2.9.236",
+  "version": "2.9.237",
   "releaseDate": "2026-11-20",
   "changelog": [
+    {
+      "version": "2.9.237",
+      "date": "2026-11-20",
+      "changes": "ENHANCEMENT: Auto-create missing Fly connections even when some already exist. Find-FlyDestinationConnection now triggers Invoke-FlyConnectorCreate when the specific workload connection is missing, regardless of whether other workload connections exist for that customer. Previously, auto-create only ran when NO connections existed. Now if you have TeamChat but are missing Exchange/OneDrive/etc., it will automatically create the missing ones via the AOS portal. The connector skips connections that already exist and only creates the missing ones."
+    },
     {
       "version": "2.9.236",
       "date": "2026-11-20",
