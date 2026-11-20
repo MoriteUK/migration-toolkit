@@ -1,7 +1,12 @@
 {
-  "version": "2.9.237",
+  "version": "2.9.238",
   "releaseDate": "2026-11-20",
   "changelog": [
+    {
+      "version": "2.9.238",
+      "date": "2026-11-20",
+      "changes": "FIX: fly-connector.js now handles optional form fields correctly. Made 'Microsoft delegated app profile' field optional with isVisible check - this field only exists for some workload types (e.g., Teams Chat) but not others (Exchange, OneDrive, SharePoint, Teams, Groups). Added validation error detection after clicking Save to catch and report AOS portal validation errors like 'Select at least one authentication method' instead of timing out silently. These fixes resolve timeout errors when auto-creating connections for multiple workload types."
+    },
     {
       "version": "2.9.237",
       "date": "2026-11-20",

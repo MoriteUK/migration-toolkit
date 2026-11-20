@@ -570,10 +570,19 @@ async function createOneConnection(page, task) {
   }
 
   // --- Microsoft delegated app profile: pick first available option automatically ---
-  logStep(`${task.id} open Microsoft delegated app profile dropdown`);
-  await openDropdownAfterLabel(page, 'Microsoft delegated app profile');
-  const selectedDelegatedProfile = await pickFirstNonNoneOption(page);
-  logStep(`${task.id} Delegated app profile selected: "${selectedDelegatedProfile}"`);
+  // This field is optional - only present for some workload types (e.g., Teams Chat)
+  const delegatedLabel = page.locator(
+    'xpath=//label[starts-with(normalize-space(.), "Microsoft delegated app profile")]'
+  ).first();
+  let selectedDelegatedProfile = '';
+  if (await delegatedLabel.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    logStep(`${task.id} open Microsoft delegated app profile dropdown`);
+    await openDropdownAfterLabel(page, 'Microsoft delegated app profile');
+    selectedDelegatedProfile = await pickFirstNonNoneOption(page);
+    logStep(`${task.id} Delegated app profile selected: "${selectedDelegatedProfile}"`);
+  } else {
+    logStep(`${task.id} Microsoft delegated app profile field not present - skipping`);
+  }
 
   // --- Placeholder account (Teams Chat Destination): derive from selected app profile ---
   // The email is extracted from the selected profile text, e.g.
@@ -604,6 +613,17 @@ async function createOneConnection(page, task) {
   logStep(`${task.id} click Save`);
   const saveBtn = page.getByRole('button', { name: /^\s*save\s*$/i }).first();
   await saveBtn.click({ timeout: 10_000 });
+
+  // Check for validation errors that prevent save
+  await page.waitForTimeout(1_000); // give validation messages time to appear
+  const validationError = page.locator(
+    'text=/Select at least one authentication|required|invalid|error/i'
+  ).first();
+  if (await validationError.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    const errorText = await validationError.textContent().catch(() => 'validation error');
+    logError(`${task.id} Validation error: ${errorText}`);
+    throw new Error(`Validation failed: ${errorText}`);
+  }
 
   // Robust "form closed" detection:
   //   1. Drawer/dialog disappears (the form container, not just one input)
