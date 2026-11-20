@@ -616,13 +616,26 @@ async function createOneConnection(page, task) {
 
   // Check for validation errors that prevent save
   await page.waitForTimeout(1_000); // give validation messages time to appear
-  const validationError = page.locator(
-    'text=/Select at least one authentication|required|invalid|error/i'
-  ).first();
-  if (await validationError.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    const errorText = await validationError.textContent().catch(() => 'validation error');
-    logError(`${task.id} Validation error: ${errorText}`);
-    throw new Error(`Validation failed: ${errorText}`);
+
+  // Check for specific validation messages (not just any text with "error")
+  const validationSelectors = [
+    'text=/Select at least one authentication/i',
+    'text=/field is required/i',
+    'text=/cannot be empty/i',
+    'text=/must be provided/i',
+    'text=/invalid value/i',
+    '[role="alert"]:visible',
+    '.ms-MessageBar--error:visible',
+    '.fui-MessageBar[role="alert"]:visible'
+  ];
+
+  for (const selector of validationSelectors) {
+    const errorEl = page.locator(selector).first();
+    if (await errorEl.isVisible({ timeout: 500 }).catch(() => false)) {
+      const errorText = await errorEl.textContent().catch(() => 'validation error');
+      logError(`${task.id} Validation error: ${errorText.substring(0, 200)}`);
+      throw new Error(`Validation failed: ${errorText.substring(0, 200)}`);
+    }
   }
 
   // Robust "form closed" detection:

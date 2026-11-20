@@ -1,7 +1,12 @@
 {
-  "version": "2.9.238",
+  "version": "2.9.239",
   "releaseDate": "2026-11-20",
   "changelog": [
+    {
+      "version": "2.9.239",
+      "date": "2026-11-20",
+      "changes": "FIX: Refined validation error detection in fly-connector.js to avoid false positives. The previous broad regex was matching UI text like 'Ignored errors' (a heading/label) and treating it as a validation error. Now uses specific selectors for actual validation messages: 'Select at least one authentication', 'field is required', 'cannot be empty', 'must be provided', 'invalid value', plus role=alert and MessageBar elements. This prevents false failures while still catching real validation errors."
+    },
     {
       "version": "2.9.238",
       "date": "2026-11-20",
