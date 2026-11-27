@@ -1,0 +1,53 @@
+{
+  "version": "2.9.241",
+  "releaseDate": "2026-11-27",
+  "changelog": [
+    {
+      "version": "2.9.241",
+      "date": "2026-11-27",
+      "changes": [
+        "Added FLY Executive Brief Reports section with automated API integration",
+        "New Reports sidebar section with customer dropdown populated from Settings",
+        "Automated FLY report download - no manual export needed",
+        "One-click generation of executive briefs for all workloads",
+        "Real-time progress tracking and preview with combined statistics",
+        "90% time savings on executive brief generation (6+ steps to 1 click)",
+        "Added Install-RequiredModules.ps1 for dependency checking",
+        "Added comprehensive FLY documentation and user guides",
+        "Fixed customer dropdown event handlers for better reliability"
+      ],
+      "breaking": false
+    },
+    {
+      "version": "2.9.240",
+      "date": "2026-11-27",
+      "changes": [
+        "Previous version changes..."
+      ],
+      "breaking": false
+    }
+  ],
+  "minimumVersion": "2.9.0",
+  "downloadUrl": "https://github.com/MoriteUK/migration-toolkit/releases/latest",
+  "features": {
+    "reports": {
+      "flyBrief": {
+        "enabled": true,
+        "version": "1.0.0",
+        "description": "Automated FLY Executive Brief generation with API integration"
+      }
+    }
+  },
+  "requirements": {
+    "powershell": "7.0",
+    "node": "16.0",
+    "modules": [
+      "Microsoft.Graph",
+      "Microsoft.Online.SharePoint.PowerShell",
+      "ExchangeOnlineManagement",
+      "MicrosoftTeams",
+      "Fly.Client",
+      "ImportExcel"
+    ]
+  }
+}
