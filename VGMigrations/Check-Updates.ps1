@@ -109,7 +109,8 @@ try {
     # Get latest version.json from GitHub
     $GitHubVersionUrl = "https://raw.githubusercontent.com/$GitHubRepo/main/VGMigrations/version.json"
     Write-UpdateLog "Contacting GitHub..."
-    $RemoteVersionJson = Invoke-RestMethod -Uri $GitHubVersionUrl -TimeoutSec 20 -ErrorAction Stop
+    $RemoteVersionJsonRaw = Invoke-RestMethod -Uri $GitHubVersionUrl -TimeoutSec 20 -ErrorAction Stop
+    $RemoteVersionJson = $RemoteVersionJsonRaw | ConvertFrom-Json
     $RemoteVersion = $RemoteVersionJson.version
 
     Write-UpdateLog "Remote version: $RemoteVersion"
