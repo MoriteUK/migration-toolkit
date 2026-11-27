@@ -350,6 +350,100 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   })();
 
+  // FLY Brief customer combobox - initialize once
+  (function initFlyBriefCustomerCombobox() {
+    const input  = document.getElementById('flyBriefCustomer');
+    const btn    = document.getElementById('flyBriefCustomerBtn');
+    const panel  = document.getElementById('flyBriefCustomerPanel');
+    const list   = document.getElementById('flyBriefCustomerList');
+    if (!input || !btn || !panel || !list) {
+      console.log('FLY Brief dropdown elements not ready on page load');
+      return;
+    }
+
+    let customerNames = [];
+
+    function selectCustomer(customerName) {
+      input.value = customerName;
+      closePanel();
+    }
+
+    function renderItems(filter) {
+      const q = (filter || '').toLowerCase();
+      const filtered = customerNames.filter(name => !q || name.toLowerCase().includes(q));
+
+      if (filtered.length === 0) {
+        list.innerHTML = '<div class="domain-dropdown-empty">No matches</div>';
+      } else {
+        list.innerHTML = filtered.map(name =>
+          `<div class="domain-dropdown-item" data-customer="${name}">
+            <span class="di-domain">${name}</span>
+          </div>`
+        ).join('');
+        list.querySelectorAll('.domain-dropdown-item').forEach(el => {
+          el.addEventListener('mousedown', e => {
+            e.preventDefault();
+            selectCustomer(el.dataset.customer);
+          });
+        });
+      }
+    }
+
+    function openPanel() {
+      if (customerNames.length === 0) { closePanel(); return; }
+      renderItems(input.value);
+      panel.classList.remove('hidden');
+    }
+
+    function closePanel() {
+      panel.classList.add('hidden');
+    }
+
+    btn.addEventListener('click', () => {
+      console.log('FLY Brief dropdown button clicked, customers:', customerNames.length);
+      if (customerNames.length === 0) { input.focus(); return; }
+      if (panel.classList.contains('hidden')) {
+        input.focus();
+        openPanel();
+      } else {
+        closePanel();
+      }
+    });
+
+    input.addEventListener('input', () => { openPanel(); });
+    input.addEventListener('focus', () => { openPanel(); });
+    input.addEventListener('blur', () => {
+      setTimeout(() => closePanel(), 150);
+    });
+
+    document.addEventListener('click', e => {
+      if (!input.contains(e.target) && !btn.contains(e.target) && !panel.contains(e.target)) {
+        closePanel();
+      }
+    });
+
+    // Export function to populate customer names when view loads
+    window._loadFlyBriefCustomerNames = async function() {
+      try {
+        const cfgResult = await window.electronAPI.getConfig();
+        const customers = cfgResult?.config?.Customers;
+        if (customers && customers.length > 0) {
+          customerNames = [...new Set(customers
+            .filter(c => c.Prefix)
+            .map(c => c.Prefix)
+          )].sort();
+          console.log(`Loaded ${customerNames.length} customers for FLY Brief`);
+        } else {
+          customerNames = [];
+          console.log('No customers found in config');
+        }
+      } catch (err) {
+        console.error('Failed to load FLY Brief customers:', err);
+        customerNames = [];
+      }
+    };
+  })();
+
   // Discovery - Start button
   const startDiscoveryBtn = document.getElementById('startDiscoveryBtn');
   if (startDiscoveryBtn) {
@@ -1983,7 +2077,7 @@ function switchView(viewName) {
       } else if (viewName === 'misc-add-dg-members') {
         loadCustomerDropdownInto('addDgMembersCustomerPrefix', 'Select customer...');
       } else if (viewName === 'reports-fly-brief') {
-        loadFlyBriefCustomers();
+        if (window._loadFlyBriefCustomerNames) window._loadFlyBriefCustomerNames();
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
@@ -4553,104 +4647,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // FLY EXECUTIVE BRIEF
   // ══════════════════════════════════════════════════════════════════════════
 
-  async function loadFlyBriefCustomers() {
-    console.log('Loading FLY Brief customers...');
-    try {
-      const cfgResult = await window.electronAPI.getConfig();
-      const customers = cfgResult?.config?.Customers;
-
-      const input = document.getElementById('flyBriefCustomer');
-      const btn = document.getElementById('flyBriefCustomerBtn');
-      const panel = document.getElementById('flyBriefCustomerPanel');
-      const list = document.getElementById('flyBriefCustomerList');
-
-      if (!input || !btn || !panel || !list) {
-        console.warn('FLY Brief customer dropdown elements not found');
-        return;
-      }
-
-      let customerNames = [];
-      if (customers && customers.length > 0) {
-        // Extract unique customer names (Prefix field)
-        customerNames = [...new Set(customers
-          .filter(c => c.Prefix)
-          .map(c => c.Prefix)
-        )].sort();
-      }
-
-      function selectCustomer(customerName) {
-        input.value = customerName;
-        panel.classList.add('hidden');
-      }
-
-      function renderCustomers(filter) {
-        const q = (filter || '').toLowerCase();
-        const filtered = customerNames.filter(name => !q || name.toLowerCase().includes(q));
-
-        if (filtered.length === 0) {
-          list.innerHTML = '<div class="domain-dropdown-empty">No matches</div>';
-        } else {
-          list.innerHTML = filtered.map(name =>
-            `<div class="domain-dropdown-item" data-customer="${name}">
-              <span class="di-domain">${name}</span>
-            </div>`
-          ).join('');
-
-          list.querySelectorAll('.domain-dropdown-item').forEach(el => {
-            el.onclick = (e) => {
-              console.log('Customer selected:', el.dataset.customer);
-              e.preventDefault();
-              e.stopPropagation();
-              selectCustomer(el.dataset.customer);
-            };
-          });
-        }
-      }
-
-      // Initial render with all customers
-      renderCustomers('');
-
-      // Filter as user types
-      input.addEventListener('input', () => {
-        renderCustomers(input.value);
-        if (!panel.classList.contains('hidden')) {
-          // Keep panel open while typing
-        }
-      });
-
-      // Toggle dropdown on button click
-      btn.onclick = (e) => {
-        console.log('FLY Brief dropdown button clicked');
-        e.preventDefault();
-        e.stopPropagation();
-        const isHidden = panel.classList.contains('hidden');
-        if (isHidden) {
-          panel.classList.remove('hidden');
-          renderCustomers(input.value);
-        } else {
-          panel.classList.add('hidden');
-        }
-        console.log('Panel is now:', panel.classList.contains('hidden') ? 'hidden' : 'visible');
-      };
-
-      // Open dropdown when clicking input
-      input.addEventListener('focus', () => {
-        panel.classList.remove('hidden');
-        renderCustomers(input.value);
-      });
-
-      // Close dropdown when clicking outside
-      document.addEventListener('click', (e) => {
-        if (!input.contains(e.target) && !btn.contains(e.target) && !panel.contains(e.target)) {
-          panel.classList.add('hidden');
-        }
-      });
-
-      console.log(`Loaded ${customerNames.length} customers for FLY Brief`);
-    } catch (err) {
-      console.error('Failed to load FLY Brief customers:', err);
-    }
-  }
 
   // Email checkbox toggle
   const flyBriefSendEmailCheckbox = document.getElementById('flyBriefSendEmail');
