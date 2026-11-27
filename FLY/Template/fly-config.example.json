@@ -1,0 +1,21 @@
+{
+  "flyUrl": "https://graph-uk.avepointonlineservices.com/fly",
+  "clientId": "<AvePoint Online Services app registration client ID>",
+  "certificateThumbprint": "<thumbprint of the certificate in CurrentUser\\My or LocalMachine\\My>",
+  "outputRoot": "C:\\Temp\\Scripts\\Avepoint\\FLY\\Reports",
+  "timeZoneOffsetMinutes": 0,
+  "include": ["ErrorObjects", "WarningObjects", "SuccessfulObjects", "SkippedObjects", "NotFoundObjects", "UnsupportedObjects"],
+  "discover": {
+    "enabled": true,
+    "workloads": ["Exchange", "OneDrive", "SharePoint", "Teams", "M365Group", "TeamChat"],
+    "exclude": ["VolarisStrategy*"]
+  },
+  "projects": [
+    {
+      "project": "AEP - OneDrive",
+      "client": "AEP Italia",
+      "workload": "OneDrive",
+      "internalDomains": ["aep-italia.it", "easyticketing.it"]
+    }
+  ]
+}

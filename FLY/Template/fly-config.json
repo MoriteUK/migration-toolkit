@@ -1,0 +1,22 @@
+{
+  "flyUrl": "https://<your-data-centre-public-api-host>/fly",
+  "clientId": "9ebef03c-abfa-4e5e-a5a5-8b1a8cea45d6",
+  "certificateThumbprint": "<thumbprint of the .pfx installed in CurrentUser\\My or LocalMachine\\My>",
+  "outputRoot": "C:\\Temp\\Scripts\\Avepoint\\FLY\\Reports",
+  "timeZoneOffsetMinutes": 0,
+  "include": ["ErrorObjects", "WarningObjects", "SuccessfulObjects", "SkippedObjects", "NotFoundObjects", "UnsupportedObjects"],
+  "projects": [
+    {
+      "project": "<exact FLY project name>",
+      "client": "AEP Italia",
+      "workload": "OneDrive",
+      "internalDomains": ["aep-italia.it", "easyticketing.it"]
+    },
+    {
+      "project": "<another FLY project name>",
+      "client": "<company name>",
+      "workload": "SharePoint",
+      "internalDomains": []
+    }
+  ]
+}

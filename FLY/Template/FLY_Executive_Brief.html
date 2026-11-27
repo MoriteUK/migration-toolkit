@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Migration Executive Brief</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one A4 sheet. Verdict band, four figures, two columns (delivery / security), decisions strip */
+:root{
+  --bg:#eef1f3; --paper:#ffffff; --fg:#16202a; --muted:#5b6771; --line:#dfe4e8; --accent:#0f6b78;
+  --good:#1f7a4d; --good-bg:#e2f3ea; --warn:#9a6200; --warn-bg:#fbf0d9; --bad:#b3261e; --bad-bg:#fbe4e2;
+  --display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+@page{size:A4;margin:0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 var(--body);padding:24px 16px}
+.sheet{width:210mm;max-width:100%;margin:0 auto;background:var(--paper);padding:13mm 14mm;display:flex;flex-direction:column;gap:14px;box-shadow:0 1px 3px rgb(0 0 0 / .08)}
+h1,h2{font-family:var(--display);margin:0;line-height:1.15;text-wrap:balance}
+h1{font-size:1.75rem}
+h2{font-size:.95rem;letter-spacing:.04em;text-transform:uppercase;color:var(--accent)}
+p{margin:0}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;border-bottom:2px solid var(--fg);padding-bottom:8px}
+.eyebrow{font:500 .7rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.meta{font-size:.8rem;color:var(--muted);text-align:right}
+.verdict{font-size:1.02rem;line-height:1.5}
+.verdict strong{font-weight:600}
+.figs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.fig{border-top:3px solid var(--line);padding-top:6px;display:flex;flex-direction:column;gap:1px}
+.fig b{font:700 1.55rem var(--display);font-variant-numeric:tabular-nums}
+.fig span{font-size:.78rem;color:var(--muted);line-height:1.35}
+.fig.g{border-color:var(--good)} .fig.a{border-color:var(--warn)} .fig.r{border-color:var(--bad)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.col{display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:5.2rem minmax(0,1fr);gap:8px;align-items:start;padding-block:6px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.pill{display:inline-flex;align-items:center;gap:5px;font:500 .64rem var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:2px 6px;border-radius:3px;width:max-content}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.g{color:var(--good);background:var(--good-bg)} .pill.a{color:var(--warn);background:var(--warn-bg)} .pill.r{color:var(--bad);background:var(--bad-bg)}
+.row p{font-size:.86rem}
+.row p b,.decisions li b{font-weight:600}
+.decisions{background:var(--bg);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.decisions ol{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:6px;font-size:.88rem}
+.foot{font-size:.7rem;color:var(--muted);border-top:1px solid var(--line);padding-top:6px}
+[contenteditable]:focus{outline:2px dashed var(--accent);outline-offset:2px}
+
+/* control panel (screen only) */
+.panel{max-width:210mm;margin:0 auto 20px;background:var(--paper);padding:18px 20px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--line)}
+.panel h1{font-size:1.3rem}
+.panel p{color:var(--muted);max-width:70ch}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+label{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted)}
+input[type=text]{font:inherit;color:var(--fg);padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.filebtn{font:600 .85rem var(--body);padding:8px 14px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,.filebtn:focus-within{outline:2px solid var(--fg);outline-offset:2px}
+.filebtn input{position:absolute;opacity:0;width:1px;height:1px}
+.progress{font:500 .8rem var(--mono);color:var(--muted);min-height:1.2em}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.err{color:var(--bad);font-size:.85rem}
+@media (max-width:640px){.figs{grid-template-columns:repeat(2,minmax(0,1fr))}.cols{grid-template-columns:1fr}.sheet{padding:18px}.meta{text-align:left}}
+@media print{body{background:#fff;padding:0}.panel{display:none!important}.sheet{box-shadow:none;max-width:none;width:210mm;min-height:297mm}[contenteditable]{outline:none}}
+</style>
+</head>
+<body>
+
+<div class="panel" id="panel">
+  <h1>Migration Executive Brief</h1>
+  <p>Select the folder of an AvePoint FLY report export (or its CSV files). The brief needs the <b>Mappings</b> summary and, for the security section, the <b>Site security</b> and <b>SharedLink</b> reports. The large “Site objects” files are not needed and are skipped. Everything is read on this computer; nothing is uploaded.</p>
+  <div class="fields">
+    <label for="client">Client / migration name<input type="text" id="client" placeholder="e.g. AEP Italia"></label>
+    <label for="internal">Internal email domains (comma separated)<input type="text" id="internal" placeholder="detected from the mappings"></label>
+  </div>
+  <div class="btns">
+    <label class="filebtn">Choose export folder<input type="file" id="folder" webkitdirectory></label>
+    <label class="filebtn" style="background:transparent;color:var(--accent)">Choose CSV files<input type="file" id="files" multiple accept=".csv"></label>
+    <button id="rebuild" class="ghost" disabled>Rebuild with new settings</button>
+    <button id="print" disabled>Save as PDF</button>
+  </div>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="progress" id="progress"></div>
+  <div class="err" id="err"></div>
+  <p style="font-size:.8rem">After the brief appears you can click any text on it to edit the wording. “Save as PDF” opens the print dialog: choose <i>Save as PDF</i>, paper A4.</p>
+</div>
+
+<div class="sheet" id="sheet" hidden></div>
+
+<script id="core">
+/* ===== CORE: analysis + rendering. Shared with fly-brief.js (Node) — keep browser/Node neutral. ===== */
+var BriefCore = (function () {
+  var CFG = {
+    contentGood: 99.5, contentWarn: 97,       // % of objects present
+    permGood: 95, permWarn: 70,               // % of permission entries restored
+    anyoneRed: 1000,                          // anonymous edit links above this = High
+    staleDays: 14,                            // days with no jobs before "Stalled"
+    personal: /^(gmail|googlemail|hotmail|outlook|live|yahoo|icloud|me|aol|libero|tiscali|alice|virgilio|gmx|web|proton|protonmail)\./i
+  };
+
+  // streaming CSV reader: source is a ReadableStream of bytes; onRow(obj) per data row
+  async function readCsv(stream, onRow, onBytes) {
+    var reader = stream.getReader(), dec = new TextDecoder('utf-8');
+    var field = '', row = [], inQ = false, prevQ = false, header = null, first = true;
+    function emit() {
+      if (!header) { header = row; return; }
+      if (row.length < 2) return;
+      var o = {}; for (var k = 0; k < header.length; k++) o[header[k]] = row[k] === undefined ? '' : row[k];
+      onRow(o);
+    }
+    for (;;) {
+      var r = await reader.read();
+      var chunk = r.done ? dec.decode() : dec.decode(r.value, { stream: true });
+      if (r.value && onBytes) onBytes(r.value.length);
+      if (first && chunk.length) { if (chunk.charCodeAt(0) === 0xfeff) chunk = chunk.slice(1); first = false; }
+      for (var i = 0; i < chunk.length; i++) {
+        var c = chunk[i];
+        if (inQ) { if (c === '"') { inQ = false; prevQ = true; } else field += c; continue; }
+        if (c === '"') { if (prevQ) field += '"'; inQ = true; prevQ = false; continue; }
+        prevQ = false;
+        if (c === ',') { row.push(field); field = ''; }
+        else if (c === '\n') { row.push(field.charAt(field.length - 1) === '\r' ? field.slice(0, -1) : field); field = ''; emit(); row = []; }
+        else field += c;
+      }
+      if (r.done) break;
+    }
+    if (field || row.length) { row.push(field); emit(); }
+  }
+
+  function pick(files) {
+    var f = { mappings: null, security: null, links: null, skipped: [] };
+    files.forEach(function (x) {
+      var n = x.name;
+      if (!/\.csv$/i.test(n)) return;
+      if (/Mappings\.csv$/i.test(n) || (!f.mappings && /SummaryReport.*\.csv$/i.test(n))) f.mappings = x;
+      else if (/Site security\.csv$|_security\.csv$/i.test(n)) f.security = x;
+      else if (/SharedLink/i.test(n)) f.links = x;
+      else f.skipped.push(n);
+    });
+    return f;
+  }
+  var num = function (s) { var v = parseFloat(String(s || '').replace(/[<\s,]/g, '')); return isNaN(v) ? 0 : v; };
+  var dom = function (e) { e = String(e || '').toLowerCase(); var i = e.lastIndexOf('@'); return i < 0 ? '' : e.slice(i + 1); };
+  var day = function (s) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? m[1] + '-' + m[2] + '-' + m[3] : ''; };
+  var owner = function (u) { var m = /\/(personal|sites|teams)\/([^/]+)/i.exec(u || ''); return m ? m[2].toLowerCase() : '(other)'; };
+
+  // FLY summary reports differ slightly per workload, so find each column by pattern rather than exact name.
+  function resolveCols(headers, fileName) {
+    var find = function (res) { for (var i = 0; i < res.length; i++) for (var j = 0; j < headers.length; j++) if (res[i].test(headers[j])) return headers[j]; return null; };
+    var K = {
+      status: find([/^Last job status$/i, /job status/i, /^status$/i]),
+      ok: find([/^Successful (objects|items)$/i, /^Successful/i, /succe/i]),
+      exc: find([/with exceptions$/i, /exception/i, /warning/i]),
+      err: find([/^Error (objects|items)$/i, /^(Error|Failed) /i, /^errors?$/i]),
+      skip: find([/^Skipped/i]),
+      gb: find([/size.*\(GB\)/i, /size/i]),
+      start: find([/job start time/i, /start time/i]),
+      end: find([/job end time/i, /end time/i]),
+      src: find([/^Source (URL|mailbox|email|address|user|group|team|chat|object)?/i, /^Source/i]),
+      dst: find([/^Destination (URL|mailbox|email|address|user|group|team|chat|object)?/i, /^Destination/i])
+    };
+    var missing = ['status', 'ok'].filter(function (k) { return !K[k]; });
+    if (missing.length) throw new Error('“' + fileName + '” has columns this template does not recognise (could not find: ' + missing.join(', ') + '). Columns found: ' + headers.join(' | '));
+    return K;
+  }
+
+  // files: array of {name, size, stream()} ; returns plain-JSON summary
+  async function analyse(files, opts) {
+    opts = opts || {};
+    var prog = opts.progress || function () {};
+    var f = pick(files);
+    if (!f.mappings) throw new Error('No “…Mappings.csv” summary report found in the selection.');
+    var total = [f.mappings, f.security, f.links].filter(Boolean).reduce(function (a, x) { return a + (x.size || 0); }, 0) || 1, done = 0;
+    var tick = function (n) { done += n; prog(done / total); };
+    var S = { workload: (/^(\w+?)(Summary|Migration)Report/i.exec(f.mappings.name) || [])[1] || '', exportDate: '',
+      m: { total: 0, finished: 0, exceptions: 0, failed: 0, gb: 0, ok: 0, exc: 0, err: 0, skip: 0, topErr: 0, failedWithData: 0, firstStart: '', lastEnd: '' },
+      sec: null, links: null, domains: [], files: { mappings: f.mappings.name, security: f.security && f.security.name, links: f.links && f.links.name, skipped: f.skipped.length } };
+    var ts = /_(\d{4})(\d{2})(\d{2})\d{6,}/.exec(f.mappings.name); if (ts) S.exportDate = ts[1] + '-' + ts[2] + '-' + ts[3];
+    var doms = {}, K = null;
+    await readCsv(f.mappings.stream(), function (r) {
+      if (!K) K = resolveCols(Object.keys(r), f.mappings.name);
+      var M = S.m, st = r[K.status] || '';
+      M.total++;
+      if (/^Finished$|^Successful$|^Completed$/i.test(st)) M.finished++; else if (/xception|warning/i.test(st)) M.exceptions++; else if (/fail|error/i.test(st)) M.failed++;
+      var ok = num(r[K.ok]), ex = K.exc ? num(r[K.exc]) : 0, er = K.err ? num(r[K.err]) : 0, gb = K.gb ? num(r[K.gb]) : 0;
+      M.gb += gb; M.ok += ok; M.exc += ex; M.err += er; M.skip += K.skip ? num(r[K.skip]) : 0;
+      if (er > M.topErr) M.topErr = er;
+      if (/fail|error/i.test(st) && (ok > 0 || gb > 0)) M.failedWithData++;
+      var s = day(r[K.start]), e = day(r[K.end]);
+      if (s && (!M.firstStart || s < M.firstStart)) M.firstStart = s;
+      if (e && e > M.lastEnd) M.lastEnd = e;
+      [dom(r[K.src]), dom(r[K.dst])].forEach(function (d) { if (d) doms[d] = 1; });
+    }, tick);
+    S.columns = K;
+    S.domains = Object.keys(doms).filter(function (d) { return !/onmicrosoft\.com$/.test(d); }).sort();
+
+    if (f.security) {
+      var C = S.sec = { total: 0, ok: 0, skipped: 0, blockedEntries: 0, blocked: 0, guestFail: 0, unmapped: 0 }, blocked = {};
+      await readCsv(f.security.stream(), function (r) {
+        C.total++; var st = r['Status'], code = r['Error code'] || '';
+        if (st === 'Successful') C.ok++; else if (st === 'Skipped') C.skipped++;
+        if (/SignInBlocked/i.test(code)) { C.blockedEntries++; var m = /destination user "+([^"]+)"+/i.exec(r['Comment'] || ''); blocked[(m ? m[1] : r['Destination login name'] || r['Source login name']).toLowerCase()] = 1; }
+        else if (/UserGroupEnsure/i.test(code) && /#ext#/i.test(r['Source login name'] || '')) C.guestFail++;
+        else if (/UserNotFound/i.test(code)) C.unmapped++;
+      }, tick);
+      C.blocked = Object.keys(blocked).length;
+    }
+    if (f.links) {
+      var L = S.links = { total: 0, ok: 0, incomplete: 0, anyone: 0, anyoneEdit: 0, owners: 0, ownersAnyone: 0, recipients: {} }, own = {};
+      await readCsv(f.links.stream(), function (r) {
+        L.total++; var st = r['Status'], t = r['Shared link type'] || '', o = owner(r['Source URL']);
+        if (st === 'Successful') L.ok++; else if (/xception|error|fail/i.test(st)) L.incomplete++;
+        own[o] = own[o] || 0;
+        if (/anyone/i.test(t)) { L.anyone++; own[o]++; if (/edit/i.test(r['Shared link permission'] || '')) L.anyoneEdit++; }
+        var d = dom(r['Shared with source user/group email']); if (d) L.recipients[d] = (L.recipients[d] || 0) + 1;
+      }, tick);
+      L.owners = Object.keys(own).length; L.ownersAnyone = Object.keys(own).filter(function (k) { return own[k] > 0; }).length;
+    }
+    prog(1);
+    return S;
+  }
+
+  // ---------- rendering ----------
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var n0 = function (v) { return Math.round(v).toLocaleString('en-GB'); };
+  var approx = function (v) { return v >= 1000 ? (v >= 10000 ? n0(Math.round(v / 1000) * 1000) : n0(Math.round(v / 100) * 100)) : n0(v); };
+  var pct = function (a, b, d) { return b ? (100 * a / b) : 100; };
+  var fmtPct = function (v) { return (v >= 99.5 && v < 100 ? (Math.floor(v * 10) / 10).toFixed(1) : v >= 10 ? Math.floor(v).toString() : v.toFixed(1)) + '%'; };
+  var dt = function (s) { if (!s) return ''; var d = new Date(s + 'T00:00:00Z'); return d.getUTCDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()] + ' ' + d.getUTCFullYear(); };
+  var days = function (a, b) { return a && b ? Math.round((new Date(b) - new Date(a)) / 864e5) : 0; };
+  var pl = function (n, one, many) { return n === 1 ? one : (many || one + 's'); };
+  var tb = function (gb) { return gb >= 1000 ? (gb / 1000).toFixed(1) + ' TB' : gb.toFixed(gb >= 10 ? 0 : 1) + ' GB'; };
+  var words = ['no','one','two','three','four','five','six','seven','eight','nine','ten'];
+  var w = function (n) { return n <= 10 ? words[n] : n0(n); };
+  var cap = function (s) { return s.charAt(0).toUpperCase() + s.slice(1); };
+  var pill = function (cls, t) { return '<span class="pill ' + cls + '">' + t + '</span>'; };
+  var row = function (cls, t, title, body) { return '<div class="row">' + pill(cls, t) + '<p><b>' + title + '</b> ' + body + '</p></div>'; };
+
+  // Wording per FLY workload
+  var NODATA_ACCT = ['is a service or duplicate account with no data', 'are service or duplicate accounts with no data'];
+  var NODATA = ['has no data to migrate', 'have no data to migrate'];
+  var WL = {
+    OneDrive:   { title: 'OneDrive', items: 'files and folders', unit: 'user', units: 'users', acct: 'account', accts: 'accounts', landed: 'Users\' files are', dataPhrase: 'business data', noData: NODATA_ACCT, secHint: 'file permissions and sharing links' },
+    SharePoint: { title: 'SharePoint', items: 'files, lists and pages', unit: 'site', units: 'sites', acct: 'site', accts: 'sites', landed: 'Site content is', dataPhrase: 'business data', noData: NODATA, secHint: 'site permissions and sharing links' },
+    Exchange:   { title: 'Exchange', items: 'mail items', unit: 'mailbox', units: 'mailboxes', acct: 'mailbox', accts: 'mailboxes', landed: 'Mailbox content is', dataPhrase: 'mail', noData: NODATA, secHint: 'mailbox delegation, send-as rights and forwarding rules' },
+    Teams:      { title: 'Teams', items: 'channels, posts and files', unit: 'team', units: 'teams', acct: 'team', accts: 'teams', landed: 'Team content is', dataPhrase: 'content', noData: NODATA, secHint: 'team owners and guest membership' },
+    M365Group:  { title: 'Microsoft 365 Groups', items: 'group items', unit: 'group', units: 'groups', acct: 'group', accts: 'groups', landed: 'Group content is', dataPhrase: 'content', noData: NODATA, secHint: 'group owners and guest membership' },
+    TeamChat:   { title: 'Teams Chat', items: 'chat messages', unit: 'chat', units: 'chats', acct: 'chat', accts: 'chats', landed: 'Chat history is', dataPhrase: 'messages', noData: NODATA, secHint: 'external chat access' },
+    Generic:    { title: 'Microsoft 365', items: 'items', unit: 'object', units: 'objects', acct: 'mapping', accts: 'mappings', landed: 'Migrated content is', dataPhrase: 'data', noData: NODATA, secHint: 'permissions' }
+  };
+  function wlKey(s) {
+    s = String(s || '');
+    if (/chat/i.test(s)) return 'TeamChat';
+    if (/group/i.test(s)) return 'M365Group';
+    if (/teams?/i.test(s)) return 'Teams';
+    if (/exchange|mail/i.test(s)) return 'Exchange';
+    if (/sharepoint|spo/i.test(s)) return 'SharePoint';
+    if (/onedrive|od4b/i.test(s)) return 'OneDrive';
+    return 'Generic';
+  }
+
+  function render(S, opts) {
+    opts = opts || {};
+    var M = S.m, C = S.sec, L = S.links;
+    var internal = (opts.internal && opts.internal.length ? opts.internal : S.domains).map(function (d) { return d.trim().toLowerCase(); }).filter(Boolean);
+    var isInternal = function (d) { return /onmicrosoft\.com$/.test(d) || internal.some(function (x) { return d === x || d.endsWith('.' + x); }); };
+    var client = opts.client || 'Tenant';
+    var T = WL[wlKey(opts.workload || S.workload)];
+    var workload = T.title;
+    var objs = M.ok + M.exc + M.err;
+    var contentPct = pct(M.ok + M.exc, objs), errPct = pct(M.err, objs);
+    var permPct = C ? pct(C.ok, C.total) : null;
+    var permFail = C ? C.total - C.ok - C.skipped : 0;
+    var anyoneEdit = L ? L.anyoneEdit : 0;
+    var ext = {}; if (L) Object.keys(L.recipients).forEach(function (d) { if (!isInternal(d)) ext[d] = L.recipients[d]; });
+    var extD = Object.keys(ext).sort(function (a, b) { return ext[b] - ext[a]; });
+    var personal = extD.filter(function (d) { return CFG.personal.test(d); });
+    var business = extD.filter(function (d) { return !CFG.personal.test(d); });
+    var gap = days(M.lastEnd, S.exportDate);
+    var openIssues = M.failed > 0 || (permPct !== null && permPct < CFG.permGood) || M.err > 0;
+    var noData = M.failed - M.failedWithData;
+
+    var contentCls = contentPct >= CFG.contentGood ? 'g' : contentPct >= CFG.contentWarn ? 'a' : 'r';
+    var permCls = permPct === null ? 'a' : permPct >= CFG.permGood ? 'g' : permPct >= CFG.permWarn ? 'a' : 'r';
+    var anyCls = anyoneEdit === 0 ? 'g' : anyoneEdit > CFG.anyoneRed ? 'r' : 'a';
+    var accCls = M.failed === 0 ? 'g' : M.failedWithData === 0 ? 'a' : (M.failed / M.total > 0.1 ? 'r' : 'a');
+
+    // decisions
+    var dec = [];
+    if (anyoneEdit > 0) dec.push(['Sharing policy.', 'Approve removing or expiring anonymous edit links and making new links view-only by default in the new tenant.', 'CISO']);
+    if (C && (C.blocked > 0 || C.guestFail > 0 || C.unmapped > 0)) dec.push(['Leavers and guests.', (C.blocked ? 'Confirm whether the ' + n0(C.blocked) + ' disabled ' + pl(C.blocked, 'account is a leaver', 'accounts are leavers') + ' whose access should go to managers' : 'Confirm how unmatched accounts should be handled') + (C.guestFail || C.unmapped ? ', and whether external guests are re-invited or dropped.' : '.'), 'CIO / business']);
+    dec.push(['Close-out.', (permPct !== null && permPct < CFG.permGood ? 'Authorise the permissions re-run and completion of the remaining ' + T.accts : 'Authorise completion of the remaining items') + ', with sign-off once the open items are at zero.', 'migration lead']);
+    var nDec = dec.length;
+
+    // verdict
+    var secDone = !!(C || L);
+    var v1 = contentPct >= CFG.contentGood ? (openIssues ? '<strong>The data has moved safely; ' + (secDone ? 'access and security clean-up is not finished.' : 'some items still need attention.') + '</strong> ' + T.landed + ' in the new tenant with almost no loss.'
+                                                         : '<strong>The migration is complete.</strong> ' + T.landed + ' in the new tenant with almost no loss.')
+                                           : '<strong>The data migration is not complete.</strong> ' + fmtPct(100 - contentPct) + ' of items have not reached the new tenant.';
+    var v2 = permPct !== null && permPct < CFG.permGood ? ' ' + (permPct >= 70 ? 'A quarter' : permPct >= 45 ? 'Around half' : 'Most') + ' of file permissions did not carry over, so some people will be unable to open files shared with them.' : '';
+    if (permPct !== null && permPct < CFG.permGood && permPct >= 70) v2 = ' About ' + Math.round(100 - permPct) + '% of file permissions did not carry over, so some people will be unable to open files shared with them.';
+    var v3 = anyoneEdit > 0 ? ' The migration also carried an existing exposure into the new tenant: ' + (anyoneEdit >= 10000 ? 'tens of thousands of' : n0(anyoneEdit)) + ' sharing links let anyone who holds them edit the file.' : '';
+    var v4 = ' ' + cap(w(nDec)) + ' ' + pl(nDec, 'decision is', 'decisions are') + ' needed to close the project.';
+
+    var h = [];
+    h.push('<div class="top"><div><div class="eyebrow">Executive brief · M365 tenant migration</div><h1>' + esc(client) + ' ' + esc(workload) + ' Migration</h1></div>' +
+      '<div class="meta">Final migration jobs ' + dt(M.firstStart) + ' – ' + dt(M.lastEnd) + '<br>Status as at ' + dt(S.exportDate || M.lastEnd) + '</div></div>');
+    h.push('<p class="verdict">' + v1 + v2 + v3 + v4 + '</p>');
+    var accTile = '<div class="fig ' + accCls + '"><b>' + n0(M.failed) + '</b><span>of ' + n0(M.total) + ' ' + T.accts + ' not complete' + (M.failed ? '. ' + (M.failedWithData ? 'Only ' + w(M.failedWithData) + ' hold' + (M.failedWithData === 1 ? 's' : '') + ' ' + T.dataPhrase : (M.failed === 1 ? 'It has no' : 'None of them have') + ' data to migrate') : '') + '</span></div>';
+    var middle;
+    if (secDone) {
+      middle = (C ? '<div class="fig ' + permCls + '"><b>' + Math.floor(permPct) + '%</b><span>of file permissions restored' + (permPct < 100 ? '. The rest are tied to disabled, guest or unmatched accounts' : '') + '</span></div>'
+                  : '<div class="fig a"><b>n/a</b><span>Permissions report not supplied</span></div>') +
+               (L ? '<div class="fig ' + anyCls + '"><b>' + n0(anyoneEdit) + '</b><span>sharing links let anyone edit the file, with no sign-in</span></div>'
+                  : '<div class="fig a"><b>n/a</b><span>Sharing-link report not supplied</span></div>');
+    } else {
+      var clean = M.finished, excCls = M.exc ? 'a' : 'g';
+      middle = '<div class="fig ' + (clean === M.total ? 'g' : 'a') + '"><b>' + n0(clean) + '</b><span>of ' + n0(M.total) + ' ' + T.accts + ' finished with no issues</span></div>' +
+               '<div class="fig ' + excCls + '"><b>' + n0(M.exc) + '</b><span>' + T.items + ' migrated with warnings that need checking</span></div>';
+    }
+    h.push('<div class="figs">' +
+      '<div class="fig ' + contentCls + '"><b>' + fmtPct(contentPct) + '</b><span>of ' + (objs >= 1e6 ? (objs / 1e6).toFixed(1) + ' million' : n0(objs)) + ' ' + T.items + ' migrated (' + (M.gb ? tb(M.gb) + ', ' : '') + n0(M.total) + ' ' + pl(M.total, T.unit, T.units) + ')</span></div>' +
+      middle + accTile + '</div>');
+
+    // delivery
+    var d = [];
+    var conc = M.err && M.topErr / M.err > 0.5 ? ', and most of those belong to one ' + T.acct + ' whose items need a decision' : '';
+    d.push(row(contentCls === 'g' ? 'g' : contentCls, contentCls === 'g' ? 'On track' : contentCls === 'a' ? 'At risk' : 'Off track', contentCls === 'g' ? 'Content complete.' : 'Content incomplete.',
+      'Only ' + (errPct < 0.1 ? errPct.toFixed(2) : errPct.toFixed(1)) + '% of items failed' + conc + '.' + (contentCls === 'g' ? ' No data loss is expected.' : ' Failed items must be re-run before sign-off.')));
+    if (C || L) {
+      var ux = permFail + (L ? L.incomplete : 0);
+      d.push(row(ux > 100 ? 'a' : 'g', ux > 100 ? 'At risk' : 'On track', 'User experience.',
+        ux > 100 ? 'Around ' + approx(permFail) + ' permission entries' + (L ? ' and ' + approx(L.incomplete) + ' sharing links' : '') + ' are incomplete. Expect “I can\'t open this file” calls until a permissions re-run is done.'
+                 : 'Permissions and sharing links carried over with very few issues.'));
+    }
+    if (M.failed) {
+      d.push(row('a', 'At risk', cap(w(M.failed)) + ' ' + pl(M.failed, T.acct, T.accts) + ' open.',
+        (M.failedWithData ? cap(w(M.failedWithData)) + ' ' + pl(M.failedWithData, T.acct + ' is', T.accts + ' are') + ' only partly migrated and can be re-run.' : '') +
+        (noData ? ' ' + (M.failedWithData ? 'The other ' + w(noData) + ' ' + pl(noData, T.noData[0], T.noData[1]) : (noData === 1 ? 'It ' + T.noData[0] : 'None of them have data to migrate')) + '.' : '')));
+    } else d.push(row('g', 'On track', 'All ' + T.accts + ' complete.', 'Every mapped ' + T.acct + ' finished its last job.'));
+    if (openIssues && gap > CFG.staleDays) d.push(row('r', 'Stalled', 'No remediation since ' + dt(M.lastEnd).replace(/ \d{4}$/, '') + '.', 'The issues are known and low effort to fix, but they have been open for ' + (gap >= 14 ? Math.round(gap / 7) + ' weeks' : gap + ' days') + '.'));
+    else d.push(row('g', 'Active', 'Recent activity.', 'Last migration job finished ' + dt(M.lastEnd) + '.'));
+
+    // security
+    var s = [];
+    if (L) {
+      var share = pct(L.anyone, L.total), allOwners = L.ownersAnyone === L.owners;
+      s.push(row(anyCls, anyCls === 'r' ? 'High' : anyCls === 'a' ? 'Medium' : 'Low', 'Anonymous edit links.',
+        anyoneEdit ? (allOwners ? 'Every user with shared files has at least one' : n0(L.ownersAnyone) + ' of ' + n0(L.owners) + ' users with shared files have at least one') + ', and ' + Math.round(share) + '% of all links are open to anyone. These links are now live in the new tenant.'
+                   : 'None found in the migrated content.'));
+      s.push(row(extD.length > 10 || personal.length ? 'a' : 'g', extD.length > 10 || personal.length ? 'Medium' : 'Low', 'External sharing.',
+        extD.length ? 'Files are shared by name with ' + n0(business.length) + ' outside ' + pl(business.length, 'organisation') + (business.length ? ' (largest: ' + business.slice(0, 3).map(esc).join(', ') + ')' : '') + (personal.length ? ', plus personal email accounts (' + personal.slice(0, 3).map(esc).join(', ') + ')' : '') + '.'
+                    : 'No named sharing with external organisations was found.'));
+    }
+    if (C) {
+      var idBad = C.blocked + C.guestFail;
+      s.push(row(idBad ? 'a' : 'g', idBad ? 'Medium' : 'Low', 'Identity hygiene.',
+        idBad ? (C.blocked ? n0(C.blocked) + ' disabled ' + pl(C.blocked, 'account still holds', 'accounts still hold') + ' file access' : 'No disabled accounts hold access') + (C.guestFail ? ', and ' + n0(C.guestFail) + ' guest ' + pl(C.guestFail, 'permission has', 'permissions have') + ' no matching account in the new tenant.' : '.')
+              : 'No disabled or orphaned guest accounts were found in the permission data.'));
+      s.push(row('g', 'Low', 'Migration integrity.', 'Permissions failed closed: nothing became more open than it was at source.'));
+    }
+    if (!s.length) {
+      s.push(row('a', 'Check', 'Access review.', 'FLY\'s ' + esc(T.title) + ' report does not include ' + T.secHint + '. Review these separately before sign-off.'));
+      s.push(row(contentCls === 'g' ? 'g' : 'a', contentCls === 'g' ? 'Low' : 'Medium', 'Data integrity.', contentCls === 'g' ? 'Content arrived complete, so there is no data-loss exposure from this workload.' : 'Some content has not arrived. Confirm nothing sensitive is left only in the source tenant before it is decommissioned.'));
+    }
+    h.push('<div class="cols"><div class="col"><h2>Delivery (CIO)</h2>' + d.join('') + '</div>' +
+      (s.length ? '<div class="col"><h2>Security (CISO)</h2>' + s.join('') + '</div>' : '') + '</div>');
+    h.push('<div class="decisions"><h2>Decisions requested</h2><ol>' + dec.map(function (x) { return '<li><b>' + x[0] + '</b> ' + x[1] + ' <i>Owner: ' + x[2] + '</i></li>'; }).join('') + '</ol></div>');
+    var src = [n0(objs) + ' object records'];
+    if (C) src.push(n0(C.total) + ' permission entries');
+    if (L) src.push(n0(L.total) + ' sharing links');
+    h.push('<p class="foot">Source: AvePoint FLY migration reports exported ' + dt(S.exportDate || M.lastEnd) + ' (' + src.join(', ') + '). A detailed technical report and item-level remediation list are available separately.</p>');
+    return h.join('\n');
+  }
+  return { analyse: analyse, render: render, CFG: CFG };
+})();
+if (typeof module !== 'undefined') module.exports = BriefCore;
+/* ===== END CORE ===== */
+</script>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var summary = null, wlOverride = '';
+  function opts() {
+    return { workload: wlOverride, client: $('client').value.trim(), internal: $('internal').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean) };
+  }
+  function show() {
+    var sh = $('sheet');
+    sh.innerHTML = BriefCore.render(summary, opts());
+    sh.hidden = false;
+    sh.querySelectorAll('h1,h2,p,.fig span,.fig b,.row p,li,.meta').forEach(function (el) { el.contentEditable = 'true'; });
+    document.title = (opts().client || 'Migration') + ' Executive Brief';
+    $('rebuild').disabled = false; $('print').disabled = false;
+  }
+  async function run(list) {
+    $('err').textContent = ''; $('progress').textContent = 'Reading…'; $('bar').style.width = '0';
+    try {
+      var files = Array.prototype.slice.call(list);
+      summary = await BriefCore.analyse(files, { progress: function (p) { $('bar').style.width = (p * 100).toFixed(1) + '%'; $('progress').textContent = 'Reading reports… ' + Math.round(p * 100) + '%'; } });
+      if (!$('internal').value) $('internal').value = summary.domains.join(', ');
+      $('progress').textContent = 'Read ' + [summary.files.mappings, summary.files.security, summary.files.links].filter(Boolean).length + ' reports' + (summary.files.skipped ? ' (' + summary.files.skipped + ' other files skipped)' : '') + '.' +
+        (!summary.files.security ? ' Site security report missing.' : '') + (!summary.files.links ? ' SharedLink report missing.' : '');
+      show();
+    } catch (e) { $('err').textContent = e.message; $('progress').textContent = ''; }
+  }
+  $('folder').addEventListener('change', function (e) { run(e.target.files); });
+  $('files').addEventListener('change', function (e) { run(e.target.files); });
+  $('rebuild').addEventListener('click', function () { if (summary) show(); });
+  $('print').addEventListener('click', function () { window.print(); });
+  // Node CLI injects a pre-computed summary for headless rendering
+  if (window.__BRIEF__) { summary = window.__BRIEF__.summary; wlOverride = window.__BRIEF__.workload || ''; $('client').value = window.__BRIEF__.client || ''; $('internal').value = (window.__BRIEF__.internal || []).join(', '); show(); $('panel').hidden = true; }
+})();
+</script>
+</body>
+</html>

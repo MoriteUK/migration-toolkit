@@ -1923,6 +1923,8 @@ function switchView(viewName) {
     'avepoint-connections': 'avepointConnectionsView',
     'avepoint-reports': 'avepointReportsView',
     'avepoint-monitor': 'avepointMonitorView',
+    // Reports sub-views
+    'reports-fly-brief': 'flyBriefView',
     // Misc Scripts sub-views
     'misc-baseline': 'miscBaselineView',
     'misc-baseline-status': 'miscBaselineStatusView',
@@ -1980,6 +1982,8 @@ function switchView(viewName) {
         loadCustomerDropdownInto('updateDgDomainCustomerPrefix', 'Select customer...');
       } else if (viewName === 'misc-add-dg-members') {
         loadCustomerDropdownInto('addDgMembersCustomerPrefix', 'Select customer...');
+      } else if (viewName === 'reports-fly-brief') {
+        loadFlyBriefCustomers();
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
@@ -4544,5 +4548,279 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.workflow-nav-btn[data-view]').forEach((btn) => {
     btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
   });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // FLY EXECUTIVE BRIEF
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function loadFlyBriefCustomers() {
+    console.log('Loading FLY Brief customers...');
+    try {
+      const cfgResult = await window.electronAPI.getConfig();
+      const customers = cfgResult?.config?.Customers;
+
+      const input = document.getElementById('flyBriefCustomer');
+      const btn = document.getElementById('flyBriefCustomerBtn');
+      const panel = document.getElementById('flyBriefCustomerPanel');
+      const list = document.getElementById('flyBriefCustomerList');
+
+      if (!input || !btn || !panel || !list) {
+        console.warn('FLY Brief customer dropdown elements not found');
+        return;
+      }
+
+      let customerNames = [];
+      if (customers && customers.length > 0) {
+        // Extract unique customer names (Prefix field)
+        customerNames = [...new Set(customers
+          .filter(c => c.Prefix)
+          .map(c => c.Prefix)
+        )].sort();
+      }
+
+      function selectCustomer(customerName) {
+        input.value = customerName;
+        panel.classList.add('hidden');
+      }
+
+      function renderCustomers(filter) {
+        const q = (filter || '').toLowerCase();
+        const filtered = customerNames.filter(name => !q || name.toLowerCase().includes(q));
+
+        if (filtered.length === 0) {
+          list.innerHTML = '<div class="domain-dropdown-empty">No matches</div>';
+        } else {
+          list.innerHTML = filtered.map(name =>
+            `<div class="domain-dropdown-item" data-customer="${name}">
+              <span class="di-domain">${name}</span>
+            </div>`
+          ).join('');
+
+          list.querySelectorAll('.domain-dropdown-item').forEach(el => {
+            el.onclick = (e) => {
+              console.log('Customer selected:', el.dataset.customer);
+              e.preventDefault();
+              e.stopPropagation();
+              selectCustomer(el.dataset.customer);
+            };
+          });
+        }
+      }
+
+      // Initial render with all customers
+      renderCustomers('');
+
+      // Filter as user types
+      input.addEventListener('input', () => {
+        renderCustomers(input.value);
+        if (!panel.classList.contains('hidden')) {
+          // Keep panel open while typing
+        }
+      });
+
+      // Toggle dropdown on button click
+      btn.onclick = (e) => {
+        console.log('FLY Brief dropdown button clicked');
+        e.preventDefault();
+        e.stopPropagation();
+        const isHidden = panel.classList.contains('hidden');
+        if (isHidden) {
+          panel.classList.remove('hidden');
+          renderCustomers(input.value);
+        } else {
+          panel.classList.add('hidden');
+        }
+        console.log('Panel is now:', panel.classList.contains('hidden') ? 'hidden' : 'visible');
+      };
+
+      // Open dropdown when clicking input
+      input.addEventListener('focus', () => {
+        panel.classList.remove('hidden');
+        renderCustomers(input.value);
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !btn.contains(e.target) && !panel.contains(e.target)) {
+          panel.classList.add('hidden');
+        }
+      });
+
+      console.log(`Loaded ${customerNames.length} customers for FLY Brief`);
+    } catch (err) {
+      console.error('Failed to load FLY Brief customers:', err);
+    }
+  }
+
+  // Email checkbox toggle
+  const flyBriefSendEmailCheckbox = document.getElementById('flyBriefSendEmail');
+  const flyBriefEmailOptions = document.getElementById('flyBriefEmailOptions');
+
+  if (flyBriefSendEmailCheckbox && flyBriefEmailOptions) {
+    flyBriefSendEmailCheckbox.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        flyBriefEmailOptions.classList.remove('hidden');
+      } else {
+        flyBriefEmailOptions.classList.add('hidden');
+      }
+    });
+  }
+
+  // Generate Brief button handler
+  const generateFlyBriefBtn = document.getElementById('generateFlyBriefBtn');
+  const flyBriefLog = document.getElementById('flyBriefLog');
+  const flyBriefLogOutput = document.getElementById('flyBriefLogOutput');
+  const downloadFlyBriefBtn = document.getElementById('downloadFlyBriefBtn');
+  const openFlyBriefBtn = document.getElementById('openFlyBriefBtn');
+  const flyBriefPreview = document.getElementById('flyBriefPreview');
+  const flyBriefPreviewContent = document.getElementById('flyBriefPreviewContent');
+
+  if (generateFlyBriefBtn) {
+    generateFlyBriefBtn.addEventListener('click', async () => {
+      console.log('Generate FLY Brief clicked');
+
+      // Get form values
+      const customerName = document.getElementById('flyBriefCustomer').value.trim();
+      const outputPath = document.getElementById('flyBriefOutputPath').value.trim();
+      const generatePdf = document.getElementById('flyBriefGeneratePdf').checked;
+      const autoOpen = document.getElementById('flyBriefAutoOpen').checked;
+      const sendEmail = document.getElementById('flyBriefSendEmail').checked;
+
+      // Validation
+      if (!customerName) {
+        alert('Please enter a customer name');
+        return;
+      }
+
+      // Email options
+      let emailOptions = null;
+      if (sendEmail) {
+        const emailTo = document.getElementById('flyBriefEmailTo').value.trim();
+        const emailSubject = document.getElementById('flyBriefEmailSubject').value.trim() ||
+                            `Migration Executive Brief - ${customerName}`;
+        const emailBody = document.getElementById('flyBriefEmailBody').value.trim();
+
+        if (!emailTo) {
+          alert('Please enter recipient email address(es)');
+          return;
+        }
+
+        emailOptions = {
+          to: emailTo,
+          subject: emailSubject,
+          body: emailBody
+        };
+      }
+
+      // Show log section
+      flyBriefLog.classList.remove('hidden');
+      flyBriefLogOutput.textContent = 'Connecting to AvePoint FLY...\n';
+
+      // Disable button
+      generateFlyBriefBtn.disabled = true;
+      generateFlyBriefBtn.textContent = 'Processing...';
+
+      try {
+        const result = await window.electronAPI.generateFlyBriefFromApi({
+          customerName,
+          outputPath,
+          generatePdf,
+          autoOpen,
+          email: emailOptions
+        });
+
+        if (result.success) {
+          flyBriefLogOutput.textContent += '\n✅ Briefs generated successfully!\n';
+
+          if (result.briefs && result.briefs.length > 0) {
+            flyBriefLogOutput.textContent += `\n${result.briefs.length} brief(s) created:\n\n`;
+
+            result.briefs.forEach((brief, index) => {
+              flyBriefLogOutput.textContent += `${index + 1}. ${brief.workload}:\n`;
+              flyBriefLogOutput.textContent += `   HTML: ${brief.htmlPath}\n`;
+              if (brief.pdfPath) {
+                flyBriefLogOutput.textContent += `   PDF:  ${brief.pdfPath}\n`;
+              }
+              flyBriefLogOutput.textContent += '\n';
+            });
+
+            // Use first PDF for download button
+            const firstPdf = result.briefs.find(b => b.pdfPath);
+            if (firstPdf) {
+              downloadFlyBriefBtn.classList.remove('hidden');
+              downloadFlyBriefBtn.setAttribute('data-pdf-path', firstPdf.pdfPath);
+            }
+          }
+
+          // Show preview with combined stats
+          if (result.briefs && result.briefs.length > 0 && flyBriefPreview && flyBriefPreviewContent) {
+            flyBriefPreview.classList.remove('hidden');
+
+            let previewHtml = '<div style="font-family: monospace; font-size: 12px;">';
+            previewHtml += `<strong>Migration Summary - ${customerName}</strong><br>`;
+            previewHtml += `<strong>Generated:</strong> ${new Date().toLocaleDateString()}<br><br>`;
+
+            result.briefs.forEach(brief => {
+              if (brief.summary) {
+                const s = brief.summary;
+                previewHtml += `<strong>━━━ ${brief.workload} ━━━</strong><br>`;
+                previewHtml += `<strong>Mappings:</strong> ${s.m.total} total, ${s.m.finished} finished, ${s.m.failed} failed<br>`;
+                previewHtml += `<strong>Objects:</strong> ${s.m.ok.toLocaleString()} migrated successfully<br>`;
+                previewHtml += `<strong>Data Size:</strong> ${s.m.gb.toFixed(2)} GB<br>`;
+                if (s.sec) {
+                  previewHtml += `<strong>Permissions:</strong> ${s.sec.ok} / ${s.sec.total} OK<br>`;
+                }
+                if (s.links) {
+                  previewHtml += `<strong>Shared Links:</strong> ${s.links.total} total, ${s.links.anyoneEdit} anonymous edit<br>`;
+                }
+                previewHtml += '<br>';
+              }
+            });
+
+            previewHtml += '</div>';
+            flyBriefPreviewContent.innerHTML = previewHtml;
+          }
+
+          if (result.emailSent) {
+            flyBriefLogOutput.textContent += `\n📧 Email sent to: ${emailOptions.to}\n`;
+          }
+
+          if (result.outputFolder) {
+            openFlyBriefBtn.classList.remove('hidden');
+            openFlyBriefBtn.setAttribute('data-output-path', result.outputFolder);
+          }
+
+        } else {
+          flyBriefLogOutput.textContent += `\n❌ Error: ${result.error}\n`;
+        }
+      } catch (err) {
+        console.error('Generate FLY Brief error:', err);
+        flyBriefLogOutput.textContent += `\n❌ Error: ${err.message}\n`;
+      } finally {
+        generateFlyBriefBtn.disabled = false;
+        generateFlyBriefBtn.textContent = '📄 Generate Brief';
+      }
+    });
+  }
+
+  // Download PDF button
+  if (downloadFlyBriefBtn) {
+    downloadFlyBriefBtn.addEventListener('click', async () => {
+      const pdfPath = downloadFlyBriefBtn.getAttribute('data-pdf-path');
+      if (pdfPath) {
+        await window.electronAPI.openPath(pdfPath);
+      }
+    });
+  }
+
+  // Open output folder button
+  if (openFlyBriefBtn) {
+    openFlyBriefBtn.addEventListener('click', async () => {
+      const outputPath = openFlyBriefBtn.getAttribute('data-output-path');
+      if (outputPath) {
+        await window.electronAPI.openPath(outputPath);
+      }
+    });
+  }
 
 });
