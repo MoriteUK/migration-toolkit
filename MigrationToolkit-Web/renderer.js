@@ -356,10 +356,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btn    = document.getElementById('flyBriefCustomerBtn');
     const panel  = document.getElementById('flyBriefCustomerPanel');
     const list   = document.getElementById('flyBriefCustomerList');
+
+    console.log('FLY Brief dropdown init:', {
+      input: !!input,
+      btn: !!btn,
+      panel: !!panel,
+      list: !!list
+    });
+
     if (!input || !btn || !panel || !list) {
-      console.log('FLY Brief dropdown elements not ready on page load');
+      console.error('FLY Brief dropdown elements not found on page load!');
       return;
     }
+
+    console.log('FLY Brief dropdown initialized successfully');
 
     let customerNames = [];
 
@@ -399,13 +409,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       panel.classList.add('hidden');
     }
 
-    btn.addEventListener('click', () => {
-      console.log('FLY Brief dropdown button clicked, customers:', customerNames.length);
-      if (customerNames.length === 0) { input.focus(); return; }
+    btn.addEventListener('click', (e) => {
+      console.warn('=== FLY BRIEF BUTTON CLICKED ===');
+      console.log('Customers loaded:', customerNames.length);
+      console.log('Panel current state:', panel.classList.contains('hidden') ? 'HIDDEN' : 'VISIBLE');
+
+      if (customerNames.length === 0) {
+        console.log('→ No customers loaded yet, just focusing input');
+        input.focus();
+        return;
+      }
       if (panel.classList.contains('hidden')) {
+        console.log('→ Opening panel');
         input.focus();
         openPanel();
       } else {
+        console.log('→ Closing panel');
         closePanel();
       }
     });
