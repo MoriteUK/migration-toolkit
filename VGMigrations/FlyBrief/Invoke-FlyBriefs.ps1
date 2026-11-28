@@ -454,4 +454,4 @@ if ($clients.Count -eq 1) {
   if ($pack) { $results = @($pack) + $results; if ($pack.pdfPath) { Write-Host "All-areas executive brief: $($pack.pdfPath)" -ForegroundColor Green } }
 }
 Save-Results $results
-$results | Format-Table project, status, folder -AutoSize -Wrap | Out-Host
+$results | Format-Table project, status, source -AutoSize -Wrap | Out-Host

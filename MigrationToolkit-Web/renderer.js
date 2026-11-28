@@ -4654,7 +4654,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const stopBtn = document.getElementById('globalStopBtn');
       if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '■ Stop Script'; stopBtn.style.display = 'inline-flex'; }
       window.electronAPI.onPsOutput((text) => {
-        flyBriefLogOutput.textContent += text;
+        // Per-file paths aren't useful here - the all-areas brief is linked below when the run finishes
+        const shown = text.split(/(?<=\n)/).filter(l => !/^\s*(PACK )?(HTML|PDF):\s/.test(l)).join('');
+        if (!shown) return;
+        flyBriefLogOutput.textContent += shown;
         flyBriefLogOutput.scrollTop = flyBriefLogOutput.scrollHeight;
       });
 
@@ -4683,9 +4686,12 @@ document.addEventListener('DOMContentLoaded', () => {
           openFlyBriefBtn.setAttribute('data-output-path', result.outputFolder);
         }
 
-        if (ok.length) {
+        // Show only the all-areas brief; the per-area files are still written to the output folder.
+        // If the combined brief failed, fall back to listing the area briefs so there is still something to open.
+        const shownBriefs = pack ? [pack] : ok;
+        if (shownBriefs.length) {
           let html = `<div style="font-size:12px;line-height:1.6;"><strong>${flyEsc(options.clientName || customerPrefix || 'Migration')}</strong> &middot; generated ${flyEsc(new Date().toLocaleString())}<br><br>`;
-          ok.forEach(b => {
+          shownBriefs.forEach(b => {
             const s = b.summary;
             html += b === pack
               ? `<div style="margin-bottom:12px;"><strong>All areas</strong> &mdash; executive brief for email (summary page + one page per area)`

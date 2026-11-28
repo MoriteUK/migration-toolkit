@@ -1,7 +1,15 @@
 {
-  "version": "2.9.245",
+  "version": "2.9.246",
   "releaseDate": "2026-11-28",
   "changelog": [
+    {
+      "version": "2.9.246",
+      "date": "2026-11-28",
+      "changes": [
+        "FLY Executive Brief panel shows only the all-areas executive brief: the preview links just its PDF and HTML, and the log no longer lists every per-area HTML/PDF path or folder. The per-area files are still written to the output folder. If the all-areas brief fails, the per-area briefs are listed instead"
+      ],
+      "breaking": false
+    },
     {
       "version": "2.9.245",
       "date": "2026-11-28",
