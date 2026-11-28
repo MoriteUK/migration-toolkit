@@ -51,6 +51,8 @@ header .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.
 header .tools label{display:flex;gap:5px;align-items:center;cursor:pointer}
 header .tools button{background:transparent;border-color:#ffffff66}
 tr.marked td{opacity:.55}
+tr.marked td.nogo,tr.marked td:last-child{opacity:1}
+label.ign{display:inline-flex;align-items:center;gap:4px;font-size:.76rem;white-space:nowrap;margin-right:6px;cursor:pointer}
 select.mark{font:inherit;font-size:.76rem;padding:3px 4px;border:1px solid var(--line);border-radius:4px;background:#fff}
 input.tnote{font:inherit;font-size:.76rem;padding:3px 6px;border:1px solid var(--line);border-radius:4px;margin-top:4px;width:100%;min-width:140px}
 @media (max-width:800px){.shell{grid-template-columns:1fr} nav{flex-direction:row;overflow-x:auto}}
@@ -83,7 +85,8 @@ var DATA = /*__DATA__*/null;
   // applies to every area and every customer's report in this browser
   var GSTORE = 'flyTechMarks:*';
   var gmarks = (function () { try { return JSON.parse(localStorage.getItem(GSTORE)) || null; } catch (e) { return null; } })() || { codes: {} };
-  var showMarked = localStorage.getItem(STORE + ':show') === '1';
+  // Fixed / ignored rows stay visible (greyed out) unless someone unticks "Show fixed & ignored"
+  var showMarked = localStorage.getItem(STORE + ':show') !== '0';
   function save() { try { localStorage.setItem(STORE, JSON.stringify(marks)); localStorage.setItem(GSTORE, JSON.stringify(gmarks)); } catch (e) { alert('Could not save marks in this browser: ' + e.message); } }
   var hash = function (s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
   var typeKey = function (A, g) { return A.id + '|' + g.key; };
@@ -102,7 +105,12 @@ var DATA = /*__DATA__*/null;
     save();
   }
   function setNote(A, g, note) { var k = typeKey(A, g); if (marks.types[k]) marks.types[k].note = note; else if (gmarks.codes[g.key]) gmarks.codes[g.key].note = note; save(); }
-  function setItem(A, it, s) { var k = itemKey(A, it); if (s === 'open' || s === 'inherit') delete marks.items[k]; else marks.items[k] = { s: s, at: new Date().toISOString() }; save(); }
+  // 'inherit' = follow the issue type. 'open' on an item whose type is fixed/ignored re-opens just that item.
+  function setItem(A, it, s) {
+    var k = itemKey(A, it), t = typeMark(A, A.groups[it[0]]);
+    if (s === 'inherit' || (s === 'open' && !t)) delete marks.items[k]; else marks.items[k] = { s: s, at: new Date().toISOString() };
+    save();
+  }
 
   // open (not fixed / ignored) counts. Items beyond the per-type cap follow their type's mark.
   var cache = {};
@@ -113,7 +121,10 @@ var DATA = /*__DATA__*/null;
     A.groups.forEach(function (g, gi) { if (!typeMark(A, g)) g.top.forEach(function (t) { oOpen[t[0]][g.sev] += t[1]; oOpen[t[0]].n += t[1]; }); });
     A.items.forEach(function (it) {
       var g = A.groups[it[0]];
-      if (!typeMark(A, g) && marks.items[itemKey(A, it)]) { gOpen[it[0]]--; oOpen[it[1]][g.sev]--; oOpen[it[1]].n--; }
+      var own = marks.items[itemKey(A, it)], d = 0;
+      if (!typeMark(A, g) && own && own.s !== 'open') d = -1;       // item fixed / ignored on its own
+      else if (typeMark(A, g) && own && own.s === 'open') d = 1;    // item re-opened inside an ignored / fixed type
+      if (d) { gOpen[it[0]] += d; oOpen[it[1]][g.sev] += d; oOpen[it[1]].n += d; }
     });
     var c = { Error: 0, Warning: 0, Security: 0, Info: 0 }, marked = 0;
     A.groups.forEach(function (g, gi) { c[g.sev] += gOpen[gi]; marked += g.n - gOpen[gi]; });
@@ -176,7 +187,7 @@ var DATA = /*__DATA__*/null;
       var g = x.g, st = x.m ? x.m.s : 'open';
       h += '<tr class="click' + (x.m ? ' marked' : '') + '" data-go="#/a/' + A.id + '/g/' + x.i + '"><td><span class="pill ' + g.sev + '">' + g.sev + '</span></td><td>' + esc(g.kind) + '</td><td class="mono">' + esc(g.code || '–') + '</td><td class="wrap">' + esc(g.msg) + '</td>' +
         '<td class="n">' + n0(S.gOpen[x.i]) + (S.gOpen[x.i] !== g.n ? '<div class="small muted">of ' + n0(g.n) + '</div>' : '') + '</td><td class="n">' + n0(g.users) + '</td>' +
-        '<td class="nogo" data-g="' + x.i + '">' + markSel('tmark', x.m && x.m.all ? 'ignored-all' : st, null, true) + (x.m && x.m.all ? '<div class="small muted">all areas &amp; customers</div>' : '') + (x.m ? '<input class="tnote" type="text" placeholder="Note (why)" value="' + esc(x.m.note || '') + '">' : '') + '</td></tr>';
+        '<td class="nogo" data-g="' + x.i + '"><label class="ign"><input type="checkbox" class="tign"' + (st === 'ignored' ? ' checked' : '') + '> Ignored</label>' + markSel('tmark', x.m && x.m.all ? 'ignored-all' : st, null, true) + (x.m && x.m.all ? '<div class="small muted">all areas &amp; customers</div>' : '') + (x.m ? '<input class="tnote" type="text" placeholder="Note (why)" value="' + esc(x.m.note || '') + '">' : '') + '</td></tr>';
     });
     return h + (gs.length ? '' : '<tr><td colspan="7" class="muted">No issues recorded for this area.</td></tr>') + '</tbody></table>';
   }
@@ -214,7 +225,7 @@ var DATA = /*__DATA__*/null;
     if (filt.g != null) {
       var G = A.groups[filt.g], m = typeMark(A, G);
       h += '<p class="wrap"><span class="pill ' + G.sev + '">' + G.sev + '</span> ' + esc(G.msg) + '</p>' +
-        '<div class="filters" data-g="' + filt.g + '"><b class="small">This whole issue type:</b> ' + markSel('tmark', m ? (m.all ? 'ignored-all' : m.s) : 'open', null, true) + (m ? '<input class="tnote" type="text" placeholder="Note (why)" value="' + esc(m.note || '') + '" style="min-width:320px">' : '') + '</div>' +
+        '<div class="filters" data-g="' + filt.g + '"><b class="small">This whole issue type:</b> <label class="ign"><input type="checkbox" class="tign"' + (m && m.s === 'ignored' ? ' checked' : '') + '> Ignored</label> ' + markSel('tmark', m ? (m.all ? 'ignored-all' : m.s) : 'open', null, true) + (m ? '<input class="tnote" type="text" placeholder="Note (why)" value="' + esc(m.note || '') + '" style="min-width:320px">' : '') + '</div>' +
         (G.kept < G.n ? '<div class="note">Listing the first ' + n0(G.kept) + ' of ' + n0(G.n) + ' items of this type. The rest are in FLY\'s migration report; a Fixed / Ignored mark on the issue type covers them too.</div>' : '');
     }
     h += '<div class="filters"><input type="search" id="q" placeholder="Search item, user, path or message…"><select id="sev"><option value="">All severities</option>' + SEVS.map(function (s) { return '<option>' + s + '</option>'; }).join('') + '</select>' +
@@ -237,7 +248,8 @@ var DATA = /*__DATA__*/null;
     function render() {
       $('rows').innerHTML = list.slice(0, limit).map(function (it, idx) {
         var g = A.groups[it[0]], st = itemState(A, it);
-        var sel = st.own ? markSel('imark', st.s, 'As issue type') : markSel('imark', 'inherit', st.s === 'open' ? 'Open' : 'As issue type (' + st.s + ')');
+        var sel = '<label class="ign"><input type="checkbox" class="iign"' + (st.s === 'ignored' ? ' checked' : '') + '> Ignored</label>' +
+          (st.own ? markSel('imark', st.s, 'As issue type') : markSel('imark', 'inherit', st.s === 'open' ? 'Open' : 'As issue type (' + st.s + ')'));
         return '<tr class="' + (st.s !== 'open' ? 'marked' : '') + '" data-i="' + A.items.indexOf(it) + '"><td><span class="pill ' + g.sev + '">' + g.sev + '</span> ' + stateTag(st.s) + '</td>' + (filt.o == null ? '<td class="wrap small"><a href="#/a/' + A.id + '/o/' + it[1] + '">' + esc(A.owners[it[1]].label) + '</a></td>' : '') +
           '<td class="wrap"><b>' + esc(it[2]) + '</b><div class="small muted wrap">' + esc(it[4]) + '</div></td><td class="small">' + esc(g.kind) + (it[3] ? '<br>' + esc(it[3]) : '') + '</td><td class="small">' + esc(it[5]) + '</td>' +
           '<td class="mono"><a href="#/a/' + A.id + '/g/' + it[0] + '">' + esc(g.code || '–') + '</a></td><td class="small wrap">' + esc(A.msgs[it[6]]) + '</td><td>' + sel + '</td></tr>';
@@ -248,6 +260,13 @@ var DATA = /*__DATA__*/null;
       $('rows').querySelectorAll('select.imark').forEach(function (s) {
         s.addEventListener('change', function () {
           var it = A.items[+s.closest('tr').getAttribute('data-i')]; setItem(A, it, s.value); changed();
+          var keepScroll = window.scrollY; refresh(); window.scrollTo(0, keepScroll);
+        });
+      });
+      // tick box: tick = ignore this item, untick = re-open it (even if its whole issue type is ignored)
+      $('rows').querySelectorAll('input.iign').forEach(function (c) {
+        c.addEventListener('change', function () {
+          var it = A.items[+c.closest('tr').getAttribute('data-i')]; setItem(A, it, c.checked ? 'ignored' : 'open'); changed();
           var keepScroll = window.scrollY; refresh(); window.scrollTo(0, keepScroll);
         });
       });
@@ -329,6 +348,15 @@ var DATA = /*__DATA__*/null;
         var g = A.groups[+s.closest('[data-g]').getAttribute('data-g')];
         if (/^ignored/.test(s.value) && !typeMark(A, g)) { var why = prompt('Why is "' + (g.code || g.kind) + '" being ignored? (optional note, e.g. organiser is in another domain)', ''); setType(A, g, s.value); if (why) setNote(A, g, why); }
         else setType(A, g, s.value);
+        changed(); var y = window.scrollY; refresh(); window.scrollTo(0, y);
+      });
+    });
+    // tick box on an issue type: tick = Ignored (this area, asks for a note), untick = Open again
+    m.querySelectorAll('[data-g] input.tign').forEach(function (c) {
+      c.addEventListener('change', function () {
+        var g = A.groups[+c.closest('[data-g]').getAttribute('data-g')];
+        if (c.checked) { var why = prompt('Why is "' + (g.code || g.kind) + '" being ignored? (optional note, e.g. organiser is in another domain)', ''); setType(A, g, 'ignored'); if (why) setNote(A, g, why); }
+        else setType(A, g, 'open');
         changed(); var y = window.scrollY; refresh(); window.scrollTo(0, y);
       });
     });

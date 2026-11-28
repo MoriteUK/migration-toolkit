@@ -1,7 +1,17 @@
 {
-  "version": "2.9.248",
+  "version": "2.9.249",
   "releaseDate": "2026-11-28",
   "changelog": [
+    {
+      "version": "2.9.249",
+      "date": "2026-11-28",
+      "changes": [
+        "Fly TechTeam Report: fixed / ignored rows now stay visible (greyed out) by default, so the tech team keeps seeing every error and the decisions made on it. 'Show fixed & ignored' is ticked by default and can be unticked to hide them",
+        "Every issue-type row, every item row, and the issue-type bar in the item view has an 'Ignored' tick box. Ticking ignores it (asking for an optional note); unticking re-opens it if someone thinks it can be fixed. Unticking a single item inside an ignored issue type re-opens just that item, and the open counts include it",
+        "Nothing is ignored by default: the report never marks anything itself, and only the tech team's own choices (stored in their browser) change what is open"
+      ],
+      "breaking": false
+    },
     {
       "version": "2.9.248",
       "date": "2026-11-28",

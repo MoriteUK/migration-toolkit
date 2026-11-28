@@ -39,7 +39,8 @@ An interactive HTML for the tech team to work through problems mid-migration, be
 - **Sources:** with a **Downloaded FLY Reports Folder**, each downloaded area is read down to item level (this reads every object file, about 35 seconds for Amickiel's ~3.5M rows). Areas without a download, or all areas if no folder is given, show each user or site's **live** migration status from FLY.
 - **Fixed / Ignored:** mark an issue type, or a single item, as Fixed or Ignored, with a note.
   - **Ignored everywhere** applies an error code to every area and every customer. Use it for errors that are expected when one domain is split into many, e.g. `EX-UserNotInMapping`, where the meeting organiser is mapped to another domain.
-  - Counts, badges and the CSV show only what is still open. *Show fixed & ignored* brings marked rows back.
+  - Nothing is ignored until someone on the tech team chooses to. Every issue-type row and item row has an **Ignored** tick box; untick it to re-open something you think can be fixed. Unticking a single item inside an ignored type re-opens just that item.
+  - Fixed / ignored rows stay visible, greyed out. Untick *Show fixed & ignored* at the top to hide them. Counts, badges and the CSV show only what is still open.
   - Marks are saved in the browser on that PC, keyed by area + error code (+ user + item), so they survive regenerating the report.
   - **Export marks / Import marks** shares them with the team. **Export open issues (CSV)** lists the open items for tickets.
 - Output: `<folder>\TechTeam Report\<Customer>_TechTeam_Report.html`, or `Logs\FlyBriefs\<Customer>\TechTeam Report\` without a folder.
