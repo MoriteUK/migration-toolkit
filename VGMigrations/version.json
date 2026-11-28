@@ -1,7 +1,18 @@
 {
-  "version": "2.9.247",
+  "version": "2.9.248",
   "releaseDate": "2026-11-28",
   "changelog": [
+    {
+      "version": "2.9.248",
+      "date": "2026-11-28",
+      "changes": [
+        "Fly TechTeam Report: Fixed / Ignored marks. Each issue type has Open / Fixed / Ignored (this area) / Ignored everywhere, plus a note; individual items can be marked too. 'Ignored everywhere' applies an error code to every area and every customer's report. It is for errors that are expected when one domain is split into many (e.g. EX-UserNotInMapping: the meeting organiser is mapped to another domain), so it is set once rather than per customer",
+        "Counts, sidebar badges, area cards and the overview show only open issues. Marked rows are hidden by default, with a 'Show fixed & ignored' toggle. Items beyond the per-type listing cap follow their issue type's mark",
+        "Marks are kept in the browser (per customer, plus a shared 'everywhere' list) and keyed by area + FLY error code (+ user + item), so they survive regenerating the report. Export marks / Import marks share them between team members. Export open issues (CSV) lists the remaining open items",
+        "Verified in Edge: ignoring EX-UserNotInMapping everywhere dropped Amickiel Exchange open errors 1,433 -> 868 and Teams 1,753 -> 1,725, applied to a second customer's report, survived reload and a regenerated copy, and was excluded from the CSV. Setting it back to Open restored the counts"
+      ],
+      "breaking": false
+    },
     {
       "version": "2.9.247",
       "date": "2026-11-28",

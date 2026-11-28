@@ -87,7 +87,8 @@ function msgIdx(A, s) { s = trim(s, 400); if (A._msg[s] === undefined) { A._msg[
 function addIssue(A, kind, r, sev, code, comment, title, detail, pathStr) {
   const gk = kind + '|' + (code || norm(comment));
   let g = A._group[gk];
-  if (g === undefined) { g = A._group[gk] = A.groups.length; A.groups.push({ kind, sev, code: code || '', msg: trim(comment, 400), n: 0, kept: 0, owners: {} }); }
+  // key: stable across regenerations, so the report's Fixed / Ignored marks survive a re-run
+  if (g === undefined) { g = A._group[gk] = A.groups.length; A.groups.push({ key: gk, kind, sev, code: code || '', msg: trim(comment, 400), n: 0, kept: 0, owners: {} }); }
   const G = A.groups[g], o = ownerIdx(A, ownerOf(r));
   G.n++; G.owners[o] = (G.owners[o] || 0) + 1; A.owners[o].n++; A.counts[sev]++;
   if (G.kept >= CAP_PER_GROUP || A.items.length >= CAP_PER_AREA) { A.capped++; return; }
