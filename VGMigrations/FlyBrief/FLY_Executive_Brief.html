@@ -46,6 +46,16 @@ p{margin:0}
 .decisions ol{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:6px;font-size:.88rem}
 .foot{font-size:.7rem;color:var(--muted);border-top:1px solid var(--line);padding-top:6px}
 [contenteditable]:focus{outline:2px dashed var(--accent);outline-offset:2px}
+/* all-areas summary table + multi-page pack */
+.ovt{width:100%;border-collapse:collapse;font-size:.76rem;table-layout:fixed}
+.ovt .pill{font-size:.58rem;padding:2px 4px}
+.pill.n{color:var(--muted);background:var(--bg)}
+.ovt th{font:500 .62rem var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:4px 6px;border-bottom:2px solid var(--fg)}
+.ovt td{padding:6px 5px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.35}
+.ovt th,.ovt th.n{white-space:normal;line-height:1.25}
+.ovt .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ovt small{display:block;font-size:.68rem;color:var(--muted);font-weight:400}
+.pack .sheet + .sheet{margin-top:24px}
 
 /* control panel (screen only) */
 .panel{max-width:210mm;margin:0 auto 20px;background:var(--paper);padding:18px 20px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--line)}
@@ -65,7 +75,8 @@ button:focus-visible,.filebtn:focus-within{outline:2px solid var(--fg);outline-o
 .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
 .err{color:var(--bad);font-size:.85rem}
 @media (max-width:640px){.figs{grid-template-columns:repeat(2,minmax(0,1fr))}.cols{grid-template-columns:1fr}.sheet{padding:18px}.meta{text-align:left}}
-@media print{body{background:#fff;padding:0}.panel{display:none!important}.sheet{box-shadow:none;max-width:none;width:210mm;min-height:297mm}[contenteditable]{outline:none}}
+@media print{body{background:#fff;padding:0}.panel{display:none!important}.sheet{box-shadow:none;max-width:none;width:210mm;min-height:297mm}[contenteditable]{outline:none}
+  .pack .sheet{break-after:page;height:297mm;overflow:hidden}.pack .sheet:last-child{break-after:auto}.pack .sheet + .sheet{margin-top:0}}
 </style>
 </head>
 <body>
@@ -263,9 +274,11 @@ var BriefCore = (function () {
     return 'Generic';
   }
 
-  function render(S, opts) {
+  // Every per-area figure and RAG class, shared by the one-page brief and the all-areas summary page
+  function facts(S, opts) {
     opts = opts || {};
-    var M = S.m, C = S.sec, L = S.links;
+    // A report with no permission / sharing-link rows says nothing about them (not "100% restored")
+    var M = S.m, C = S.sec && S.sec.total ? S.sec : null, L = S.links && S.links.total ? S.links : null;
     var internal = (opts.internal && opts.internal.length ? opts.internal : S.domains).map(function (d) { return d.trim().toLowerCase(); }).filter(Boolean);
     var isInternal = function (d) { return /onmicrosoft\.com$/.test(d) || internal.some(function (x) { return d === x || d.endsWith('.' + x); }); };
     var client = opts.client || 'Tenant';
@@ -297,6 +310,18 @@ var BriefCore = (function () {
     if (anyoneEdit > 0) dec.push(['Sharing policy.', 'Approve removing or expiring anonymous edit links and making new links view-only by default in the new tenant.', 'CISO']);
     if (C && (C.blocked > 0 || C.guestFail > 0 || C.unmapped > 0)) dec.push(['Leavers and guests.', (C.blocked ? 'Confirm whether the ' + n0(C.blocked) + ' disabled ' + pl(C.blocked, 'account is a leaver', 'accounts are leavers') + ' whose access should go to managers' : 'Confirm how unmatched accounts should be handled') + (C.guestFail || C.unmapped ? ', and whether external guests are re-invited or dropped.' : '.'), 'CIO / business']);
     dec.push(['Close-out.', (permPct !== null && permPct < CFG.permGood ? 'Authorise the permissions re-run and completion of the remaining ' + T.accts : 'Authorise completion of the remaining items') + ', with sign-off once the open items are at zero.', 'migration lead']);
+    return { M: M, C: C, L: L, T: T, client: client, objs: objs, api: api, contentPct: contentPct, errPct: errPct, permPct: permPct, permFail: permFail,
+      anyoneEdit: anyoneEdit, extD: extD, personal: personal, business: business, gap: gap, openIssues: openIssues, noData: noData,
+      contentCls: contentCls, permCls: permCls, anyCls: anyCls, accCls: accCls, dec: dec };
+  }
+
+  function render(S, opts) {
+    opts = opts || {};
+    var F = facts(S, opts);
+    var M = F.M, C = F.C, L = F.L, T = F.T, client = F.client, workload = T.title, objs = F.objs, api = F.api;
+    var contentPct = F.contentPct, errPct = F.errPct, permPct = F.permPct, permFail = F.permFail, anyoneEdit = F.anyoneEdit;
+    var extD = F.extD, personal = F.personal, business = F.business, gap = F.gap, openIssues = F.openIssues, noData = F.noData;
+    var contentCls = F.contentCls, permCls = F.permCls, anyCls = F.anyCls, accCls = F.accCls, dec = F.dec;
     var nDec = dec.length;
 
     // verdict
@@ -388,7 +413,106 @@ var BriefCore = (function () {
     else h.push('<p class="foot">Source: AvePoint FLY migration reports exported ' + dt(S.exportDate || M.lastEnd) + ' (' + src.join(', ') + '). A detailed technical report and item-level remediation list are available separately.</p>');
     return h.join('\n');
   }
-  return { analyse: analyse, render: render, CFG: CFG };
+  // One-page summary across every area: items = [{ summary, workload }], opts = { client, internal }
+  function renderOverview(items, opts) {
+    opts = opts || {};
+    var rank = { g: 0, a: 1, r: 2 }, worst = function (cs) { return cs.reduce(function (w, c) { return rank[c] > rank[w] ? c : w; }, 'g'); };
+    var all = items.map(function (it) {
+      var F = facts(it.summary, { client: opts.client, internal: opts.internal, workload: it.workload || it.summary.workload });
+      // Open accounts that hold no data are housekeeping, not a risk to the business
+      var cls = [F.contentCls]; if (F.M.failedWithData) cls.push(F.accCls); if (F.C) cls.push(F.permCls); if (F.L) cls.push(F.anyCls);
+      var M = F.M, T = F.T, hl;
+      if (!M.total) return { F: F, it: it, rag: 'n', empty: true,
+        hl: M.notStarted ? cap(w(M.notStarted)) + ' ' + pl(M.notStarted, T.acct, T.accts) + ' mapped in FLY, none migrated yet.' : 'No ' + T.accts + ' are mapped in FLY for this area, so there was nothing to migrate.' };
+      if (F.contentCls !== 'g') hl = F.api ? cap(w(M.failedWithData)) + ' ' + pl(M.failedWithData, T.acct, T.accts) + ' with ' + T.dataPhrase + ' only partly migrated.'
+                                          : fmtPct(100 - F.contentPct) + ' of ' + T.items + ' have not reached the new tenant.';
+      else if (M.failedWithData) hl = cap(w(M.failedWithData)) + ' ' + pl(M.failedWithData, T.acct + ' is', T.accts + ' are') + ' only partly migrated.';
+      else if (F.anyoneEdit) hl = n0(F.anyoneEdit) + ' anonymous edit ' + pl(F.anyoneEdit, 'link') + ' carried into the new tenant.';
+      else if (F.permPct !== null && F.permPct < CFG.permGood) hl = Math.round(100 - F.permPct) + '% of permissions not restored.';
+      else if (M.exceptions && F.api) hl = n0(M.exceptions) + ' ' + pl(M.exceptions, T.acct, T.accts) + ' finished with item warnings.';
+      else hl = 'Content migrated with no material issues.';
+      return { F: F, it: it, rag: worst(cls), hl: hl };
+    });
+    var A = all.filter(function (a) { return !a.empty; });   // areas with migrations; empty ones are listed but not scored
+    var ragTxt = { g: 'On track', a: 'At risk', r: 'Off track', n: 'No mappings' };
+    var nR = A.filter(function (a) { return a.rag === 'r'; }).length, nA = A.filter(function (a) { return a.rag === 'a'; }).length, nG = A.length - nR - nA;
+    var gb = 0, open = 0, withData = 0, anyEdit = 0, linksKnown = false, permOk = 0, permTot = 0, dates = [];
+    A.forEach(function (a) {
+      var M = a.F.M; gb += M.gb || 0; open += M.failed; withData += M.failedWithData;
+      if (a.F.L) { linksKnown = true; anyEdit += a.F.anyoneEdit; }
+      if (a.F.C) { permOk += a.F.C.ok; permTot += a.F.C.total; }
+      var d = a.it.summary.exportDate || M.lastEnd; if (d) dates.push(d);
+    });
+    dates.sort();
+    var asAt = dates.length ? dates[dates.length - 1] : '';
+    var client = opts.client || 'Tenant';
+
+    // decisions: merge the same decision across areas, with wording and counts that hold for all of them
+    var decMap = {}, decOrder = [];
+    A.forEach(function (a) {
+      a.F.dec.forEach(function (d) {
+        if (!decMap[d[0]]) { decMap[d[0]] = { d: d.slice(), areas: [], F: [] }; decOrder.push(d[0]); }
+        decMap[d[0]].areas.push(a.F.T.title); decMap[d[0]].F.push(a.F);
+      });
+    });
+    if (decMap['Leavers and guests.']) {
+      var lg = decMap['Leavers and guests.'], withBlocked = lg.F.filter(function (F) { return F.C && F.C.blocked; });
+      lg.d[1] = (withBlocked.length ? 'Confirm whether the disabled accounts that still hold access (' + withBlocked.map(function (F) { return F.T.title + ' ' + n0(F.C.blocked); }).join(', ') + ') are leavers whose access should go to managers'
+                                     : 'Confirm how unmatched accounts should be handled') +
+                (lg.F.some(function (F) { return F.C && (F.C.guestFail || F.C.unmapped); }) ? ', and whether external guests are re-invited or dropped.' : '.');
+    }
+    if (decMap['Close-out.']) {
+      var rerun = decMap['Close-out.'].F.some(function (F) { return F.permPct !== null && F.permPct < CFG.permGood; });
+      decMap['Close-out.'].d[1] = 'Authorise ' + (rerun ? 'the permissions re-run and ' : '') + 'completion of the remaining items in each area, with sign-off once the open items are at zero.';
+    }
+
+    var verdict = nR + nA === 0
+      ? '<strong>All ' + w(A.length) + ' areas have migrated with no material issues.</strong>'
+      : '<strong>' + cap(w(nG)) + ' of ' + w(A.length) + ' areas ' + (nG === 1 ? 'is' : 'are') + ' on track; ' + w(nR + nA) + ' need' + (nR + nA === 1 ? 's' : '') + ' attention before sign-off.</strong>' +
+        (withData ? ' ' + cap(w(withData)) + ' ' + pl(withData, 'account or site still holds', 'accounts or sites still hold') + ' data that has only partly migrated.' : '') +
+        (anyEdit ? ' ' + n0(anyEdit) + ' anonymous edit ' + pl(anyEdit, 'link was', 'links were') + ' carried into the new tenant.' : '');
+    verdict += ' ' + cap(w(decOrder.length)) + ' ' + pl(decOrder.length, 'decision is', 'decisions are') + ' needed to close the project.';
+
+    var h = [];
+    h.push('<div class="top"><div><div class="eyebrow">Executive summary · M365 tenant migration</div><h1>' + esc(client) + ' Microsoft 365 Migration</h1></div>' +
+      '<div class="meta">' + A.length + ' migration ' + pl(A.length, 'area') + (all.length > A.length ? ' (' + (all.length - A.length) + ' with no mappings)' : '') + '<br>Status as at ' + dt(asAt) + '</div></div>');
+    h.push('<p class="verdict">' + verdict + '</p>');
+    h.push('<div class="figs">' +
+      '<div class="fig ' + (nR ? 'r' : nA ? 'a' : 'g') + '"><b>' + nG + ' / ' + A.length + '</b><span>areas on track</span></div>' +
+      '<div class="fig g"><b>' + tb(gb) + '</b><span>of data migrated across all areas</span></div>' +
+      '<div class="fig ' + (withData ? 'a' : 'g') + '"><b>' + n0(open) + '</b><span>accounts, sites or chats not complete' + (open ? '. ' + (withData ? 'Only ' + w(withData) + ' hold data' : 'None hold data') : '') + '</span></div>' +
+      (linksKnown ? '<div class="fig ' + (anyEdit === 0 ? 'g' : anyEdit > CFG.anyoneRed ? 'r' : 'a') + '"><b>' + n0(anyEdit) + '</b><span>sharing links let anyone edit, with no sign-in</span></div>'
+                  : '<div class="fig ' + (permTot && pct(permOk, permTot) < CFG.permGood ? 'a' : 'g') + '"><b>' + (permTot ? Math.floor(pct(permOk, permTot)) + '%' : 'n/a') + '</b><span>of permissions restored</span></div>') +
+      '</div>');
+
+    var rows = all.map(function (a) {
+      var F = a.F, M = F.M, T = F.T;
+      if (a.empty) return '<tr><td><b>' + esc(T.title) + '</b></td><td>' + pill('n', ragTxt.n) + '</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td>' + a.hl + '</td></tr>';
+      var migrated = fmtPct(F.contentPct) + '<small>of ' + (F.api ? T.accts : 'items') + '</small>';
+      return '<tr><td><b>' + esc(T.title) + '</b>' + (F.api ? '<small>live FLY data</small>' : '') + '</td>' +
+        '<td>' + pill(a.rag, ragTxt[a.rag]) + '</td>' +
+        '<td class="n">' + migrated + '</td>' +
+        '<td class="n">' + (M.gb ? tb(M.gb) : '–') + '</td>' +
+        '<td class="n">' + n0(M.failed) + '<small>of ' + n0(M.total) + '</small></td>' +
+        '<td class="n">' + (F.C ? Math.floor(F.permPct) + '%' : '–') + '</td>' +
+        '<td class="n">' + (F.L ? n0(F.anyoneEdit) : '–') + '</td>' +
+        '<td>' + a.hl + '</td></tr>';
+    }).join('');
+    h.push('<h2>By area</h2><table class="ovt"><colgroup><col style="width:13%"><col style="width:13%"><col style="width:9%"><col style="width:8%"><col style="width:7%"><col style="width:12%"><col style="width:9%"><col></colgroup>' +
+      '<thead><tr><th>Area</th><th>Status</th><th class="n">Migrated</th><th class="n">Data</th><th class="n">Open</th><th class="n">Permissions restored</th><th class="n">Anyone-edit links</th><th>Highlight</th></tr></thead><tbody>' + rows + '</tbody></table>');
+
+    h.push('<div class="decisions"><h2>Decisions requested</h2><ol>' + decOrder.map(function (k) {
+      var x = decMap[k];
+      return '<li><b>' + x.d[0] + '</b> ' + x.d[1] + ' <i>Owner: ' + x.d[2] + '. Applies to: ' + x.areas.join(', ') + '.</i></li>';
+    }).join('') + '</ol></div>');
+
+    var src = all.map(function (a) {
+      if (a.empty) return a.F.T.title + ' (no mappings in the FLY project)'; return a.F.T.title + (a.F.api ? ' (live FLY project data, ' + dt(a.it.summary.exportDate) + ')' : ' (report exported ' + dt(a.it.summary.exportDate || a.F.M.lastEnd) + ')'); });
+    h.push('<p class="foot">Sources: AvePoint FLY. ' + src.join('; ') + '. Each migrated area has its own one-page brief on the following pages. “–” means the figure is not part of that area\'s FLY data. “Open” is accounts, sites, teams or chats whose last migration job did not finish.</p>');
+    return h.join('\n');
+  }
+
+  return { analyse: analyse, render: render, renderOverview: renderOverview, facts: facts, CFG: CFG };
 })();
 if (typeof module !== 'undefined') module.exports = BriefCore;
 /* ===== END CORE ===== */

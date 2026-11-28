@@ -4663,16 +4663,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const briefs = result.briefs || [];
         const ok = briefs.filter(b => b.status === 'OK');
         const failed = briefs.filter(b => b.status !== 'OK');
+        const pack = ok.find(b => b.workload === 'All');   // summary page + one page per area
 
         if (result.success) {
-          flyBriefLogOutput.textContent += `\n✅ ${ok.length} brief(s) built${failed.length ? `, ${failed.length} failed` : ''}.\n`;
+          flyBriefLogOutput.textContent += `\n✅ ${ok.length - (pack ? 1 : 0)} area brief(s) built${pack ? ' + the all-areas executive brief' : ''}${failed.length ? `, ${failed.length} failed` : ''}.\n`;
         } else {
           flyBriefLogOutput.textContent += `\n❌ ${result.error}\n`;
         }
         failed.forEach(b => { flyBriefLogOutput.textContent += `   ✗ ${b.project}: ${b.status}\n`; });
         flyBriefLogOutput.scrollTop = flyBriefLogOutput.scrollHeight;
 
-        const firstPdf = ok.find(b => b.pdfPath);
+        const firstPdf = (pack && pack.pdfPath) ? pack : ok.find(b => b.pdfPath);
         if (firstPdf) {
           downloadFlyBriefBtn.classList.remove('hidden');
           downloadFlyBriefBtn.setAttribute('data-pdf-path', firstPdf.pdfPath);
@@ -4686,11 +4687,13 @@ document.addEventListener('DOMContentLoaded', () => {
           let html = `<div style="font-size:12px;line-height:1.6;"><strong>${flyEsc(options.clientName || customerPrefix || 'Migration')}</strong> &middot; generated ${flyEsc(new Date().toLocaleString())}<br><br>`;
           ok.forEach(b => {
             const s = b.summary;
-            html += `<div style="margin-bottom:12px;"><strong>${flyEsc(b.workload)}</strong> &mdash; ${flyEsc(b.project)}`;
+            html += b === pack
+              ? `<div style="margin-bottom:12px;"><strong>All areas</strong> &mdash; executive brief for email (summary page + one page per area)`
+              : `<div style="margin-bottom:12px;"><strong>${flyEsc(b.workload)}</strong> &mdash; ${flyEsc(b.project)}`;
             if (b.pdfPath) html += ` &middot; <a href="#" data-open-path="${flyEsc(b.pdfPath)}">PDF</a>`;
             if (b.htmlPath) html += ` &middot; <a href="#" data-open-path="${flyEsc(b.htmlPath)}">HTML</a>`;
             html += '<br>';
-            if (b.source) html += `<span style="opacity:.7">Source: ${flyEsc(b.source)}</span><br>`;
+            if (b.source && b !== pack) html += `<span style="opacity:.7">Source: ${flyEsc(b.source)}</span><br>`;
             if (s && s.m) {
               html += `Mappings: ${flyNum(s.m.total)} total, ${flyNum(s.m.finished)} finished, ${flyNum(s.m.exceptions)} with exceptions, ${flyNum(s.m.failed)} failed<br>`;
               html += (s.source === 'api' ? '' : `Objects migrated: ${flyNum(s.m.ok)} &middot; `) + `Data: ${typeof s.m.gb === 'number' ? s.m.gb.toFixed(1) : '-'} GB<br>`;

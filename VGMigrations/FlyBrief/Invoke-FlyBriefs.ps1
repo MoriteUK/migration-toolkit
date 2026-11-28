@@ -102,7 +102,7 @@ $cfg = [pscustomobject]@{
   Projects   = @($raw.projects)
 }
 Write-Host "Config: $ConfigPath"
-Write-Host "Output: $($cfg.OutputRoot)"
+if (-not $ExportFolder) { Write-Host "Output: $($cfg.OutputRoot)" }
 
 $briefJs = Join-Path $PSScriptRoot 'fly-brief.js'
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js is required (https://nodejs.org).' }
@@ -248,42 +248,120 @@ function Save-Results($rows) {
   if ($ResultPath) { ConvertTo-Json -InputObject @($rows) -Depth 4 | Set-Content -Path $ResultPath -Encoding UTF8 }
 }
 
-# ── Export-folder mode: briefs from reports downloaded from the FLY portal, no API calls ─────
+# Run fly-brief.js for one area and fill in the result row from the paths it reports.
+function Invoke-AreaBrief($row, [string[]]$SourceArgs, [string]$OutDir) {
+  $nodeArgs = @($briefJs) + $SourceArgs + @('--client', $row.client, '--out', $OutDir)
+  if ($row.workload) { $nodeArgs += @('--workload', $row.workload) }
+  if ($InternalDomains) { $nodeArgs += @('--internal', $InternalDomains) }
+  if ($NoPdf) { $nodeArgs += '--no-pdf' }
+  $lines = @(& node @nodeArgs 2>&1 | ForEach-Object { "$_" })
+  $lines | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE) { throw "fly-brief.js exited with $LASTEXITCODE" }
+  $row.htmlPath = ($lines | Where-Object { $_ -match '^HTML:\s+(.+)$' } | ForEach-Object { $Matches[1].Trim() } | Select-Object -First 1)
+  $row.pdfPath  = ($lines | Where-Object { $_ -match '^PDF:\s+(.+)$' }  | ForEach-Object { $Matches[1].Trim() } | Select-Object -First 1)
+  if ($row.htmlPath) { $row.summaryPath = $row.htmlPath -replace '\.html$', '.summary.json' }
+  $row.folder = $OutDir
+  $row.status = 'OK'
+}
+
+# One document for the executive team: summary page + one page per area (static HTML + PDF).
+# Adds a row with workload 'All' so the app can offer it first.
+function New-FlyBriefPack($rows, [string]$Client, [string]$OutDir) {
+  $sums = @($rows | Where-Object { $_.status -eq 'OK' -and $_.summaryPath -and (Test-Path $_.summaryPath) } | ForEach-Object { $_.summaryPath })
+  if (-not $sums.Count) { return $null }
+  Write-Host "[$Client] building the all-areas executive brief ($($sums.Count) areas)..."
+  $nodeArgs = @($briefJs, '--pack', ($sums -join ';'), '--client', $Client, '--out', $OutDir)
+  if ($InternalDomains) { $nodeArgs += @('--internal', $InternalDomains) }
+  if ($NoPdf) { $nodeArgs += '--no-pdf' }
+  $lines = @(& node @nodeArgs 2>&1 | ForEach-Object { "$_" })
+  $lines | ForEach-Object { Write-Host "  $_" }
+  $row = [ordered]@{ project = "$Client - all areas"; client = $Client; workload = 'All'; status = ''; source = 'combined'; folder = $OutDir; htmlPath = $null; pdfPath = $null; summaryPath = $null }
+  if ($LASTEXITCODE) { $row.status = "Failed: fly-brief.js --pack exited with $LASTEXITCODE"; return [pscustomobject]$row }
+  $row.htmlPath = ($lines | Where-Object { $_ -match '^PACK HTML:\s+(.+)$' } | ForEach-Object { $Matches[1].Trim() } | Select-Object -First 1)
+  $row.pdfPath  = ($lines | Where-Object { $_ -match '^PACK PDF:\s+(.+)$' }  | ForEach-Object { $Matches[1].Trim() } | Select-Object -First 1)
+  $row.status = 'OK'
+  [pscustomobject]$row
+}
+
+$areaOrder = 'Exchange', 'OneDrive', 'SharePoint', 'Teams', 'M365Group', 'TeamChat'
+$platformArea = @{ 0 = 'Exchange'; 1 = 'Teams'; 2 = 'SharePoint'; 3 = 'OneDrive'; 4 = 'M365Group'; 5 = 'TeamChat' }   # FLY sourcePlatform codes
+
+# ── Export-folder mode: briefs from reports downloaded from the FLY portal ───────────────────────
+# Every *Mappings.csv is one report; its detail files are matched by workload + export time, so a folder
+# holding several areas (or copies of the same extract) never mixes their data. Duplicate copies of the
+# same report are built once. Areas with no downloaded report are filled from live FLY data when -Company
+# names the customer. Output: one brief per area plus the all-areas pack, in one folder.
 if ($ExportFolder) {
   if (-not (Test-Path $ExportFolder -PathType Container)) { throw "Export folder not found: $ExportFolder" }
+  $ExportFolder = (Resolve-Path $ExportFolder).Path
   $client = if ($ClientName) { $ClientName } elseif ($Company) { $Company } else { 'Migration' }
+  $outDir = if ($OutputRoot) { $OutputRoot } else { Join-Path $ExportFolder 'Executive Brief' }
+  New-Item -ItemType Directory -Force -Path $outDir | Out-Null
   Get-ChildItem $ExportFolder -Filter *.zip -Recurse | ForEach-Object {
     $dest = Join-Path $_.DirectoryName $_.BaseName
     if (-not (Test-Path $dest)) { Write-Host "Expanding $($_.Name)"; Expand-Archive $_.FullName -DestinationPath $dest -Force }
   }
-  $dirs = @(Get-ChildItem $ExportFolder -Recurse -File -Filter '*Mappings.csv' | Select-Object -ExpandProperty DirectoryName -Unique)
-  if (-not $dirs) { Save-Results @(); throw "No *Mappings.csv found under $ExportFolder. Download the project's migration report (CSV) from the FLY portal's Download Center and unzip it there." }
+  # One entry per distinct report (workload + export second), preferring the copy nearest the top folder
+  $reports = [ordered]@{}
+  Get-ChildItem $ExportFolder -Recurse -File -Filter '*Mappings.csv' |
+    Where-Object { $_.FullName -notlike "$outDir*" } |
+    Sort-Object { ($_.FullName -split '\\').Count }, FullName | ForEach-Object {
+      if ($_.Name -match '^(\w+?)(?:Summary|Migration)Report_(\d{14})') { $key = "$($Matches[1])|$($Matches[2])"; $wl = $Matches[1] } else { $key = $_.FullName; $wl = '' }
+      if (-not $reports.Contains($key)) { $reports[$key] = [pscustomobject]@{ workload = $wl; path = $_.FullName } }
+      else { Write-Host "Skipping duplicate copy: $($_.FullName)" }
+    }
+  if (-not $reports.Count -and -not $Company) { Save-Results @(); throw "No *Mappings.csv found under $ExportFolder. Download each project's migration report (CSV) from the FLY portal's Download Center and unzip it there." }
+
   $results = @()
-  foreach ($d in $dirs) {
-    $map = Get-ChildItem $d -File -Filter '*Mappings.csv' | Select-Object -First 1
-    $wl = if ($map.Name -match '^(\w+?)(Summary|Migration)Report') { $Matches[1] } else { '' }
-    $row = [ordered]@{ project = "$client - $(if ($wl) { $wl } else { 'export' })"; client = $client; workload = $wl; status = ''; folder = $d; htmlPath = $null; pdfPath = $null; summaryPath = $null }
+  foreach ($r in ($reports.Values | Sort-Object { $i = $areaOrder.IndexOf($_.workload); if ($i -lt 0) { 99 } else { $i } })) {
+    $row = [ordered]@{ project = "$client - $(if ($r.workload) { $r.workload } else { 'export' })"; client = $client; workload = $r.workload; status = ''; source = 'FLY report (downloaded)'; folder = $null; htmlPath = $null; pdfPath = $null; summaryPath = $null }
     try {
-      Write-Host "[$($row.project)] building brief from $d"
-      $nodeArgs = @($briefJs, '--in', $d, '--client', $client, '--out', $d)
-      if ($wl) { $nodeArgs += @('--workload', $wl) }
-      if ($InternalDomains) { $nodeArgs += @('--internal', $InternalDomains) }
-      if ($NoPdf) { $nodeArgs += '--no-pdf' }
-      & node @nodeArgs
-      if ($LASTEXITCODE) { throw "fly-brief.js exited with $LASTEXITCODE" }
-      $row.htmlPath    = Get-ChildItem $d -Filter '*_Executive_Brief.html' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
-      $row.pdfPath     = Get-ChildItem $d -Filter '*_Executive_Brief.pdf' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
-      $row.summaryPath = Get-ChildItem $d -Filter '*_Executive_Brief.summary.json' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
-      $row.status = 'OK'
-      Write-Host "[$($row.project)] done" -ForegroundColor Green
+      Write-Host "[$($row.project)] building brief from $(Split-Path $r.path -Leaf)"
+      Invoke-AreaBrief $row @('--report', $r.path) $outDir
     } catch {
       Write-Warning "[$($row.project)] $($_.Exception.Message)"
       $row.status = 'Failed: ' + $_.Exception.Message
     }
     $results += [pscustomobject]$row
   }
+
+  # Areas with no downloaded report: live FLY data for the customer's matching project(s)
+  $covered = @($results | Where-Object status -eq 'OK' | ForEach-Object workload)
+  $missing = @($areaOrder | Where-Object { $_ -notin $covered })
+  if ($Company -and $missing.Count) {
+    try {
+      Connect-FlyFromConfig
+      $projects = @(Get-AllFlyProjects | Where-Object {
+          $area = $platformArea[[int]$_.sourcePlatform]
+          $area -in $missing -and ($_.name -like "$Company - *" -or ($_.name -split '\s+-\s+', 2)[0].Trim() -eq $Company)
+        })
+      foreach ($fp in $projects) {
+        $wl = $platformArea[[int]$fp.sourcePlatform]
+        $row = [ordered]@{ project = $fp.name; client = $client; workload = $wl; status = ''; source = 'FLY live data'; folder = $null; htmlPath = $null; pdfPath = $null; summaryPath = $null }
+        try {
+          Write-Host "[$($fp.name)] no downloaded report - reading live migration status from FLY..."
+          $live = Join-Path $outDir ((& $safeName "$client $wl") + '_live-summary.json')
+          Get-FlyLiveSummary -ProjectId $fp.id -Workload $wl | ConvertTo-Json -Depth 6 | Set-Content $live -Encoding UTF8
+          Invoke-AreaBrief $row @('--summary', $live) $outDir
+        } catch {
+          Write-Warning "[$($fp.name)] $($_.Exception.Message)"
+          $row.status = 'Failed: ' + $_.Exception.Message
+        }
+        $results += [pscustomobject]$row
+      }
+      $stillMissing = @($missing | Where-Object { $_ -notin @($projects | ForEach-Object { $platformArea[[int]$_.sourcePlatform] }) })
+      if ($stillMissing.Count) { Write-Host "No FLY project for: $($stillMissing -join ', ')" }
+    } catch { Write-Warning "Could not fill missing areas from live FLY data: $($_.Exception.Message)" }
+    finally { try { Disconnect-Fly | Out-Null } catch {} }
+  } elseif ($missing.Count) {
+    Write-Host "No downloaded report for: $($missing -join ', ') (pass -Company to fill these from live FLY data)"
+  }
+
+  $pack = New-FlyBriefPack $results $client $outDir
+  if ($pack) { $results = @($pack) + $results }
   Save-Results $results
-  $results | Format-Table project, status, folder -AutoSize -Wrap | Out-Host
+  $results | Format-Table project, status, source -AutoSize -Wrap | Out-Host
+  if ($pack -and $pack.pdfPath) { Write-Host "All-areas executive brief: $($pack.pdfPath)" -ForegroundColor Green }
   return
 }
 
@@ -369,5 +447,11 @@ foreach ($p in $work) {
 }
 
 if ($needFly) { try { Disconnect-Fly | Out-Null } catch {} }
+# One document for the executive team when the run covers a single customer
+$clients = @($results | Where-Object status -eq 'OK' | ForEach-Object client | Sort-Object -Unique)
+if ($clients.Count -eq 1) {
+  $pack = New-FlyBriefPack $results $clients[0] (Join-Path $cfg.OutputRoot (& $safeName $clients[0]))
+  if ($pack) { $results = @($pack) + $results; if ($pack.pdfPath) { Write-Host "All-areas executive brief: $($pack.pdfPath)" -ForegroundColor Green } }
+}
 Save-Results $results
 $results | Format-Table project, status, folder -AutoSize -Wrap | Out-Host

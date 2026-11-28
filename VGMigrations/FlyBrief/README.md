@@ -23,6 +23,15 @@ The app uses the toolkit's Fly API settings (`%APPDATA%\FlyMigration\config.json
 2. **Fly.Client report export.** Only with `-UseApiReport`. FLY currently finishes these jobs but returns `reportUrl: null` (Fly.Client issue #16, open since Oct 2026), so it is off by default.
 3. **Live FLY API data.** Always available, and takes about 5 seconds per project. It gives mapping-level figures that match the report: completed, with exceptions, failed, failed-with-data, GB migrated and job dates. Item counts, permissions and sharing links are not in the API, so the brief says so and flags an access review instead. The preview and run results show which source each brief used.
 
+### The all-areas executive brief (for emailing to the executive team)
+Every run that covers one customer also writes `<Customer>_Migration_Executive_Brief.pdf` and `.html`. Page 1 is a one-page summary of all six areas: status, % migrated, data, open items, permissions, anyone-edit links, a one-line highlight per area, and the decisions merged across areas. After that comes one page per migrated area. The HTML is static, with no scripts, so it opens cleanly as an email attachment. An area with no mappings in FLY is listed on the summary page but gets no page of its own.
+
+From reports you downloaded from the FLY portal (full figures, including permissions and sharing links):
+```
+.\Invoke-FlyBriefs.ps1 -ExportFolder "E:\Avepoint\Reports\Extracts" -Company Amickiel
+```
+Zips are expanded and each `*Mappings.csv` is paired only with its own detail files (same workload, same export time), so a folder holding every area, or copies of the same extract, never mixes data between areas. Areas with no downloaded report are filled from live FLY data for that customer's project. Output goes to `<ExportFolder>\Executive Brief\` (or `-OutputRoot`).
+
 ## 2. Manual: open the template and choose an export
 1. Open `FLY_Executive_Brief.html` in Edge or Chrome.
 2. Choose the export folder. The brief needs the `…Mappings.csv` file, plus `…Site security.csv` and `…SharedLink.csv` for the security section. It skips the large "Site objects" files.

@@ -1,7 +1,20 @@
 {
-  "version": "2.9.244",
+  "version": "2.9.245",
   "releaseDate": "2026-11-28",
   "changelog": [
+    {
+      "version": "2.9.245",
+      "date": "2026-11-28",
+      "changes": [
+        "FLY Executive Brief: new all-areas executive brief for emailing to the executive team. <Customer>_Migration_Executive_Brief.pdf/.html has a one-page summary of every area (status, % migrated, data, open items, permissions restored, anyone-edit links, one-line highlight, and decisions merged across areas with each area's own counts), then one page per migrated area. The HTML is static (no scripts), so it renders the same as an email attachment. It is built automatically by the app's Generate Brief and by the export-folder mode",
+        "Fixed export-folder mode mixing areas: a folder holding several areas' reports (or copies of the same extract) was read as ONE report, so the brief took one area's summary with another area's permission and sharing-link files. Each *Mappings.csv is now paired only with its own files (same workload + export second), duplicate copies are built once, and all briefs go to one folder (<ExportFolder>\\Executive Brief)",
+        "Export-folder mode with -Company fills areas that have no downloaded report from live FLY data. An area with no mappings in FLY is shown as 'No mappings' on the summary page, is not scored, and gets no page",
+        "Brief fixes: a report with no permission or sharing-link rows no longer shows '100% of permissions restored'. On the summary page, open accounts that hold no data do not mark an area At Risk",
+        "fly-brief.js: --report <Mappings.csv> and --pack <summaries>. FLY_Executive_Brief.html: shared facts() for per-area figures, renderOverview() for the summary page",
+        "App: the preview lists the all-areas brief first, and Open PDF opens it"
+      ],
+      "breaking": false
+    },
     {
       "version": "2.9.244",
       "date": "2026-11-28",
