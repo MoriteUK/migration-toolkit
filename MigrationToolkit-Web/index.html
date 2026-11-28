@@ -2340,6 +2340,17 @@
               <p class="form-help">Default: Migrations\Logs\FlyBriefs\{Customer}\{Project}\{yyyyMMdd-HHmm}</p>
             </div>
           </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">Export Folder (use reports downloaded from FLY)</label>
+              <div class="input-with-button">
+                <input type="text" class="form-input form-input-compact" id="flyBriefExportFolder" placeholder="Leave blank to export straight from FLY">
+                <button type="button" data-folder="true">Browse</button>
+              </div>
+              <p class="form-help">FLY's API sometimes finishes an export without returning the file. If that happens, download each project's migration report (CSV) from the FLY portal's Download Center into one folder and pick it here. Zips are unpacked, every workload in the folder gets a brief, and the briefs are saved next to the reports.</p>
+            </div>
+          </div>
         </div>
 
         <div class="form-card form-card-compact">
@@ -2564,7 +2575,7 @@
     </div>
   </div>
 
-  <script src="renderer.js?v=2.9.242"></script>
+  <script src="renderer.js?v=2.9.243"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">

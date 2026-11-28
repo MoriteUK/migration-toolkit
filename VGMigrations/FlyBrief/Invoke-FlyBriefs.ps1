@@ -28,6 +28,12 @@
   Comma-separated internal email domains used to classify sharing-link recipients. Defaults to the
   config entry, then to the domains detected in the export.
 
+.PARAMETER ExportFolder
+  Build briefs from report exports already downloaded from the FLY portal (Download Center) instead
+  of exporting through the API. Any .zip files are expanded; every folder holding a *Mappings.csv
+  gets its own brief, written next to the CSVs. No FLY sign-in is needed.
+  Use this while the FLY API returns no report URL for export jobs (Fly.Client issue #16).
+
 .PARAMETER ResultPath
   Also write the per-project results as JSON to this file (used by the Migration Toolkit app).
 
@@ -57,6 +63,7 @@ param(
   [string]$ConfigPath,
   [string]$OutputRoot,
   [string]$InternalDomains,
+  [string]$ExportFolder,
   [string]$ResultPath,
   [switch]$SkipExport,
   [string]$Project = '*',
@@ -75,8 +82,9 @@ if (-not $ConfigPath) {
   }
   $ConfigPath = if ($localOk) { $local } else { Join-Path $env:APPDATA 'FlyMigration\config.json' }
 }
-if (-not (Test-Path $ConfigPath)) { throw "Config not found: $ConfigPath. Configure the Fly API in the toolkit's Settings, or create fly-config.json." }
-$raw = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+if (Test-Path $ConfigPath) { $raw = Get-Content $ConfigPath -Raw | ConvertFrom-Json }
+elseif ($ExportFolder) { $raw = [pscustomobject]@{} }   # export-folder mode never talks to FLY
+else { throw "Config not found: $ConfigPath. Configure the Fly API in the toolkit's Settings, or create fly-config.json." }
 $isToolkitCfg = -not $raw.projects -and -not $raw.discover -and $raw.Url
 $cfg = [pscustomobject]@{
   Url        = $(if ($raw.flyUrl) { $raw.flyUrl } else { $raw.Url })
@@ -173,6 +181,45 @@ function Save-Results($rows) {
   if ($ResultPath) { ConvertTo-Json -InputObject @($rows) -Depth 4 | Set-Content -Path $ResultPath -Encoding UTF8 }
 }
 
+# ── Export-folder mode: briefs from reports downloaded from the FLY portal, no API calls ─────
+if ($ExportFolder) {
+  if (-not (Test-Path $ExportFolder -PathType Container)) { throw "Export folder not found: $ExportFolder" }
+  $client = if ($ClientName) { $ClientName } elseif ($Company) { $Company } else { 'Migration' }
+  Get-ChildItem $ExportFolder -Filter *.zip -Recurse | ForEach-Object {
+    $dest = Join-Path $_.DirectoryName $_.BaseName
+    if (-not (Test-Path $dest)) { Write-Host "Expanding $($_.Name)"; Expand-Archive $_.FullName -DestinationPath $dest -Force }
+  }
+  $dirs = @(Get-ChildItem $ExportFolder -Recurse -File -Filter '*Mappings.csv' | Select-Object -ExpandProperty DirectoryName -Unique)
+  if (-not $dirs) { Save-Results @(); throw "No *Mappings.csv found under $ExportFolder. Download the project's migration report (CSV) from the FLY portal's Download Center and unzip it there." }
+  $results = @()
+  foreach ($d in $dirs) {
+    $map = Get-ChildItem $d -File -Filter '*Mappings.csv' | Select-Object -First 1
+    $wl = if ($map.Name -match '^(\w+?)(Summary|Migration)Report') { $Matches[1] } else { '' }
+    $row = [ordered]@{ project = "$client - $(if ($wl) { $wl } else { 'export' })"; client = $client; workload = $wl; status = ''; folder = $d; htmlPath = $null; pdfPath = $null; summaryPath = $null }
+    try {
+      Write-Host "[$($row.project)] building brief from $d"
+      $nodeArgs = @($briefJs, '--in', $d, '--client', $client, '--out', $d)
+      if ($wl) { $nodeArgs += @('--workload', $wl) }
+      if ($InternalDomains) { $nodeArgs += @('--internal', $InternalDomains) }
+      if ($NoPdf) { $nodeArgs += '--no-pdf' }
+      & node @nodeArgs
+      if ($LASTEXITCODE) { throw "fly-brief.js exited with $LASTEXITCODE" }
+      $row.htmlPath    = Get-ChildItem $d -Filter '*_Executive_Brief.html' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+      $row.pdfPath     = Get-ChildItem $d -Filter '*_Executive_Brief.pdf' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+      $row.summaryPath = Get-ChildItem $d -Filter '*_Executive_Brief.summary.json' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+      $row.status = 'OK'
+      Write-Host "[$($row.project)] done" -ForegroundColor Green
+    } catch {
+      Write-Warning "[$($row.project)] $($_.Exception.Message)"
+      $row.status = 'Failed: ' + $_.Exception.Message
+    }
+    $results += [pscustomobject]$row
+  }
+  Save-Results $results
+  $results | Format-Table project, status, folder -AutoSize -Wrap | Out-Host
+  return
+}
+
 $needFly = -not $SkipExport -or ($cfg.Discover -and $cfg.Discover.enabled)
 if ($needFly) { Connect-FlyFromConfig }
 $work = Get-WorkList
@@ -214,7 +261,7 @@ foreach ($p in $work) {
     }
     $row.folder = $out
     if (-not (Get-ChildItem $out -Recurse -Filter '*Mappings.csv')) {
-      throw "No *Mappings.csv in $out. Either the project has no migrated mappings yet, or FLY returned no report file (Fly.Client issue #16)."
+      throw "FLY finished the export but returned no report file (its API gave reportUrl = null - Fly.Client issue #16), or the project has no migrated mappings yet. Download the report from the FLY portal's Download Center and use the Export Folder option instead."
     }
     Write-Host "[$($p.project)] building brief..."
     $nodeArgs = @($briefJs, '--in', $out, '--client', $client, '--workload', $p.workload, '--out', $out)

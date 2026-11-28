@@ -18,6 +18,12 @@ Go to **Reports → FLY Executive Brief**.
 
 The app uses the toolkit's Fly API settings (`%APPDATA%\FlyMigration\config.json`: Url, ClientId, EncSecret), so no extra setup is needed.
 
+**If a workload fails with "returned no report file".** FLY's API can finish an export job yet return `reportUrl: null` (Fly.Client issue #16; seen on 28 Nov 2026 for every export tried). In that case:
+1. In the FLY portal, open the **Download Center**. Generate or download each project's migration report as CSV into one folder; zips are fine.
+2. In the panel, set **Export Folder** to that folder and click **Generate Brief**. The customer is optional, but it sets the name used on the brief.
+
+Every report in the folder gets its own brief. The workload is detected from the file name, and the brief is saved next to its CSVs. No FLY sign-in is needed.
+
 ## 2. Manual: open the template and choose an export
 1. Open `FLY_Executive_Brief.html` in Edge or Chrome.
 2. Choose the export folder. The brief needs the `…Mappings.csv` file, plus `…Site security.csv` and `…SharedLink.csv` for the security section. It skips the large "Site objects" files.
@@ -38,6 +44,7 @@ The PDF is rendered with headless Edge or Chrome. Set `EDGE_PATH` if neither is 
 .\Invoke-FlyBriefs.ps1 -Project "AEP - OneDrive"                 # one project
 .\Invoke-FlyBriefs.ps1 Caternet -SkipExport                      # rebuild from the latest exports
 .\Invoke-FlyBriefs.ps1 Caternet -OutputRoot D:\Briefs -NoPdf -ResultPath .\results.json
+.\Invoke-FlyBriefs.ps1 -ExportFolder "C:\Users\me\Downloads\Caternet reports" -ClientName Caternet   # from portal downloads, no API
 ```
 **Config.** The script uses `fly-config.json` from this folder, but only if that file contains real credentials (`EncSecret` or a certificate thumbprint). Otherwise it falls back to the toolkit config and auto-discovers every project. To use certificate auth, explicit project entries or `discover.exclude` patterns, copy `fly-config.example.json` to `fly-config.json`. That file is git-ignored.
 
@@ -45,6 +52,6 @@ The PDF is rendered with headless Edge or Chrome. Set `EDGE_PATH` if neither is 
 
 **Output.** Briefs are written to `<OutputRoot>\<client>\<project>\<yyyyMMdd-HHmm>\<client>_<workload>_Executive_Brief.{html,pdf,summary.json}`. Exchange, Teams, Groups and Teams Chat briefs have no sharing-link data, so their security column flags what to review separately.
 
-**Known limitation.** Fly.Client issue #16: an export job can finish without returning a report URL. When that happens, the project is reported as failed instead of producing an empty brief.
+**Known limitation.** Fly.Client issue #16: an export job can finish without returning a report URL. FLY's own `GET /downloadcenter/reporturl` returns `{"reportUrl": null}`, so this is not a client bug. When it happens, the project is reported as failed instead of producing an empty brief. Use `-ExportFolder` with reports downloaded from the portal.
 
 Thresholds such as the green/amber limits and the "stalled" days are in the `CFG` block at the top of the core script in `FLY_Executive_Brief.html`.

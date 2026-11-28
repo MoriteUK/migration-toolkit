@@ -4641,10 +4641,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (generateFlyBriefBtn) {
     generateFlyBriefBtn.addEventListener('click', async () => {
       const customerPrefix = document.getElementById('flyBriefCustomer').value.trim();
-      if (!customerPrefix) { alert('Please select a customer'); return; }
+      const exportFolder = document.getElementById('flyBriefExportFolder').value.trim();
+      if (!customerPrefix && !exportFolder) { alert('Please select a customer (or pick an Export Folder of downloaded FLY reports)'); return; }
 
       const options = {
         customerPrefix,
+        exportFolder,
         clientName: document.getElementById('flyBriefClientName').value.trim(),
         internalDomains: document.getElementById('flyBriefInternalDomains').value.trim(),
         outputPath: document.getElementById('flyBriefOutputPath').value.trim(),
@@ -4656,7 +4658,9 @@ document.addEventListener('DOMContentLoaded', () => {
       flyBriefPreview.classList.add('hidden');
       downloadFlyBriefBtn.classList.add('hidden');
       openFlyBriefBtn.classList.add('hidden');
-      flyBriefLogOutput.textContent = `Exporting FLY reports for "${customerPrefix}" - this can take several minutes per workload...\n\n`;
+      flyBriefLogOutput.textContent = exportFolder
+        ? `Building briefs from the FLY reports in ${exportFolder}...\n\n`
+        : `Exporting FLY reports for "${customerPrefix}" - this can take several minutes per workload...\n\n`;
       generateFlyBriefBtn.disabled = true;
       generateFlyBriefBtn.textContent = 'Processing...';
 
@@ -4692,7 +4696,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (ok.length) {
-          let html = `<div style="font-size:12px;line-height:1.6;"><strong>${flyEsc(options.clientName || customerPrefix)}</strong> &middot; generated ${flyEsc(new Date().toLocaleString())}<br><br>`;
+          let html = `<div style="font-size:12px;line-height:1.6;"><strong>${flyEsc(options.clientName || customerPrefix || 'Migration')}</strong> &middot; generated ${flyEsc(new Date().toLocaleString())}<br><br>`;
           ok.forEach(b => {
             const s = b.summary;
             html += `<div style="margin-bottom:12px;"><strong>${flyEsc(b.workload)}</strong> &mdash; ${flyEsc(b.project)}`;

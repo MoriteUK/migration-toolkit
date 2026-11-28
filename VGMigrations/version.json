@@ -1,7 +1,18 @@
 {
-  "version": "2.9.242",
+  "version": "2.9.243",
   "releaseDate": "2026-11-28",
   "changelog": [
+    {
+      "version": "2.9.243",
+      "date": "2026-11-28",
+      "changes": [
+        "FLY Executive Brief: new Export Folder option. FLY's API currently finishes report exports but returns reportUrl = null (confirmed with a raw GET /downloadcenter/reporturl on a finished, unexpired AEP - OneDrive job), so Fly.Client downloads nothing (Fly.Client issue #16). Download the migration reports from the FLY portal's Download Center into one folder and pick it here instead. Zips are expanded, the workload is detected from each report name, and one brief per report is written next to its CSVs",
+        "Invoke-FlyBriefs.ps1: new -ExportFolder mode (no FLY sign-in or config needed). The automatic-export failure message now names the null report URL and points to the Export Folder option",
+        "fly-brief.js: fixed PDFs silently missing when several briefs are built in a row. Every run shared one headless Edge profile, so a second run handed its job to the still-running first instance and exited without writing its PDF. Each run now gets its own profile and waits (up to 60s) for the PDF to finish writing",
+        "renderer.js cache-buster bumped to 2.9.243. A window opened before an update keeps running the old screen code until the app is fully closed and reopened"
+      ],
+      "breaking": false
+    },
     {
       "version": "2.9.242",
       "date": "2026-11-28",

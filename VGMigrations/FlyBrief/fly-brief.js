@@ -57,9 +57,23 @@ async function buildBrief({ input, client, workload, out, internal, noPdf, log =
     const edge = findEdge();
     if (!edge) { log('Edge/Chrome not found; skipped PDF (set EDGE_PATH).'); return { htmlOut, summary }; }
     const pdfOut = path.join(out, base + '.pdf');
-    const profile = path.join(require('os').tmpdir(), 'fly-brief-edge');
-    execFileSync(edge, ['--headless=new', '--disable-gpu', '--no-pdf-header-footer', '--user-data-dir=' + profile,
+    // A fresh profile per run: with a shared --user-data-dir, a second run while the previous headless
+    // Edge is still alive hands its job to that instance and exits, so its PDF is never written.
+    const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'fly-brief-edge-'));
+    try { fs.unlinkSync(pdfOut); } catch { /* no previous PDF */ }
+    execFileSync(edge, ['--headless=new', '--disable-gpu', '--no-pdf-header-footer', '--no-first-run', '--user-data-dir=' + profile,
       '--virtual-time-budget=5000', '--print-to-pdf=' + pdfOut, require('url').pathToFileURL(htmlOut).href], { stdio: 'ignore' });
+    // msedge.exe can return before the PDF is flushed: wait until it exists and its size stops changing.
+    const deadline = Date.now() + 60000;
+    let last = -1;
+    while (Date.now() < deadline) {
+      const size = fs.existsSync(pdfOut) ? fs.statSync(pdfOut).size : -1;
+      if (size > 0 && size === last) break;
+      last = size;
+      await new Promise(r => setTimeout(r, 500));
+    }
+    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }); } catch { /* best effort */ }
+    if (!fs.existsSync(pdfOut)) { log('PDF was not produced by ' + path.basename(edge) + ' within 60s.'); return { htmlOut, summary }; }
     log('PDF:  ' + pdfOut);
     return { htmlOut, pdfOut, summary };
   }
