@@ -14,6 +14,15 @@ const PS_SCRIPT_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'VGMigrations')
   : path.join(__dirname, '..', 'VGMigrations');
 
+// Toolkit version this main process started with. If version.json on disk moves on (an update or a
+// source change), the window can be reloaded but this process keeps running the old main.js until the
+// app is fully closed - the renderer compares the two and asks for a restart instead of running old code.
+function readToolkitVersion() {
+  try { return JSON.parse(require('fs').readFileSync(path.join(PS_SCRIPT_PATH, 'version.json'), 'utf8').replace(/^﻿/, '')).version || ''; }
+  catch { return ''; }
+}
+const STARTED_VERSION = readToolkitVersion();
+
 // Shared OneDrive folder so script-run logs land in one place across every device, instead of
 // each machine's own local %APPDATA%\FlyMigration\Logs.
 const LOGS_DIR = 'C:\\Users\\andyw\\OneDrive - Andy White\\Contracts\\Jolera\\Migrations\\Logs';
@@ -624,6 +633,8 @@ function registerIPCHandlers() {
   });
 
   // Open a file or folder with its default handler (brief PDF / output folder)
+  ipcMain.handle('app-build', async () => ({ started: STARTED_VERSION, current: readToolkitVersion() }));
+
   ipcMain.handle('open-path', async (event, filePath) => {
     const { shell } = require('electron');
     const error = await shell.openPath(filePath);

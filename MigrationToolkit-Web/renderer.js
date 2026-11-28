@@ -82,6 +82,31 @@ document.addEventListener('click', (e) => {
 // so a single global button/handler covers every screen without needing a
 // Stop button wired into each individual view.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Stale-process guard. Reloading the window picks up new screen code, but the app's main process
+// keeps running the main.js it started with until the app is fully closed. Old main.js + new screens
+// silently does the wrong thing (e.g. builds the executive brief when the TechTeam report was asked
+// for), so compare the version the main process started with against version.json on disk.
+// ---------------------------------------------------------------------------
+async function ensureCurrentBuild() {
+  let stale = false, detail = '';
+  try {
+    const b = await window.electronAPI.appBuild();
+    stale = !!(b && b.started && b.current && b.started !== b.current);
+    detail = stale ? ` (running ${b.started}, installed ${b.current})` : '';
+  } catch { stale = true; }   // main process predates this check
+  let bar = document.getElementById('staleBuildBanner');
+  if (stale && !bar) {
+    bar = document.createElement('div');
+    bar.id = 'staleBuildBanner';
+    bar.style.cssText = 'position:sticky;top:0;z-index:3000;background:#b3261e;color:#fff;padding:10px 16px;font-weight:600;text-align:center';
+    bar.textContent = `The Migration Toolkit has been updated${detail}. Close the app completely and reopen it before running anything - until then some screens run old code.`;
+    document.body.prepend(bar);
+  }
+  return !stale;
+}
+document.addEventListener('DOMContentLoaded', () => { ensureCurrentBuild(); });
+
 async function runStreamingScript(scriptName, args) {
   const stopBtn = document.getElementById('globalStopBtn');
   if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '■ Stop Script'; stopBtn.style.display = 'inline-flex'; }
@@ -4639,6 +4664,7 @@ document.addEventListener('DOMContentLoaded', () => {
     generateFlyBriefBtn.addEventListener('click', async () => {
       const customerPrefix = document.getElementById('flyBriefCustomer').value.trim();
       if (!customerPrefix) { alert('Please select a customer'); return; }
+      if (!(await ensureCurrentBuild())) { alert('The Migration Toolkit has been updated. Close the app completely and reopen it, then generate the brief again.'); return; }
       // The brief is titled with the customer prefix; internal email domains are detected from FLY's data.
       // (Settings → Customers AccountName is the admin sign-in and Domain a tenant prefix - neither fits.)
       const options = {
@@ -4740,6 +4766,7 @@ document.addEventListener('DOMContentLoaded', () => {
     genTechBtn.addEventListener('click', async () => {
       const customerPrefix = document.getElementById('flyTechCustomer').value.trim();
       if (!customerPrefix) { alert('Please select a customer'); return; }
+      if (!(await ensureCurrentBuild())) { alert('The Migration Toolkit has been updated. Close the app completely and reopen it, then run the TechTeam report again.'); return; }
       const exportFolder = document.getElementById('flyTechReportsFolder').value.trim();
       techLog.classList.remove('hidden');
       openTechBtn.classList.add('hidden'); openTechFolderBtn.classList.add('hidden');
@@ -4756,7 +4783,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       try {
         const result = await window.electronAPI.generateFlyBrief({ customerPrefix, mode: 'tech', exportFolder });
-        const report = (result.briefs || []).find(b => b.status === 'OK' && b.htmlPath);
+        // only ever offer the TechTeam report itself (never an executive brief from the same run)
+        const report = (result.briefs || []).find(b => b.status === 'OK' && b.workload === 'TechTeam' && b.htmlPath);
         if (result.success && report) {
           techOut.textContent += `\n✅ TechTeam report ready and opened in your browser:\n   ${report.htmlPath}\n`;
           openTechBtn.classList.remove('hidden'); openTechBtn.setAttribute('data-path', report.htmlPath);

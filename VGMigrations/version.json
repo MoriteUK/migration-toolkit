@@ -1,7 +1,18 @@
 {
-  "version": "2.9.249",
+  "version": "2.9.250",
   "releaseDate": "2026-11-28",
   "changelog": [
+    {
+      "version": "2.9.250",
+      "date": "2026-11-28",
+      "changes": [
+        "Fixed: Fly TechTeam Report sometimes built the executive brief instead, did not open automatically, and its Open Report button opened the executive report. Cause: the app's main process had been running since before the TechTeam report existed. Reloading the window updates the screens but not main.js, so the old main.js treated the request as an executive-brief run",
+        "New stale-process guard: the app records the toolkit version its main process started with and compares it with version.json on disk. If they differ, a red banner says to close the app completely and reopen it, and the Executive Brief and TechTeam Generate buttons refuse to run rather than run old code",
+        "TechTeam Open Report / auto-open only ever use the TechTeam report itself (workload 'TechTeam'), never an executive brief from the same run",
+        "Verified in the app: Bravura Security TechTeam report built in 28s and auto-opened. With version.json changed under the running app, the banner appeared and Generate was blocked"
+      ],
+      "breaking": false
+    },
     {
       "version": "2.9.249",
       "date": "2026-11-28",

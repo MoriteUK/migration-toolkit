@@ -54,5 +54,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generateFlyBrief: (options) => ipcRenderer.invoke('generate-fly-brief', options),
 
   // Open a file or folder with its default handler
-  openPath: (filePath) => ipcRenderer.invoke('open-path', filePath)
+  openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
+
+  // { started, current } toolkit version of the running main process vs version.json on disk
+  appBuild: () => ipcRenderer.invoke('app-build')
 });
