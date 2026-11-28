@@ -50,18 +50,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Read VBU CSV file for domain dropdown
   readVbuCsv: (filePath) => ipcRenderer.invoke('read-vbu-csv', filePath),
 
-  // Generate FLY Executive Brief (from local export folder)
+  // FLY Executive Brief: export FLY reports for a customer and build the briefs (streams on ps-output)
   generateFlyBrief: (options) => ipcRenderer.invoke('generate-fly-brief', options),
 
-  // Generate FLY Executive Brief (from FLY API)
-  generateFlyBriefFromApi: (options) => ipcRenderer.invoke('generate-fly-brief-from-api', options),
-
-  // Open file or folder path
-  openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
-
-  // Get discovery domains (reuse existing shared config)
-  getDiscoveryDomains: async () => {
-    const sharedConfig = await ipcRenderer.invoke('get-shared-config');
-    return sharedConfig.domains || [];
-  }
+  // Open a file or folder with its default handler
+  openPath: (filePath) => ipcRenderer.invoke('open-path', filePath)
 });

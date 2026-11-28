@@ -39,3 +39,8 @@ Desktop.ini
 .vscode/
 *.suo
 *.user
+
+# FLY executive brief - machine config and generated customer briefs
+fly-config.json
+VGMigrations/FlyBrief/fly-config.json
+test-output/

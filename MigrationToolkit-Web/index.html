@@ -2314,7 +2314,19 @@
                   <div id="flyBriefCustomerList"></div>
                 </div>
               </div>
-              <p class="form-help">Select from your configured customers - will find all matching FLY projects</p>
+              <p class="form-help">Customer prefix from Settings - every FLY project named "{Prefix} - {Workload}" gets a brief</p>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">Name on Brief</label>
+              <input type="text" class="form-input form-input-compact" id="flyBriefClientName" placeholder="Defaults to the customer prefix">
+            </div>
+            <div class="form-group flex-1">
+              <label class="form-label">Internal Email Domains</label>
+              <input type="text" class="form-input form-input-compact" id="flyBriefInternalDomains" placeholder="e.g. contoso.com, contoso.co.uk">
+              <p class="form-help">Used to classify sharing-link recipients. Blank = domains detected in the export</p>
             </div>
           </div>
 
@@ -2325,7 +2337,7 @@
                 <input type="text" class="form-input form-input-compact" id="flyBriefOutputPath" placeholder="Leave blank to use default location">
                 <button type="button" data-folder="true">Browse</button>
               </div>
-              <p class="form-help">Default: C:\Temp\Scripts\Avepoint\FLY\Reports\{Customer}\{Date}</p>
+              <p class="form-help">Default: Migrations\Logs\FlyBriefs\{Customer}\{Project}\{yyyyMMdd-HHmm}</p>
             </div>
           </div>
         </div>
@@ -2347,34 +2359,6 @@
               </label>
             </div>
           </div>
-
-          <div class="form-group" id="flyBriefEmailSection">
-            <label class="form-checkbox">
-              <input type="checkbox" id="flyBriefSendEmail">
-              <span>Email PDF report</span>
-            </label>
-
-            <div id="flyBriefEmailOptions" class="hidden" style="margin-left: 24px; margin-top: 10px;">
-              <div class="form-row">
-                <div class="form-group flex-1">
-                  <label class="form-label">To (email addresses, comma separated)</label>
-                  <input type="text" class="form-input form-input-compact" id="flyBriefEmailTo" placeholder="recipient@example.com, another@example.com">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group flex-1">
-                  <label class="form-label">Subject</label>
-                  <input type="text" class="form-input form-input-compact" id="flyBriefEmailSubject" placeholder="Migration Executive Brief - [Client Name]">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group flex-1">
-                  <label class="form-label">Email Body (optional)</label>
-                  <textarea class="form-input form-input-compact" id="flyBriefEmailBody" rows="3" placeholder="Please find attached the executive brief for the migration..."></textarea>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div class="form-actions">
@@ -2384,7 +2368,7 @@
           </button>
           <button type="button" class="btn btn-secondary hidden" id="downloadFlyBriefBtn">
             <span class="btn-icon">⬇️</span>
-            Download PDF
+            Open PDF
           </button>
           <button type="button" class="btn btn-secondary hidden" id="openFlyBriefBtn">
             <span class="btn-icon">📂</span>

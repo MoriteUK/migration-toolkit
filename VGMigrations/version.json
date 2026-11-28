@@ -1,7 +1,22 @@
 {
-  "version": "2.9.241",
-  "releaseDate": "2026-11-27",
+  "version": "2.9.242",
+  "releaseDate": "2026-11-28",
   "changelog": [
+    {
+      "version": "2.9.242",
+      "date": "2026-11-28",
+      "changes": [
+        "New Reports section: Reports > FLY Executive Brief builds a one-page CIO/CISO brief (HTML + PDF) for every FLY project named '{Prefix} - {Workload}' for the chosen customer",
+        "Brief engine now lives in VGMigrations\\FlyBrief\\ (FLY_Executive_Brief.html, fly-brief.js, Invoke-FlyBriefs.ps1, Test-FlyPrereqs.ps1) so it ships with the package and auto-update - the app was looking in a FLY\\Template folder that never existed",
+        "Invoke-FlyBriefs.ps1 uses the toolkit's own Fly API config (Url/ClientId/EncSecret) when there is no fly-config.json with real credentials; adds -ClientName, -OutputRoot, -InternalDomains, -NoPdf and -ResultPath (JSON results instead of scraping the console table)",
+        "Brief panel streams the script log live, works with the global Stop button, prefills Name on Brief / Internal Email Domains from the customer's AccountName / Domain, honours the Output Folder, and links each built PDF/HTML in the preview",
+        "Default brief output: Migrations\\Logs\\FlyBriefs\\{Customer}\\{Project}\\{yyyyMMdd-HHmm}",
+        "Removed the non-functional email option and the unused local-export brief handler; customer names are HTML-escaped in the dropdown",
+        "Test-FlyPrereqs.ps1 checks client-secret (DPAPI) auth, all six workloads and non-regional Fly URLs",
+        "fly-config.json and generated test briefs are git-ignored (customer data / client ID)"
+      ],
+      "breaking": false
+    },
     {
       "version": "2.9.241",
       "date": "2026-11-27",
@@ -19,12 +34,1728 @@
       "breaking": false
     },
     {
-      "version": "2.9.240",
-      "date": "2026-11-27",
+      "version": "2.9.156",
+      "date": "2026-10-13",
       "changes": [
-        "Previous version changes..."
-      ],
-      "breaking": false
+        "Electron app Discovery sidebar: Added 'Run Assessment' menu item between 'M365 Discovery' and 'Refresh Discovery Cache' that launches Assessment/Run-Assessment.ps1 directly in a new PowerShell window with its interactive workflow - gives quick access to the modern assessment engine from the main app sidebar"
+      ]
+    },
+    {
+      "version": "2.9.155",
+      "date": "2026-10-13",
+      "changes": [
+        "Discovery menu (discovery-menu.ps1): Added a third scan scope option 'Run Assessment (new)' alongside Single domain and Multiple domains - launches the modern Run-Assessment.ps1 workflow directly in a clean PowerShell window with its interactive mode menu and prompts, giving users direct access to the new assessment engine without needing domain/search-term pre-entry. Domain-specific options (VBU ID, Search Term, Output folder, SPO Admin URL, Skip checkboxes) are hidden when this mode is selected since the script handles all inputs interactively",
+        "Fixed Power Platform module loading conflict in discovery (search-domain.ps1): Removed Ensure-Module pre-check from both upfront and mid-run Power Platform scans that was trying to import Microsoft.PowerApps.Administration.PowerShell in the main session (where Microsoft.Graph is already loaded), causing Microsoft.Identity.Client assembly version conflicts. Both scans now spawn the isolated child pwsh.exe process directly without the pre-check, so the Power Platform module imports cleanly in its own session with no Graph SDK present"
+      ]
+    },
+    {
+      "version": "2.9.154",
+      "date": "2026-09-23",
+      "changes": [
+        "v2.9.153's discovery-engine revert only fixed discovery-menu.ps1 (a standalone WinForms tool) - the Electron app's own Discovery panel independently hardcodes its launch target in MigrationToolkit-Web/renderer.js and was untouched, so Discovery still launched Assessment/Run-Assessment.ps1 in its own window there, same as before. This is the exact 'wrong app' mistake called out in v2.9.152's changelog, this time caught before it shipped for more than one version",
+        "renderer.js's Discovery panel now streams search-domain.ps1 directly into the panel (window.electronAPI.onPsOutput / runStreamingScript, the same pattern every other panel here already uses) instead of opening Run-Assessment.ps1 in a separate window with a typed-prompt reminder - one run per domain via -Domain/-OutputPath/-BusinessUnitId/-SkipPowerPlatform, looping client-side for a multi-domain batch exactly as it did before v2.9.98. The VBU Search Term field and Skip Team Memberships checkbox are no longer read here - search-domain.ps1 has no equivalent parameters for either"
+      ]
+    },
+    {
+      "version": "2.9.153",
+      "date": "2026-09-23",
+      "changes": [
+        "Discovery engine: reverted discovery-menu.ps1 to the pre-v2.9.98 version (launches search-domain.ps1 / run-multiple-domains.ps1, restored to the VGMigrations root from _Legacy/ where they were left untouched) - deliberate, explicitly requested revert. Live server run of the v2.9.128 modular engine hit two separate failures in the same session: Connect-SPOService not recognized (Microsoft.Online.SharePoint.PowerShell installed via pwsh7's Install-Module -Scope CurrentUser lands under Documents\\PowerShell\\Modules, a path the separate Windows PowerShell 5.1 process that SharePoint.psm1's -UseWindowsPowerShell proxies through never scans - Get-Module -ListAvailable in the pwsh7 session itself still found it fine, so the prerequisite check falsely reported 'present'), and a Graph connection crash ('Method not found: ...BaseAbstractApplicationBuilder.WithLogging...', an MSAL/Identity.Client assembly-version conflict against ExchangeOnlineManagement, which had already connected successfully in the same process moments earlier). search-domain.ps1 avoids both: it imports the SPO module directly under pwsh7 (no WinPS proxy) and runs its SPO connection in an isolated child process, and separately pins Microsoft.Graph.Authentication to 2.33.0 with Exchange -DisableWAM",
+        "Also fixed the same SPO WinPS-visibility false-positive in the (now unused by the GUI, but left in place) modular engine's Assessment/Modules/Prerequisites.psm1 - both the presence check and the install now go through a real powershell.exe instead of trusting the pwsh7 session's own Get-Module -ListAvailable",
+        "Assessment/Run-Assessment.ps1 and Run-MultiAssessment.ps1 (not currently launched by discovery-menu.ps1, but kept working for anyone invoking them directly) now accept -VbuDomain/-VbuSearchTerm/-VbuId/-SharePointAdminUrl/-OutputPath instead of only prompting interactively; 'Generate Mapping Files' removed from Run-Assessment.ps1's mode menu (Invoke-MappingFileGeneration and its branch left in place, just unreachable from the menu)",
+        "fly-connector.js (AvePoint Fly connection automation): fixed a ReferenceError crashing Microsoft Teams Chat connection creation (a block-scoped variable was read outside the block it was declared in), fixed the Connections-page navigation retry logic that was toggling the Settings nav menu closed instead of leaving it open on a retry (hiding the Connections item and guaranteeing the fallback selector ran - which itself only matched the literal text 'Connection', never the real 'Connections' label, also fixed), and added a fast-fail check for Fly's own 'Select at least one authentication method to proceed' validation error immediately after clicking Save instead of sitting through a 90-second timeout chain before failing anyway",
+        "New-AzureAppRegistration.ps1: fixed the credentials text-file save assuming $env:USERPROFILE\\Desktop, which doesn't exist when Desktop is OneDrive-redirected (Known Folder Move) - now resolves the real Desktop path via [Environment]::GetFolderPath('Desktop')"
+      ]
+    },
+    {
+      "version": "2.9.152",
+      "date": "2026-09-14",
+      "changes": [
+        "The v2.9.151 dashboard change below was made in the wrong app - menu.ps1 is a legacy WinForms tool the user doesn't actually run (confirmed via their taskbar shortcut, which launches MigrationToolkit-Web/Electron instead). Left the menu.ps1 changes in place (harmless, unused) and made the real change in MigrationToolkit-Web: added a 'Mapping Files' sidebar item under Avepoint Steps, directly above 'Project' (renamed to 'Migrate', sidebar label and view heading both), wired to a new view with workbook/domain/SPO-URL/templates-folder/output-folder fields and a streamed-log Generate button, matching the existing Refresh Discovery Cache screen's layout and JS pattern exactly",
+        "Added VGMigrations\\Generate-FlyMappingFiles.ps1 - a non-interactive wrapper around Invoke-MappingFileGeneration for this new screen to call (Electron spawns pwsh.exe with no console, so Read-Host isn't available - confirmed by testing: an unset Fly Templates folder parameter hit the Read-Host fallback and failed with 'PowerShell is in NonInteractive mode'). Invoke-MappingFileGeneration's five inputs are now all optional parameters that fall back to the original prompts only when omitted, so Run-Assessment.ps1's interactive console mode is unchanged. Verified end-to-end against a synthetic assessment workbook (all 7 sheets, mixed Migrate Yes/No rows) with no parameters omitted - all 7 templates generated correctly, no prompts hit",
+        "Also caught and reverted a bad decision from earlier in this session before it caused real harm: v2.9.149 had deleted Update-DistributionGroupsCache.ps1/Update-SharePointSitesCache.ps1/Update-TeamsChannelsCache.ps1 as 'orphaned', but MigrationToolkit-Web's Misc Scripts > Refresh Discovery Cache screen calls all three by name - they were never orphaned, just broken (see v2.9.149's entry for the real, still-open bug). Restored via git checkout before anything was committed"
+      ]
+    },
+    {
+      "version": "2.9.151",
+      "date": "2026-09-14",
+      "changes": [
+        "AvePoint Fly dashboard (menu.ps1): renamed the 'Connections' card to 'Migrate' (unchanged behaviour - still opens the Migration Mappings/connections form), and added a new 'Mapping Files' card directly above it that launches Assessment\\Run-Assessment.ps1 in its own visible console pre-loaded with a reminder to select 'Generate Mapping Files' from its mode menu - the same launch-a-visible-console-with-a-reminder pattern discovery-menu.ps1 already uses for Run-Assessment.ps1, since that script takes no parameters and needs a real console for its arrow-key menu and prompts. Dashboard is now 3 rows of cards (was 2) to fit the new tile"
+      ]
+    },
+    {
+      "version": "2.9.150",
+      "date": "2026-09-14",
+      "changes": [
+        "Mapping File Generation (Assessment\\Modules\\MappingFiles.psm1, Invoke-MappingFileGeneration) now writes into copies of the actual 7 official AvePoint Fly Templates instead of generating fresh generic xlsx files - preserves each template's column widths, conditional formatting, and (for the SharePoint template) its 12 pre-seeded 'Site collection'/'Merge' rows, which are now filled in place rather than pushed below a duplicate header. Output goes to a new FLY\\ folder under a folder the user now picks via a folder-browser dialog, instead of an auto-timestamped MappingFiles\\ folder next to the workbook. New prompts: target tenant domain (was 'Destination domain'), and the Fly Templates source folder (defaults to the shared OneDrive location, overridable per run)",
+        "Added the 7th, previously entirely unsupported, mapping type: Fly_Import_User_Mapping_Template.xlsx (Source user/group -> Destination user/group), covering the same in-scope AD-user set as the existing Teams Chat mapping",
+        "Fixed a bug in the existing code (predates this change, found while touching this function): Teams Chat mappings silently read zero rows because the sheet name looked up was 'Users', but Workbook.psm1 has always written it as 'AD Users' - Import-WorkbookSheet caught the resulting Import-Excel error and returned an empty array with only a yellow warning, so every past run's Teams Chat mapping file was empty (or not written) without an obvious failure. Corrected to 'AD Users'; the new User mapping reads the same corrected sheet",
+        "Found and fixed a PowerShell/EPPlus gotcha while implementing the in-place template writer: $ws.Cells[$r, $c + 1] (unparenthesized arithmetic inside a variable-indexed .NET indexer) silently misparses as an array-concat expression instead of a two-argument indexer call, returning a plain System.Object[] rather than a cell reference - assigning .Value on it then fails. Fixed by parenthesizing to $ws.Cells[$r, ($c + 1)]. Verified against real copies of all 7 templates (including the SharePoint template's pre-seeded rows, both under- and over-filled, and templates with header columns the generated rows don't populate) before treating this as done"
+      ]
+    },
+    {
+      "version": "2.9.149",
+      "date": "2026-09-14",
+      "changes": [
+        "CORRECTED BELOW: this version briefly deleted Update-DistributionGroupsCache.ps1, Update-SharePointSitesCache.ps1 and Update-TeamsChannelsCache.ps1, wrongly believing them orphaned by v2.9.128's revert of the caching layer. That was based on searching the VGMigrations repo only - the live app is actually the separate MigrationToolkit-Web Electron app (sibling folder, not checked at the time), whose Misc Scripts > 'Refresh Discovery Cache' panel calls all three of these by name. Restored before anything was committed, so no functional change ships from this version",
+        "The real underlying bug is still open: Get-DiscoveryCacheFolder, Test-DiscoveryCachePrereqs and the per-workload CacheFile writers were dropped from Common.psm1/Exchange.psm1/SharePoint.psm1 by v2.9.128's revert, so all three cache-refresh scripts still fail immediately with 'term not recognized' errors when run from the Electron panel - needs Get-DiscoveryCacheFolder (and the writer functions) re-implemented, not just the scripts left in place"
+      ]
+    },
+    {
+      "version": "2.9.148",
+      "date": "2026-09-11",
+      "changes": [
+        "Found the real cause of the 155/164 NotFound results (v2.9.147's error-visibility fix made this diagnosable): confirmed live against AEP's actual Discovery folder that 'DG AEP BES' genuinely exists in the destination tenant - but under Alias 'DGAEPBES', not 'bes'. This Discovery folder's 03b_DistributionGroup_Members.csv is the LEGACY search-domain.ps1 schema (GroupEmail/MemberEmail only, no alias column at all), so Add-DistributionGroupMembers.ps1 was deriving each group's identity by guessing the local-part of GroupEmail ('bes@aep-italia.it' -> 'bes') - wrong whenever the real Exchange Alias differs from the SMTP address's local-part, which is common and was true for the large majority of AEP's 164 groups",
+        "Fixed: now loads 03_DistributionGroups.csv (if present) as an authoritative Alias lookup, joined by PrimarySmtpAddress - the exact same Alias column New-DistributionGroups.ps1 used to create each group and Update-DistributionGroupDomain.ps1 already looks it up by, so all three scripts now agree on group identity. Verified against AEP's real Discovery folder: all 164 groups resolve via the join (zero fall back to guessing), and 'bes@aep-italia.it' correctly resolves to 'DGAEPBES'. The guess-from-email-local-part path is kept only as a last-resort fallback for a group missing from 03_DistributionGroups.csv entirely",
+        "New-DistributionGroups.ps1 and Update-DistributionGroupDomain.ps1 were never affected by this - both already read Alias directly from 03_DistributionGroups.csv's own column, no guessing involved"
+      ]
+    },
+    {
+      "version": "2.9.147",
+      "date": "2026-09-11",
+      "changes": [
+        "v2.9.146's exact-Identity fix (confirmed live) now correctly reports 155/164 AEP groups as NotFound instead of falsely matching - but the user confirmed at least one of them ('bes') genuinely DOES exist in the destination tenant. Root cause: all three DL lookups (Get-DistributionGroup x2 + Get-Recipient) were wrapped in bare 'try { } catch { }' with no logging, so a real error - or EXO's REST-backed cmdlets simply returning nothing under sustained back-to-back single-item throttling, which doesn't even throw - was indistinguishable from a genuine miss. The pattern in both failed runs (a handful of successes scattered among long runs of consecutive failures) matches known EXO throttling behaviour on tight per-item Get-DistributionGroup/Get-Recipient loops, not 164 groups genuinely missing",
+        "Added a shared Invoke-ExoRetry/Invoke-ExoRetryThrowing wrapper (3 attempts, exponential backoff, retries only on transient-looking errors - throttl/too many/timeout/session/connection/50x/429) to Add-DistributionGroupMembers.ps1, New-DistributionGroups.ps1 and Update-DistributionGroupDomain.ps1's group lookups and member add/list calls. A lookup that still fails after retries now logs the real captured error alongside 'NOT FOUND' (and it's written to the results CSV's Message column) instead of a silent guess, and a 300ms pacing gap was added between groups in all three to reduce how often the throttling is hit in the first place",
+        "Not yet re-run against a live tenant - re-run Add DL Members for AEP; the NOT FOUND count and any [last error: ...] text will now show whether this was throttling (should drop sharply, or show retryable-looking messages) or something else entirely"
+      ]
+    },
+    {
+      "version": "2.9.146",
+      "date": "2026-09-11",
+      "changes": [
+        "Fixed a live bug (confirmed on a real AEP run: 780 of 816 member-adds failed) shared by Add-DistributionGroupMembers.ps1, New-DistributionGroups.ps1 and Update-DistributionGroupDomain.ps1 - each fell back to 'Get-Recipient -Filter \"EmailAddresses -like *alias@*\"' whenever an exact Get-DistributionGroup -Identity lookup missed. That wildcard matches ANY EmailAddresses entry containing the alias as a substring anywhere - including X500/legacyDN entries, which routinely embed unrelated text - so a short/common alias (ict, bes, wel, sysmon...) silently matched the WRONG recipient instead of correctly reporting not-found. The group was then addressed by the original (wrong) alias in later calls, which genuinely couldn't find any object by that identity - surfacing as 'The operation couldn't be performed because object ... couldn't be found' on nearly every member add, even though the run's own summary said every group was found",
+        "Replaced the wildcard fallback in all three scripts with exact -Identity attempts only (Alias, then the temporary tenant address, then Get-Recipient -Identity as a last resort) - a genuine miss now correctly reports NotFound/GroupNotFound instead of a false match. Every script also now addresses the group by the GUID actually resolved (or, in New-DistributionGroups.ps1, just created) rather than the raw CSV alias, so a case/character mismatch can't misdirect the later Add-DistributionGroupMember/Set-DistributionGroup call",
+        "Likely explains why so many AEP groups showed as not-existing when Add DL Members ran: New-DistributionGroups.ps1 (Create Target DLs) has the identical fallback in its exists-check, so it could have silently reported 'AlreadyExists' for a group that was never actually created, because the wildcard matched some unrelated recipient instead. Re-run Create Target DLs for AEP after updating to confirm which groups are genuinely missing and create them for real, then re-run Add DL Members"
+      ]
+    },
+    {
+      "version": "2.9.145",
+      "date": "2026-09-11",
+      "changes": [
+        "Add-DistributionGroupMembers.ps1 (Misc Scripts > Add DL Members, added in v2.9.144) now reads 03b_DistributionGroup_Members.csv - the one-row-per-group-member file Discovery already writes - instead of 03_DistributionGroups.csv's pipe-delimited Members column. Groups rows by GroupAlias (falls back to the local-part of GroupPrimarySmtpAddress/GroupEmail if a Discovery folder predates the GroupAlias column) into one member list per DL. Falls back to the old 03_DistributionGroups.csv Members column when 03b_DistributionGroup_Members.csv isn't present (an older Discovery folder), so nothing already-migrated breaks",
+        "Also copes with the older search-domain.ps1 engine's 03b schema (GroupEmail/MemberEmail instead of GroupPrimarySmtpAddress/MemberAddress, plus a '(no members)' placeholder row per empty group) by skipping any row with a blank member address"
+      ]
+    },
+    {
+      "version": "2.9.144",
+      "date": "2026-09-11",
+      "changes": [
+        "Added Add-DistributionGroupMembers.ps1 + an 'Add DL Members' panel under Misc Scripts: reads 03_DistributionGroups.csv's Members column from Discovery and adds any missing members to the matching group in the destination tenant, resolving each member's new address via -MappingCsv (Fly exchange mapping file) or -CustomerPrefix, same pattern as Create Target DLs. Unlike Create Target DLs it never creates a group - a group not already present in the destination tenant is logged and skipped. Use it to top up membership after Create Target DLs already ran (e.g. new starters were added to the source group afterwards), or for groups that exist independently of this toolkit. Idempotent - safe to re-run. WhatIf previews every add",
+        "Update Target DL Domain (Update-DistributionGroupDomain.ps1) was already fully wired up under Post Migration from an earlier change - no change needed there, just confirmed it's the script already flipping DL primary addresses from the temporary tenant.onmicrosoft.com address to the real domain post-cutover",
+        "Not yet exercised against a live tenant - parse-checked only; run with WhatIf first and read the results CSV before trusting a live run"
+      ]
+    },
+    {
+      "version": "2.9.143",
+      "date": "2026-09-09",
+      "changes": [
+        "Enable-BaselineCAPolicies.ps1 / 'Enable CA Policies' panel: dropped the -IncludeAllDisabled option (and its checkbox). The script now only ever acts on the 8 named baseline policies - no other Conditional Access policy in the tenant is read or changed. Added a clear warning when none of the 8 exist yet"
+      ]
+    },
+    {
+      "version": "2.9.142",
+      "date": "2026-09-09",
+      "changes": [
+        "Added Enable-BaselineCAPolicies.ps1 + a 'Enable CA Policies' panel under Post Migration - run it after cutover to switch on the 8 Conditional Access policies that Tenant Baseline Config (Step 11) creates disabled. Connects interactively, finds the policies by name, and moves them to report-only by default (enabledForReportingButNotEnforced); tick Enforce to take them fully live. -IncludeAllDisabled widens the target set to every disabled CA policy in the tenant",
+        "Safety guards: with a break-glass UPN given, each policy is checked for that account on its Users > Exclude list before it is enforced - a policy that doesn't exclude it is left unchanged with a warning. Enforce with no break-glass account is refused outright. Both are overridable with Force. WhatIf previews every change. ShouldProcess is used for -WhatIf only (ConfirmImpact left at default so it never auto-prompts in the streamed runner)",
+        "'Also turn Security Defaults off' option (needs Enforce, or Force) - PATCHes identitySecurityDefaultsEnforcementPolicy isEnabled=false once the policies are enforcing, since Conditional Access is Security Defaults' replacement and the two can't both be on. Skipped with a warning if the policies are only report-only",
+        "Uses Ensure-GraphModules.ps1 (Graph pinned 2.33.0, WAM-safe) and only Invoke-MgGraphRequest. Scopes: Policy.Read.All, Policy.ReadWrite.ConditionalAccess (+ Policy.ReadWrite.SecurityDefaults when disabling Security Defaults). Policy name list kept in sync with Invoke-TenantBaseline.ps1 and Check-TenantBaselineStatus.ps1",
+        "Parse-checked; not yet run against a live tenant"
+      ]
+    },
+    {
+      "version": "2.9.141",
+      "date": "2026-09-09",
+      "changes": [
+        "Invoke-TenantBaseline.ps1 Step 11 (Conditional Access): the trusted-country list for the 'Trusted Country - <code>' named locations is no longer hard-coded to CA/US/GB/IE. Step 11 now shows a WinForms tick-box dialog listing every ISO 3166-1 country as '<code>  -  <name>' with a type-to-filter box, Reset to default / Uncheck all buttons, and CA/US/GB/IE pre-ticked. The ticked codes drive both the named-location creation and the exclusions on 'Block Access Outside Approved Countries'. If the dialog is cancelled, or WinForms can't load (headless), it falls back to the default set and logs that",
+        "Step 11 also takes an optional break-glass (emergency-access) account: entered in the same dialog (or the new 'Break-glass account UPN' field on the Tenant Baseline Config panel, or -BreakGlassUpn). The account is resolved to its object id and added to conditions.users.excludeUsers on every CA policy the script creates, so a misconfigured control can't lock every admin out. A policy that already exists is left as-is but a WARN is logged if it doesn't already exclude that account. If the UPN isn't found in the tenant, policies are still created (without the exclusion) and an ERROR is logged",
+        "New optional parameters on Invoke-TenantBaseline.ps1: -TrustedCountries (comma/space/semicolon separated alpha-2 codes, pre-ticks the dialog) and -BreakGlassUpn; both are forwarded through the script's self-relaunch. The Step 11 run summary line now records the countries used and the break-glass status",
+        "Parse-checked; excludeUsers JSON injection and the ISO list parsing were unit-tested in isolation. The WinForms dialog and the live Graph calls were not exercised against a tenant"
+      ]
+    },
+    {
+      "version": "2.9.140",
+      "date": "2026-09-09",
+      "changes": [
+        "All script output now lands in one folder: C:\\Users\\andyw\\OneDrive - Andy White\\Contracts\\Jolera\\Migrations\\Logs. Previously two scripts wrote to %APPDATA%\\FlyMigration\\Logs (Roaming, per-machine, not synced) and four wrote their result CSVs to a separate Migrations\\Reports folder",
+        "Moved to Migrations\\Logs: Invite-externalUsers.ps1 (results CSV) and Search-OneDriveFiles.ps1 (run log) - were in %APPDATA%\\FlyMigration\\Logs; New-DistributionGroups.ps1, Update-DistributionGroupDomain.ps1, Get-DomainTeamMemberships.ps1 and Restore-DomainTeamMemberships.ps1 default result CSVs - were in Migrations\\Reports. The Invite External Users panel's 'results CSV is written to...' message updated to match",
+        "Unchanged (deliberately separate destinations, not the toolkit's own log area): Check-DomainMigrationReadiness.ps1 (writes to the shared GRP Data Security migration folder), the Discovery/Assessment output folder, and the Fly API report downloads shown in the Reports viewer. %LOCALAPPDATA%\\FlyMigration caches and %TEMP% bootstrap files are not output and are also unchanged"
+      ]
+    },
+    {
+      "version": "2.9.139",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: now accepts an AvePoint Fly 'M365 Group objects' migration report CSV directly (auto-detected by its Title/Type/Source/Error code columns) - no need to hand-build a per-group list. It reads the failed member rows, takes the member email from 'Title' and the group from the part of 'Source' before the first '/', de-dupes retried sub-jobs, and re-invites + re-adds each external person to their group. -TargetGroups isn't needed with this format - every row carries its own group",
+        "Safeguards on the Fly-report path: rows on an @*.onmicrosoft.com address or the -TenantId domain (internal / unmigrated accounts, not guests) are skipped; rows whose Error code isn't CO-UserOrGroupNotFound (e.g. CO-MatchMultipleUser, which needs a user mapping in the migration policy) are skipped unless -IncludeAllErrorCodes is set; successful and group-level rows are ignored. Every skipped row is still written to the results CSV with the reason. Members that were Owners in the source are re-added as Members (guests can't be group owners) with a note",
+        "The simple Email/Name/Groups/Message CSV format still works exactly as before. UI help text updated to mention both formats",
+        "Parse-checked; Fly-report parsing verified against a representative sample (dedupe, onmicrosoft skip, error-code skip, Owner capture, Source split). Not re-run end-to-end against a live tenant"
+      ]
+    },
+    {
+      "version": "2.9.138",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: WhatIf passed but the live run failed every guest with a generic 'Guest invite failed'. Root cause is the input CSV, not the script: every Email value is mangled - '@' replaced with '_' (luca.prada_alten.it should be luca.prada@alten.it). New-MgInvitation rejects the invalid address. WhatIf never caught it because WhatIf does not validate the address or call the invite API",
+        "Two fixes so this is self-evident next time: (1) the results CSV now carries the REAL failure reason (the actual Graph error, or the validation message) in the Message column instead of the fixed string 'Guest invite failed'; (2) Resolve-Guest now rejects an address that isn't 'local@domain.tld' up front, and if it has '_' and no '@' it says so and suggests the '@' form - and this check fires under WhatIf too, so a bad CSV shows as Failed in the preview rather than looking fine",
+        "To run the current CSV: fix the Email column first (replace '_' with '@'). The 'Error_Microsoft 365 Groups_*.csv' export is not a valid input file as-is",
+        "Parse-checked. Not re-run against a live tenant"
+      ]
+    },
+    {
+      "version": "2.9.137",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: sign-in works now (v2.9.136). Next: a target given as 'GRPUtentiExterniVPNAEP@mbuAEPts.onmicrosoft.com' resolved as NOT FOUND even though the group exists - it's a plain security group (no mail), so 'mail eq' misses, and the only non-mail clauses were 'mailNickname eq <bare>' and 'displayName eq <full address incl. @domain>', the latter of which can never match a real displayName",
+        "Resolve-Group now also tries 'displayName eq <bare label>' (the address with any @domain stripped), and as a last resort a $search substring match on displayName - taken automatically only if exactly one group matches, otherwise the candidates (name + id) are listed so you can pass an exact name or the object id. The NOT FOUND message now says to try the group's Entra object id",
+        "Workaround without updating: put the group's object id in the 'Target Team(s)/Group(s)' field instead of its name - the id path is a direct GET and always resolves",
+        "Parse-checked. Not re-run against a live tenant"
+      ]
+    },
+    {
+      "version": "2.9.136",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: v2.9.135's launcher works - the script now runs in its own PowerShell window and the window stays open. The remaining failure is the Graph sign-in: 'Signed-in account was recorded but no usable token', with NO browser window opening. Cause: Connect-MgGraph found a stale account in the shared MSAL token store, tried a silent token acquisition against it, that failed quietly, and because it thought it already had an account it never fell back to interactive - so no browser ever opened",
+        "Invite-externalUsers.ps1 now does what Check-OneDriveStatus.ps1 / Provision-OneDrives.ps1 already do (v2.9.85): Disconnect-MgGraph first to drop any recorded account, and Connect-MgGraph -ContextScope Process so the run stays off the shared token store entirely - every launch is a clean interactive browser sign-in. -TenantId, when supplied, is now passed to Connect-MgGraph (safe with a process-scoped context) instead of only being checked afterwards",
+        "Updated the 'no usable token' error guidance (it no longer says 'needs its own console window' - it has one now) and removed the throwaway launch-test.js diagnostic"
+      ]
+    },
+    {
+      "version": "2.9.135",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: v2.9.134's log showed the wrapper was written and the bootstrap spawned and exited 0 - but still no window. Every attempt since v2.9.131 that spawned pwsh.exe or Start-Process directly has failed to show a window from Electron's console-less main process; the ONE form that historically worked here (pre-v2.9.131) was 'cmd /c start' with Node's shell:true. Restored exactly that form, but pointed 'start' at the generated wrapper .ps1 in %TEMP% (a path with no spaces, so cmd can't mangle it) instead of putting the real args - which contain spaces - on the command line. The real target path and args live inside the wrapper as PowerShell single-quoted literals and never touch a command line",
+        "The wrapper (from v2.9.134) is kept: it runs the target as a separate child pwsh so the target's 'exit' can't close the window, then holds it open with Read-Host",
+        "Added MigrationToolkit-Web\\launch-test.js - a throwaway Electron diagnostic ('npx electron launch-test.js' from MigrationToolkit-Web\\) that fires seven different window-launch strategies at once so we can see which actually opens a visible window from a console-less Electron process. Delete once the launcher is confirmed working",
+        "Needs a full app restart to load the new main.js"
+      ]
+    },
+    {
+      "version": "2.9.134",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: the v2.9.133 diagnostic log confirmed the bootstrap ran and Start-Process succeeded (exit 0) - so a pwsh window WAS being created, it just vanished instantly. Cause: -NoExit only holds the prompt when the script finishes normally, but Invite-externalUsers.ps1 calls `exit 1` on bad input (CSV not found / empty / no 'Email' column / no target group), and an explicit `exit` terminates the whole pwsh host even under -NoExit. The window flashed and closed, which looked identical to 'no window opened'. The input in the repro was 'Error_Microsoft 365 Groups_*.csv' - an error export, which very likely has no 'Email' column",
+        "launch-script now generates a small wrapper .ps1 in %TEMP% and opens THAT: the wrapper runs the real target as a separate child pwsh (so the target's `exit` only ends that child), then prints the exit code and holds the window open with Read-Host. So the window now stays up regardless of how the script exits, and you can read the error",
+        "Diagnostic log (Logs\\launch_<script>_<timestamp>.log) now also captures the bootstrap's stdout/stderr and the child pwsh pid via Start-Process -PassThru, and the full generated wrapper body",
+        "Still needs a full app restart to load the new main.js. If the window now opens but the script reports a bad CSV, that's the real problem to fix - point it at a CSV with an 'Email' column (optional Name, Groups, Message)"
+      ]
+    },
+    {
+      "version": "2.9.133",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: still no window after v2.9.132. `cmd /c start` cannot reliably allocate a new console when its own parent process has none - and Electron's main process is a GUI-subsystem process with no console. Replaced the whole approach: launch-script now spawns one throwaway headless pwsh whose only job is to call Start-Process pwsh, and Start-Process reliably creates a brand-new visible console window for the real script regardless of the parent's console state. Inner args are built as PowerShell single-quoted literals so spaces/backslashes in the script or CSV path pass through untouched",
+        "launch-script now also writes a diagnostic log (Logs\\launch_<script>_<timestamp>.log) recording the exact bootstrap command, the spawned pid, and any spawn error / bootstrap exit code - so a future 'no window' is debuggable from the log instead of guesswork",
+        "NOTE: the Electron main process only reloads on a full app restart - if 'Invite & Add' still does nothing, quit the app completely (not just the window) and relaunch so the new main.js is loaded",
+        "Parse-checked + the Start-Process bootstrap tested in isolation; not re-run end-to-end against a live tenant"
+      ]
+    },
+    {
+      "version": "2.9.132",
+      "date": "2026-09-09",
+      "changes": [
+        "Invite External Users: fixed 'no PowerShell window opens' when clicking 'Invite & Add' (reported live). v2.9.131 spawned pwsh.exe with Node's detached:true expecting Windows to give it its own console window - but on Windows detached:true sets the DETACHED_PROCESS creation flag, which means the child gets NO console at all. The script ran invisibly with -NoExit (so it also never went away), and the interactive Connect-MgGraph browser sign-in it was meant to enable still had nowhere to run. spawn() didn't throw, so the panel reported success",
+        "main.js launch-script handler now goes back through 'cmd /c start' (which actually allocates a new console window via CREATE_NEW_CONSOLE), but as a plain arg array with shell:false - not the shell:true form the pre-v2.9.131 code used, which double-wrapped and mangled quoting on CSV/script paths containing spaces. An explicit quoted title token stops 'start' from mistaking a space-containing script path for the window title",
+        "Superseded by v2.9.133 - `cmd /c start` did not reliably open a window from Electron's console-less main process either",
+        "Parse-checked only; not re-run against a live tenant"
+      ]
+    },
+    {
+      "version": "2.9.131",
+      "date": "2026-09-08",
+      "changes": [
+        "Invite External Users: device-code sign-in (the v2.9.130 fallback) is blocked tenant-wide by a Conditional Access 'Authentication flows' policy, and Connect-MgGraph's interactive browser sign-in can't complete in the app's headless streamed pwsh child. The 'Invite & Add' button now launches Invite-externalUsers.ps1 in its OWN console window (like Discovery) so that browser sign-in has a real window to use. Output is no longer mirrored into the panel - the run and its results CSV are in that window",
+        "main.js launch-script handler now takes an args array and passes it through, and spawns pwsh.exe detached with -NoExit (Electron has no console, so a detached console-subsystem child gets its own new window; -NoExit keeps it open so results/errors stay readable). Replaces the old 'cmd /c start' form, which mangled quoting on CSV paths containing spaces. preload.js launchScript signature updated to (scriptName, args)",
+        "Invite-externalUsers.ps1: removed the -UseDeviceCode retry (blocked on these tenants). Test-GraphToken failure now stops with guidance to finish the browser sign-in / run in a pwsh window, rather than attempting device code"
+      ]
+    },
+    {
+      "version": "2.9.130",
+      "date": "2026-09-08",
+      "changes": [
+        "Invite-externalUsers.ps1: still hit 'InteractiveBrowserCredential authentication failed' after v2.9.129 even though the granted-scopes list showed Group.ReadWrite.All present - so not scopes, and (with only Authentication loaded) not an assembly clash. Connect-MgGraph recorded the account but the token acquisition had silently failed; the first real request then triggered interactive auth, which dies in the app's headless runner (no console/window)",
+        "Removed -TenantId from the Connect-MgGraph call. Passing it alongside a shared/cached MSAL token store (a prior Connect-MgGraph to another tenant, Azure CLI, WAM) breaks silent token acquisition - the cached account is for a different authority. The admin UPN suffix already targets the right tenant; -TenantId is now only a post-connect sanity check that warns on a mismatch",
+        "Added Test-GraphToken - a cheap GET /organization probe run straight after connect (and before reusing an existing session) that proves the session has a real access token, not just a recorded account. On failure the script now disconnects and retries once with Connect-MgGraph -UseDeviceCode (device-code sign-in works in a headless process - the URL+code stream into the panel). If that also fails it stops with explicit guidance (run from a real pwsh window / Conditional Access 'Authentication flows' policy blocking device code) instead of a bare error"
+      ]
+    },
+    {
+      "version": "2.9.129",
+      "date": "2026-09-08",
+      "changes": [
+        "Invite-externalUsers.ps1: fixed 'InteractiveBrowserCredential authentication failed' on every group lookup (confirmed live on a 15-row WhatIf against AEP) - it was NOT a missing group. Adding Microsoft.Graph.Users/.Groups/.Identity.SignIns to the Ensure-GraphModules.ps1 pin list pulled a second copy of Microsoft.Graph.Authentication into the process; Connect-MgGraph stored its token in one copy while Get-MgGroup/Get-MgUser read an empty context in the other, so the SDK silently retried interactive auth (which can't open a window under the Electron child process). Same assembly-version class as v2.9.69/2.9.123/2.9.126",
+        "Rewrote every Graph call to go through Invoke-MgGraphRequest (raw REST, lives in Microsoft.Graph.Authentication itself and always sees the live Connect-MgGraph context). Ensure-GraphModules.ps1 is now called with -GraphModules @() so only Authentication loads - no submodules, no duplicate Authentication assembly. Group resolve (by mail / mailNickname / displayName / GUID), the existing-guest check, New-MgInvitation and New-MgGroupMember are all REST now",
+        "The old code swallowed the auth exception and printed a misleading 'Target not found' for all 15 rows. Now: target groups are resolved once up front and printed (OK / NOT FOUND per target); an auth or permission error there stops the run immediately with the real Graph message instead of marching through every row; a mid-run auth failure on the user lookup also stops cleanly and still writes the partial results CSV. After connect it prints the granted scopes and warns if Group.Read(Write).All is missing"
+      ]
+    },
+    {
+      "version": "2.9.128",
+      "date": "2026-09-08",
+      "changes": [
+        "Discovery engine: replaced Assessment/Run-Assessment.ps1 and the AD/Common/Exchange/Graph/MappingFiles/Prerequisites/SharePoint modules with an earlier, self-contained snapshot supplied wholesale, and rewired every entry point to it. This is a deliberate revert - it drops the caching layer, non-interactive parameters, soft-fail AD, Power Platform / Domain Team Memberships / LegacyExport CSV stages, and the WAM/2.33.0 Graph pin added across v2.9.98-2.9.126",
+        "Run-Assessment.ps1 is now interactive only: an arrow-key mode menu (Run Assessment / Generate Mapping Files) then Read-Host prompts for VBU Domain / Search Term / VBU ID / SPO Admin URL and a final 'delete Raw JSON?' prompt. AD collection is hard-fail (RSAT required). SharePoint/OneDrive collect live via Connect-SPOService + Get-SPOSite (no cache). Graph connects with a plain Connect-MgGraph (no version pin / DisableWAM)",
+        "Because the engine no longer takes parameters or reads stdin, all three launchers now open it in its own visible PowerShell window instead of streaming/param-passing: the Electron Discovery panel uses launch-script (single -> Run-Assessment.ps1, multi -> Run-MultiAssessment.ps1) and shows the entered field values as a reminder of what to type; discovery-menu.ps1's single-domain run launches with no params (values echoed into the window); Run-MultiAssessment.ps1 opens one Run-Assessment.ps1 window per domain, sequentially, waiting for each to close",
+        "Added Import-AssessmentJson back to Common.psm1 as a compatibility shim so the retained Workbook.psm1 still builds the assessment workbook (the supplied Common.psm1 omitted it). Workbook.psm1 is unchanged - no replacement was supplied",
+        "Left in place but now orphaned (no longer imported by Run-Assessment.ps1): Modules/PowerPlatform.psm1, Modules/TeamMemberships.psm1, Modules/LegacyExport.psm1. Consequences: no Power Platform scan, no DomainTeamMemberships-*.csv, and no per-run Discovery\\ CSV folder - the Domain Removal scripts that read that folder will not find it after a Discovery run. The standalone Update-*Cache.ps1 scripts and the 'Refresh Discovery Cache' panel still work but are no longer consumed by Discovery",
+        "Not exercised against a live tenant - PowerShell parse-checked only"
+      ]
+    },
+    {
+      "version": "2.9.127",
+      "date": "2026-09-08",
+      "changes": [
+        "Misc Scripts: added 'Invite External Users' — reworked Invite-externalUsers.ps1 from a one-team, prompt-driven script into a headless streaming run script wired into the web UI (index.html view + sidebar item, renderer.js handler and view-map entry). Purpose: after a migration, external collaborators who lost access because their guest account did not come across can be re-added in bulk. Reads a CSV (Email required; optional Name, Groups, Message), invites each person as a B2B guest (reusing an existing guest instead of re-inviting), then adds them as a member of the target Team(s) / M365 Group(s). Because a Team's membership is its underlying group's membership and a group-connected SharePoint site inherits access from that same group, one add restores Teams, Groups and their SharePoint sites together",
+        "Targets come from a 'Target Team(s)/Group(s)' UI field (';'- or ','-separated) applied to every row, or a per-row 'Groups' column that overrides it; each target is resolved by mail address, mailNickname or object id and cached. 'Already a member' is treated as a no-op success. WhatIf previews every invite/add without making changes. Reuses an existing Microsoft.Graph session when it already carries the needed scopes (User.Invite.All, User.Read.All, Group.ReadWrite.All, GroupMember.ReadWrite.All); modules pinned to 2.33.0 via Ensure-GraphModules.ps1. Writes a per-row results CSV to %APPDATA%\\FlyMigration\\Logs",
+        "Not yet exercised against a live tenant — no Graph connection was available while writing this. Run with WhatIf first and check the results CSV before a live run"
+      ]
+    },
+    {
+      "version": "2.9.126",
+      "date": "2026-09-02",
+      "changes": [
+        "Update-TeamsChannelsCache.ps1: Fixed 'Could not load file or assembly Microsoft.Graph.Authentication, Version=2.38.0.0 ... Assembly with same name is already loaded' (confirmed live) — after Ensure-GraphModules.ps1 already pinned and imported Microsoft.Graph.Groups/Teams at 2.33.0, the script immediately re-imported both AGAIN without -RequiredVersion, which resolves to the newest installed version (2.38.0) instead of reusing what was already loaded, and PowerShell can't have two versions of the same strong-named assembly loaded in one process. Removed the redundant re-imports — Ensure-GraphModules.ps1 already leaves the pinned modules imported and ready. Same class of bug previously fixed in Check-TenantBaselineStatus.ps1 (v2.9.69); every other script that dot-sources Ensure-GraphModules.ps1 was checked and doesn't have this pattern"
+      ]
+    },
+    {
+      "version": "2.9.125",
+      "date": "2026-09-02",
+      "changes": [
+        "Refresh Discovery Cache: added a '🔁 Refresh Everything' button that runs the SharePoint Sites, Teams Channels, and (new) Distribution Groups cache refreshes one after another in a single shared log panel, instead of clicking each separately",
+        "Added a third tenant-wide cache: Update-DistributionGroupsCache.ps1 walks every distribution group and mail-enabled security group, with members, via Exchange Online, and writes DistributionGroupsCache.json - Assessment\\Modules\\Exchange.psm1's Get-DistributionGroupData now reads and locally filters that cache when it's present and under 14 days old, instead of repeating a live Get-DistributionGroup + per-group Get-DistributionGroupMember walk on every VBU's Discovery run",
+        "Unlike the SharePoint/Teams caches, the Distribution Groups cache is optional, not a hard prerequisite - Run-Assessment.ps1 does not refuse to start without it; Get-DistributionGroupData falls straight back to the original live per-VBU query if the cache is missing or stale, so existing Discovery runs are unaffected until this is refreshed",
+        "Not yet exercised against a live tenant - the cache-read/filter logic mirrors the already-proven SharePoint Sites pattern, but the new Update-DistributionGroupsCache.ps1 script's live Exchange Online connection hasn't been run for real yet"
+      ]
+    },
+    {
+      "version": "2.9.124",
+      "date": "2026-09-02",
+      "changes": [
+        "MigrationToolkit-Web: Added a 'Documentation' field under Settings > Config with an 'Open Runbook' button, linking to the toolkit's how-to guide / script reference / FAQ (opens in the default browser via the existing openExternal IPC handler)"
+      ]
+    },
+    {
+      "version": "2.9.123",
+      "date": "2026-09-02",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Changed PoliciesCreated logic from 'Yes only if every one of the 11 checks confirms Configured' to 'Yes if ANY check confirms Configured or partially applied' — all 11 checks come from the single all-in-one Invoke-TenantBaseline.ps1 run, so evidence that even one step succeeded already proves the script has been run against that tenant, even if a later step failed or was blocked partway through (e.g. AADSTS530035/Security Defaults, see v2.9.121-122). Previously a tenant where the run got through several steps before hitting a blocker further down still showed 'No', which read as 'never run' rather than 'partially run'",
+        "No is now reserved for tenants where nothing is confirmed applied AND at least one check is confirmed missing; Unknown is unchanged (nothing confirmed either way, permission gap on the app registration)"
+      ]
+    },
+    {
+      "version": "2.9.122",
+      "date": "2026-09-02",
+      "changes": [
+        "Invoke-TenantBaseline.ps1: The v2.9.121 diagnostic fix confirmed live — the blank auth errors were AADSTS530035 'Access has been blocked by security defaults' on every Graph write/read after a successful Connect-MgGraph. Not a script bug: the tenant has Microsoft Entra Security Defaults enabled (its automatic fallback for a tenant with no custom Conditional Access policies yet — which is exactly what Step 11 of this script deploys). Security Defaults requires MFA on every sign-in and was blocking these calls at the policy layer even though the initial interactive sign-in itself succeeded",
+        "Get-FullErrorMessage now recognizes AADSTS530035/'blocked by security defaults' and appends plain-English guidance: sign in again via a fresh/InPrivate browser window so a cached non-MFA session can't be silently reused, or have a Global Admin temporarily disable Security Defaults (Entra admin center > Identity > Overview > Properties) until Step 11's Conditional Access policies are in place as its replacement"
+      ]
+    },
+    {
+      "version": "2.9.121",
+      "date": "2026-09-02",
+      "changes": [
+        "Invoke-TenantBaseline.ps1: Fixed every Graph-based step failing with a useless blank 'InteractiveBrowserCredential authentication failed: ' (reported live: happened on a re-run against a tenant already known to be configured, with Connect-MgGraph itself reporting success moments earlier) — confirmed this is the same class of bug already fixed in Get-TenantLicenseReport.ps1 (v2.9.85/v2.9.117-era note): MSAL/WAM broker diagnostics bypass the exception object entirely and write straight to .NET's Console.Out/Error, so $_.Exception.Message (and even its InnerException chain) can come back completely empty",
+        "Added Get-FullErrorMessage (walks the full InnerException chain instead of just the top message) and a console tee (Start-ConsoleCapture/Reset-ConsoleCapture/Stop-ConsoleCapture, backed by a small Add-Type'd TextWriter) that mirrors everything written to Console.Out/Error into a per-step buffer without hiding it from the live window — every 'Step N failed' log line now appends that buffer's contents, so the real broker/AADSTS text shows up instead of a blank string",
+        "Also fixed Step 6 (Block Personal Device Enrollment) silently mismarking an auth failure as 'configuration not found': its Get-MgDeviceManagementDeviceEnrollmentConfiguration call had no -ErrorAction Stop, so a non-terminating failure fell through to the same '-not $defaultConfig' branch used for a genuine not-found result, masking the real cause",
+        "Not yet re-run live against a live failure to confirm what the real underlying reason is — re-run against the same tenant and check the new log for the appended console output"
+      ]
+    },
+    {
+      "version": "2.9.120",
+      "date": "2026-09-02",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Now also writes a simplified summary CSV (Domain + PoliciesCreated only) alongside the existing 11-column detail CSV, and opens the summary automatically instead of the detail report — reported: reading all the per-check columns/permission-error text to answer a plain yes/no was too noisy. The detail CSV is still written to the same folder for troubleshooting which specific check is missing",
+        "MigrationToolkit-Web: Check Baseline Status help text updated to describe both output files"
+      ]
+    },
+    {
+      "version": "2.9.119",
+      "date": "2026-09-01",
+      "changes": [
+        "Fixed 'SPO connection failed: No valid OAuth 2.0 authentication session exists' on the v2.9.118 Provision-OneDrives.ps1 rewrite (confirmed live) - this toolkit already hit and fixed this exact error before (Deduplicate-Inventory.ps1, an earlier version): a plain Connect-SPOService popup has no window to open against when spawned headlessly from Electron, and the parameter that used to work around it (-UseWebLogin) was removed from the SPO module. Added -UseSystemBrowser:$true (the current replacement, already proven working in Deduplicate-Inventory.ps1) to Provision-OneDrives.ps1 and to the new Update-SharePointSitesCache.ps1, which had the same unfixed connect pattern and would have hit the identical error on its first live run",
+        "Known related risk, not yet reported broken or touched: New-SharePointSites.ps1 and Remove-DeletedSharePointSites.ps1 still call plain Connect-SPOService with no -UseSystemBrowser and likely carry the same bug if run headlessly from the app"
+      ]
+    },
+    {
+      "version": "2.9.118",
+      "date": "2026-09-01",
+      "changes": [
+        "Provision-OneDrives.ps1: Fixed 0/61 provisioned on a live run (all failed with '[ResourceNotFound]: User's mysite not found') - the script called Microsoft Graph's Get-MgUserDrive (a plain GET) on the mistaken assumption that reading a user's drive would provision it if missing. That assumption dates back to this script's very first commit and was never true - Graph's GET does not provision anything, which is why every user failed uniformly rather than some working and some not",
+        "Rewritten to use SharePoint Online's Request-SPOPersonalSite (batched up to 200 emails per call, -NoWait) - the Microsoft-documented way to bulk-queue OneDrive provisioning. -AdminUrl is now actually used (previously accepted but ignored) and is required. Provisioning is asynchronous, so this only confirms the batch was accepted, not that each site now exists - re-run Check-OneDriveStatus.ps1 (unaffected by this fix - its Get-MgUserDrive usage is a correct read for status checking, unlike the provisioning script's) a few minutes later to confirm",
+        "MigrationToolkit-Web: Added 'Refresh Discovery Cache' to Misc Scripts as well as Discovery (both point at the same screen)",
+        "MigrationToolkit-Web: Moved 'Update Target DL Domain' from Migration to Post Migration"
+      ]
+    },
+    {
+      "version": "2.9.117",
+      "date": "2026-09-01",
+      "changes": [
+        "Discovery no longer walks the whole tenant for SharePoint sites or Teams/channels/members on every run - both are now cached. Added Update-SharePointSitesCache.ps1 (Get-SPOSite -Limit All incl. OneDrive, once) and Update-TeamsChannelsCache.ps1 (every Team, every channel incl. private/shared membership, once, tenant-wide) - each writes a JSON cache under Assessment\\Cache\\<tenant>\\, keyed by SPO Admin URL so every VBU split from the same source tenant reuses it",
+        "Run-Assessment.ps1 now reads both from cache instead of live: SharePoint.psm1's Get-SPOSiteData/Get-OneDriveData and TeamMemberships.psm1's Invoke-TeamMembershipCollection filter the cached JSON locally to the VBU in scope, rather than re-querying SPO/Graph tenant-wide every time. As a direct result, Discovery no longer opens a SharePoint Online connection at all (SharePoint.psm1's SPO module import - the source of the v2.9.116 crash - is now only needed by the standalone cache script, not by a normal Discovery run)",
+        "Run-Assessment.ps1 refuses to start if either cache is missing or more than 7 days old for the given SharePointAdminUrl (Test-DiscoveryCachePrereqs, new in Common.psm1) - prints exactly which cache is stale/missing and the command to refresh it, then stops before any tenant connection is made. -SkipTeamMemberships still exists as a plain opt-out but is no longer needed for speed now that the walk itself is cached",
+        "MigrationToolkit-Web: Added 'Refresh Discovery Cache' under the Discovery sidebar section - one screen with a shared SPO Admin URL field and a Refresh button each for the SharePoint Sites and Teams Channels caches, streaming their output the same way every other panel does",
+        "Not yet run against a live tenant - the cache read/write logic was verified with fixture JSON (missing/stale/fresh gate behaviour, VBU-domain filtering, cached Team/channel/member matching), but the two new standalone scripts' live SPO/Graph connections haven't been exercised for real yet"
+      ]
+    },
+    {
+      "version": "2.9.116",
+      "date": "2026-09-01",
+      "changes": [
+        "Fixed '[FAIL] SharePoint collection error: The term ''Invoke-SharePointCollection'' is not recognized' — SharePoint.psm1's top-level Import-Module Microsoft.Online.SharePoint.PowerShell had no try/catch, so any failure aborted the rest of the file before the function was even defined, even though Run-Assessment.ps1 already made its own protected attempt at the identical import moments earlier. Import wrapped in try/catch (best-effort, matching the one in Run-Assessment.ps1); Run-Assessment.ps1's SkipSharePoint detection also tightened to track an actual import-succeeded flag instead of just checking whether the module is listed as available, which was missing the 'installed but import still failed' case",
+        "Discovery now writes ~25 legacy-named CSVs to the Discovery folder (up from 8) - closer to parity with the old search-domain.ps1 output, even though only a handful feed the Excel workbook. New real-data files: 03b_DistributionGroup_Members, 06b_M365Group_Members, 07_AppRegistrations, 09_SharePointSites, 10_OneDrives, 11_Teams, 14_TransportRules, 16_PowerPlatform, 19_OnPrem_ADUsers, 20_OnPrem_ADGroups. Placeholder files (single 'No data' row, clearly labeled in the console output) for data the new engine doesn't collect at all: 08_EnterpriseApps, 15_PlannerPlans, 17_EntraCA_Policies, 18_EntraAuthPolicies, 21_OnPrem_ADContacts, 22_UserLicenses, 22a_LicenseCounts",
+        "Found and fixed a latent bug while building the above: Common.psm1's Import-AssessmentJson returned a bare '@()' on a missing/empty JSON file, which PowerShell's pipeline unrolling collapses to $null (not an empty array) across a function return boundary - any direct/unwrapped caller then crashed on Export-Csv with 'Cannot bind argument to parameter InputObject because it is null' the moment a collector genuinely found zero of something. Fixed with the leading-comma operator (return ,@()) so an empty array survives the return intact; this affects every caller of Import-AssessmentJson (Workbook.psm1 too), not just the new CSV export code - it just hadn't been hit yet because Workbook.psm1 happens to re-wrap with @() at its own call sites. Added a defense-in-depth null-filter in Export-LegacyCsv as well",
+        "Verified against 17 fixture JSON files covering both populated and genuinely-empty collector output - all 25 files now export with zero errors"
+      ]
+    },
+    {
+      "version": "2.9.115",
+      "date": "2026-09-01",
+      "changes": [
+        "New-DistributionGroups.ps1: fixed a silent no-op when the source CSV has no 'Members' column at all - most likely to happen right now, since Discovery only started capturing DL membership in v2.9.110; a Discovery folder generated before that has no Members data, so groups got created successfully but nothing was ever added, with zero indication why. Now logs a clear message per affected group plus a summary warning line, and tells you to re-run Discovery"
+      ]
+    },
+    {
+      "version": "2.9.114",
+      "date": "2026-09-01",
+      "changes": [
+        "Fixed New-DistributionGroups.ps1, Update-DistributionGroupDomain.ps1, and Restore-ProxyAddresses.ps1 silently connecting to the wrong tenant - confirmed live: a session left over from an earlier script run (e.g. Discovery, moments earlier, against the SOURCE tenant) was silently reused by Connect-ExchangeOnline instead of prompting fresh, so every group/address 'already existed' on the source domain even though the destination tenant had never seen them",
+        "Both DL scripts now disconnect any existing session first and pass -Organization <tenant domain> explicitly, so the connection can no longer land anywhere but the intended destination tenant. Restore-ProxyAddresses.ps1 gets the same disconnect-first fix and passes -Organization whenever -CustomerPrefix was supplied",
+        "Known follow-up: Restore-DomainTeamMemberships.ps1 has partial protection already (won't reuse a session that doesn't match an explicitly-supplied -TenantId) but can still reuse a stale session of unknown origin when -TenantId is omitted - not changed yet since that reuse behaviour may be intentional there and wasn't reported broken"
+      ]
+    },
+    {
+      "version": "2.9.113",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: added a divider line in the sidebar between Post Migration and Misc Scripts, visually separating the workflow sections (Discovery through Post Migration) from the Misc Scripts grab-bag. Also bumped main.css's stale cache-busting query string (was v=2.9.34) so the new rule actually loads for anyone with a cached copy",
+        "Moved DL External Senders from Misc Scripts to Post Migration"
+      ]
+    },
+    {
+      "version": "2.9.112",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: moved Migration above the AvePoint section in the sidebar (new order: Discovery, Migration, Avepoint Steps, Domain Removal, Post Migration, Misc Scripts) and renamed 'AvePoint Fly' to 'Avepoint Steps'. Other on-screen references to AvePoint Fly (the actual third-party product name - App Registration help text, project titles) were left as-is since they name the real product, not this sidebar label"
+      ]
+    },
+    {
+      "version": "2.9.111",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: renamed 'New Distribution Groups' to 'Create Target DLs' and 'Update DG Domain' to 'Update Target DL Domain' in the Migration sidebar section. Cosmetic only - still wired to New-DistributionGroups.ps1 / Update-DistributionGroupDomain.ps1"
+      ]
+    },
+    {
+      "version": "2.9.110",
+      "date": "2026-09-01",
+      "changes": [
+        "Discovery: distribution group collection now captures actual member addresses, not just a count (Get-DistributionGroupMember was already being called for the count - members come along for free). New Members column flows through to 03_DistributionGroups.csv and the assessment workbook automatically",
+        "Added New-DistributionGroups.ps1: reads 03_DistributionGroups.csv and creates any DG/mail-enabled security group missing from the destination tenant, using the tenant's own onmicrosoft.com address as a temporary primary (the real domain isn't verified there yet), then adds members - resolving each one's new address via -MappingCsv (Fly exchange mapping file) or -CustomerPrefix, same pattern as Restore-ProxyAddresses.ps1. Idempotent - safe to re-run, only fills in what's missing",
+        "Added Update-DistributionGroupDomain.ps1: run once the domain has cut over - flips each group's primary address from the temporary tenant address to the real one captured by Discovery, keeping the temporary address as a secondary alias",
+        "MigrationToolkit-Web: added a new 'Migration' sidebar section (Discovery -> AvePoint Fly -> Migration -> Domain Removal -> Post Migration -> Misc Scripts) containing Provision OneDrives (moved from Discovery) plus panels for both new scripts",
+        "Neither new script has been run against a live tenant yet - WhatIf first"
+      ]
+    },
+    {
+      "version": "2.9.109",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: removed 'Get Domain Devices' from Misc Scripts (sidebar entry, view, and click handler) - confirmed it covers two real gaps Discovery has (works without on-prem AD, and targets a tenant explicitly by domain), but removed anyway per explicit instruction. Get-DomainDevices.ps1 itself is untouched on disk"
+      ]
+    },
+    {
+      "version": "2.9.108",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: removed the 'Remove Entra Devices' panel (permanent delete via Remove-devices.ps1) from the sidebar entirely - Retire Devices (disable, not delete) is now the only device-removal option in the app. Remove-devices.ps1 itself is untouched on disk, just no longer surfaced in the UI",
+        "Get Domain Devices (a non-destructive export/report) is unaffected and unrelated - stays in Misc Scripts"
+      ]
+    },
+    {
+      "version": "2.9.107",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: moved the three 'Check' scripts out of Discovery into Misc Scripts - Check Baseline Status, Check Licenses, Check Domain Readiness. Pure sidebar reorder, no functional change"
+      ]
+    },
+    {
+      "version": "2.9.106",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: moved Misc Scripts to the bottom of the sidebar - new order is Discovery, AvePoint Fly, Domain Removal, Post Migration, Misc Scripts. Pure reorder, no functional change (the expand/collapse and view-switching logic is generic and doesn't care about sidebar position)"
+      ]
+    },
+    {
+      "version": "2.9.105",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: added a new sidebar section 'Post Migration' containing Restore Proxy Addresses (moved from Misc Scripts), Retire Devices (moved from Domain Removal), and a new Restore Team Memberships panel wired to Restore-DomainTeamMemberships.ps1 (Membership CSV, Domain, optional Fly mapping file, Customer fallback, Tenant ID, send-invitation toggle, WhatIf)",
+        "Retire Devices' sidebar numbering (was '7. Retire Devices' in the Domain Removal list) is dropped since it's no longer part of that numbered sequence - the guided Domain Removal Workflow's own step list is unaffected and still links to the same panel",
+        "Fixed a pre-existing bug found while relocating Retire Devices: its read-only Tenant Domain field never auto-populated from Settings on navigation (missing from the view's trigger list) - now it does, same as every other Domain Removal panel"
+      ]
+    },
+    {
+      "version": "2.9.104",
+      "date": "2026-09-01",
+      "changes": [
+        "Domain Team Memberships moved out of Misc Scripts and folded into the Assessment engine: Run-Assessment.ps1 now runs it as a regular collector (new Modules\\TeamMemberships.psm1, ported from Get-DomainTeamMemberships.ps1) on the same Graph session as everything else, writing its own DomainTeamMemberships-<domain>-<timestamp>.csv at the top of the assessment folder - same schema Restore-DomainTeamMemberships.ps1 already expects, so no change needed there",
+        "New -SkipTeamMemberships switch (default ON in both UIs) - this is the slowest collector on a large tenant since it walks every Team and every private/shared channel tenant-wide, so it's opt-in rather than running on every routine assessment; turn it on specifically before splitting a domain out",
+        "Removed the standalone 'Domain Team Memberships' Misc Scripts panel (Electron app) - the standalone Get-DomainTeamMemberships.ps1 script itself is untouched and still runs fine from the command line for a quick one-off check outside a full assessment",
+        "Graph connection scopes gained Channel.ReadBasic.All and ChannelMember.Read.All, needed to enumerate private/shared channel membership"
+      ]
+    },
+    {
+      "version": "2.9.103",
+      "date": "2026-09-01",
+      "changes": [
+        "Added Restore-DomainTeamMemberships.ps1: companion to Get-DomainTeamMemberships.ps1 - reads its output CSV and re-adds those users, as B2B guests, to the Teams/channels that will still live in the SOURCE tenant after cutover (inferred by excluding rows whose Team's own mail is on the migrated domain - those Teams are presumed to be migrating too). Archived Teams and Standard-channel rows are always skipped (Standard channel membership auto-follows the parent Team)",
+        "Resolves each user's new destination-tenant address via -MappingCsv (the Fly exchange mapping file this toolkit already produces - Source/Destination columns, xlsx or csv) or falls back to -CustomerPrefix (same Settings > Customers AccountName lookup Restore-ProxyAddresses.ps1 uses)",
+        "Teams doesn't allow guest owners - a row with Role=Owner is added as a regular Member instead, logged clearly. Guest invitations and existing memberships are both idempotent-safe (an existing guest is reused, an existing membership is treated as success, not a failure). Writes a per-row results CSV alongside the run log",
+        "Not yet exercised against a live tenant/Graph connection - run with -WhatIf first"
+      ]
+    },
+    {
+      "version": "2.9.102",
+      "date": "2026-09-01",
+      "changes": [
+        "Assessment engine: multi-domain runs no longer sign into SharePoint/Exchange/Graph once per domain - every domain in a batch is almost always the same source tenant, so re-authenticating per domain was pure friction. Run-Assessment.ps1 gained -KeepSession (reuses an already-live session instead of reconnecting, and skips sign-out at the end); Run-MultiAssessment.ps1 now passes it for every domain and disconnects once after the whole batch finishes",
+        "MigrationToolkit-Web: the Discovery panel's own 'Multiple domains' mode previously looped, spawning one separate pwsh.exe process per domain - no session could ever be reused there regardless of what the underlying script did, since each process starts cold. It now makes a single Run-MultiAssessment.ps1 call for the whole list instead, gaining the same one-sign-in-per-batch behavior",
+        "Power Platform is unaffected by either change - its scan is a separate child process with its own sign-in per domain regardless, since the scan itself is domain-scoped"
+      ]
+    },
+    {
+      "version": "2.9.101",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: fixed Start Discovery throwing a JavaScript error immediately on click - main.js's shared script-log opener built the log filename directly from the script name ('Assessment/Run-Assessment.ps1'), so it tried to create the log inside a Logs\\Assessment\\ subfolder that never gets created (only the top-level Logs folder does), and fs.createWriteStream threw ENOENT. Any path separators in the script name are now flattened into the filename itself, so the log always lands directly in the Logs folder regardless of which subfolder the script lives in"
+      ]
+    },
+    {
+      "version": "2.9.100",
+      "date": "2026-09-01",
+      "changes": [
+        "MigrationToolkit-Web: Dashboard no longer auto-selects and fetches data for whichever customer happens to sort first alphabetically on app startup - it previously fired Get-MigrationData.ps1 for an arbitrary customer (e.g. 'AEP') every launch regardless of what the operator was actually working on, leaving a misleading log entry that looked related to whatever else they did next (reported: looked like it came from an unrelated M365 Discovery run). Dashboard now stays blank until a customer is explicitly chosen from the dropdown"
+      ]
+    },
+    {
+      "version": "2.9.99",
+      "date": "2026-09-01",
+      "changes": [
+        "Restore-ProxyAddresses.ps1: fixed every recipient showing 'NOT FOUND in this tenant' when run before the old domain is renamed/verified on the destination tenant (confirmed live on a 709-recipient WhatIf run against AEP) — PrimarySmtpAddress/UserPrincipalName from the CSV are still on the OLD domain at that point, and the local-part wildcard fallback ('EmailAddresses -like $localPart@*') never matched anything because EmailAddresses entries are type-prefixed ('smtp:user@domain.com'), not bare addresses - missing leading '*' meant the filter could never match",
+        "Added optional -CustomerPrefix (matches Settings > Customers' Prefix, e.g. 'AEP') - looks up that customer's AccountName in %APPDATA%\\FlyMigration\\config.json and derives the destination tenant's onmicrosoft.com domain from it (e.g. itvolaris@mbuaepts.onmicrosoft.com -> mbuaepts.onmicrosoft.com), then tries <local-part>@<that domain> as a direct match before falling back to the (now-fixed) wildcard search",
+        "MigrationToolkit-Web: Restore Proxy Addresses panel gained a Customer dropdown (Settings > Customers), passed through as -CustomerPrefix"
+      ]
+    },
+    {
+      "version": "2.9.98",
+      "date": "2026-09-01",
+      "changes": [
+        "Replaced search-domain.ps1 with a new modular Assessment engine (VGMigrations\\Assessment\\Run-Assessment.ps1 + Modules\\) - writes one JSON file per collector (AD, Exchange, Graph, SharePoint, Power Platform) plus an assessment workbook built directly via ImportExcel, and adds a 'Generate Mapping Files' mode that turns a finished workbook into the six AvePoint Fly import files",
+        "AD collection is now soft-fail: a machine without RSAT, or with no line of sight to on-prem AD, still completes an assessment (AD-sourced sections just come back empty) instead of the old -Hybrid on/off switch",
+        "Power Platform (Power Apps + Power Automate) collection ported over as its own child-process scan (separate sign-in window, same reason as before - its SDK conflicts with Graph's) - Skip Power Platform still available for unattended runs",
+        "Interactive sign-in reliability carried over from search-domain.ps1's own hard-won fixes: Microsoft.Graph.* pinned to 2.33.0 via the existing Ensure-GraphModules.ps1 (last version before the SDK made WAM mandatory), and Connect-ExchangeOnline -DisableWAM",
+        "Every Domain Removal script (Rename-DomainObjects.ps1, Hide-AddressBook.ps1, Remove-AliasAddresses.ps1, remove-domain.ps1, Retire-Devices.ps1, Remove-devices.ps1, Restore-ProxyAddresses.ps1) keeps working unchanged - every assessment run now also writes a Discovery\\ folder with the same NN_<Area>.csv files search-domain.ps1 used to produce, generated from the new JSON by Modules\\LegacyExport.psm1",
+        "discovery-menu.ps1 and the Electron app's Discovery panel (MigrationToolkit-Web) now launch the new Assessment engine; both gained a required 'VBU Search Term' field (defaults to the domain's first label when left blank) and dropped the Hybrid/Include Members options that no longer apply",
+        "search-domain.ps1 and run-multiple-domains.ps1 moved to VGMigrations\\_Legacy\\ - not deleted, recoverable if the new engine regresses something in the field, but no longer referenced by any menu or panel",
+        "Not yet field-tested against a live tenant in this change - validate a real assessment run (including the Power Platform child-process sign-in and the Discovery CSV compatibility output) before the next live customer Domain Removal"
+      ]
+    },
+    {
+      "version": "2.9.97",
+      "date": "2026-08-28",
+      "changes": [
+        "Domain Team Memberships screen: the Domain field is now a dropdown populated from the customer domains in Settings (same source as the DL External Senders tenant list), with a separate 'One-off Domain' text box that overrides it for a domain not yet in Settings"
+      ]
+    },
+    {
+      "version": "2.9.96",
+      "date": "2026-08-28",
+      "changes": [
+        "Domain Team Memberships is now a screen in the app under Misc Scripts (Domain, optional User filter, optional Tenant ID, 'also list standard channels' toggle, optional CSV output folder) — wraps Get-DomainTeamMemberships.ps1 with streamed output. CSV now defaults to the shared Contracts\\Jolera\\Migrations\\Reports folder and the -OutputCsv parameter accepts either a folder or a full file path"
+      ]
+    },
+    {
+      "version": "2.9.95",
+      "date": "2026-08-28",
+      "changes": [
+        "Added Get-DomainTeamMemberships.ps1: reports every Team (plus private/shared channels) that users from a given email domain belong to, with their role, to a CSV. Run it against the source tenant before splitting a domain out so those users can be re-added to any Teams that aren't migrating with them. Standard channels are omitted by default (their membership follows the parent team); -IncludeStandardChannels lists them anyway. Optional -User filter narrows the report to one person"
+      ]
+    },
+    {
+      "version": "2.9.94",
+      "date": "2026-08-24",
+      "changes": [
+        "Restore-ProxyAddresses.ps1: fixed 'not found' error on discovery folders written before search-domain.ps1 v2.10.0, where an off-by-one numbering bug named this file 12_ProxyAddresses.csv instead of 13_ (and left two files starting with 10_ in the same folder). Now falls back to a wildcard *_ProxyAddresses.csv match when the exact 13_ name isn't present"
+      ]
+    },
+    {
+      "version": "2.9.93",
+      "date": "2026-08-20",
+      "changes": [
+        "Retire-Devices.ps1: fixed every device failing with 'A positional parameter cannot be found that accepts argument ''False''' (confirmed live on a 94-device run, right after the 2.9.91/2.9.92 tenant-connect fix got sign-in into the correct tenant) — Update-MgDevice's -AccountEnabled binds like a switch in this pinned SDK version (2.33.0), so '-AccountEnabled $false' set the switch present and left $false as an unbound stray argument. Same class of bug this repo already hit and fixed in Deduplicate-Inventory.ps1 (v2.9.53, -UseSystemBrowser)",
+        "Changed to '-AccountEnabled:$false' (colon syntax), which binds correctly whether the parameter is typed as switch or boolean"
+      ]
+    },
+    {
+      "version": "2.9.92",
+      "date": "2026-08-20",
+      "changes": [
+        "Retire Devices: the -Domain field is now the same readonly, Settings > Discovery > Target Domain field already used by Rename Domain Objects/Update UPNs/SIP-IM Addresses (defaults to ourvolaris.onmicrosoft.com) instead of a manually-typed box — that's the tenant this step always targets, so there's nothing to type",
+        "MigrationToolkit-Web: Added a global Stop Script button (fixed bottom-right, appears on every screen while any streamed script is running) so a run started with the wrong details — e.g. missing/incorrect tenant domain — can be cancelled immediately instead of running to completion. Backed by a new stop-powershell IPC handler in main.js that tree-kills the running pwsh.exe via taskkill /T",
+        "All ~30 existing streaming script panels (Discovery, Domain Readiness, Fly migration stages, AOS setup, OneDrive provisioning, every Domain Removal step, etc.) now route through this Stop button automatically — they were unified onto one runStreamingScript() helper instead of calling streamPowerShell directly, so no per-panel changes were needed"
+      ]
+    },
+    {
+      "version": "2.9.91",
+      "date": "2026-08-20",
+      "changes": [
+        "Remove-devices.ps1 and Retire-Devices.ps1: fixed every device failing with '[Request_ResourceNotFound] Resource '<guid>' does not exist' (100% failure rate observed on a 94-device Remove Devices run) — neither script's Connect-MgGraph call passed -TenantId, so sign-in landed in the operator's own home tenant instead of the customer's, and none of the device object IDs from the discovery CSV exist there. Get-DomainDevices.ps1 (which generates the CSV) already connects with -TenantId $domain; the two device-action scripts just never matched it",
+        "Both scripts now take a required -Domain parameter (customer tenant domain or tenant ID), passed straight through to Connect-MgGraph -TenantId; a missing -Domain now prints a clear warning up front instead of silently deleting/updating nothing across the whole tenant",
+        "Remove-devices.ps1's standalone WinForms GUI gained a Tenant Domain field (required before Connect and Delete is enabled)",
+        "MigrationToolkit-Web: Remove Entra Devices panel gained a required Customer Tenant Domain / Tenant ID field, passed as -Domain (Retire Devices later switched to the Settings-driven Target Domain field — see 2.9.92)"
+      ]
+    },
+    {
+      "version": "2.9.90",
+      "date": "2026-08-18",
+      "changes": [
+        "Search-OneDriveFiles.ps1: fixed the actual connect failure ('Specified method is not supported') and the resulting infinite error loop by dropping the background-runspace + Timer architecture entirely — the search now runs synchronously on the UI thread with periodic Application.DoEvents() calls to keep the window responsive",
+        "Root cause: Connect-PnPOnline -Interactive shows its own embedded browser dialog, which needs an active WinForms message pump on the calling thread. The main UI thread has one (Application.Run($form)); the background runspace used previously did not, which is what threw NotSupportedException. This matches this repo's own prior finding in Deduplicate-Inventory.ps1 (v2.9.53) that PnP's popup-based auth is unreliable here and Connect-SPOService -UseSystemBrowser was the fix that actually worked for SharePoint interactive sign-in",
+        "As a side effect this also removes the unrelated infinite-loop bug from 2.9.88/2.9.89: reading $script:-scoped Timer/Runspace handles from inside a Timer.Tick handler nested inside another closure was unreliable and kept re-throwing on every tick — there's no longer a Timer or background runspace for that to happen to"
+      ]
+    },
+    {
+      "version": "2.9.89",
+      "date": "2026-08-18",
+      "changes": [
+        "Search-OneDriveFiles.ps1: fixed the same crash-to-desktop recurring after 2.9.88's fix — the new Set-CtlText helper was defined as a local 'function' inside the Sign In and Search click handler, but .GetNewClosure() only captures variables, not locally-defined functions, so the Timer's separately-closured Add_Tick handler couldn't see it and threw CommandNotFoundException, which (like the original bug) escaped the WinForms callback unhandled",
+        "Set-CtlText moved to true top-level script scope (alongside _RawLog, which is why that one always worked) so it's visible from every event handler regardless of which closure defined it"
+      ]
+    },
+    {
+      "version": "2.9.88",
+      "date": "2026-08-18",
+      "changes": [
+        "Search-OneDriveFiles.ps1: fixed a crash-to-desktop (.NET unhandled-exception/JIT-debugger dialog, killing the whole pwsh.exe process) — the background-progress Timer's tick handler had a try/finally with no catch, so any error inside it (e.g. a UI control briefly unavailable during a Close-while-running race) propagated straight out of the WinForms event callback instead of being handled",
+        "Timer tick handler now has a real catch block, every control write is guarded with an IsDisposed check via a new Set-CtlText helper, and status logging no longer calls lib.ps1's shared Write-Log (which assumes a RichTextBox log panel this script doesn't have) — replaced with a simple file-only logger throughout",
+        "Sign In and Search button handler is now wrapped in try/catch too, so a failure before the background search even starts shows a message box and re-enables the UI instead of risking the same crash"
+      ]
+    },
+    {
+      "version": "2.9.87",
+      "date": "2026-08-18",
+      "changes": [
+        "Added Search-OneDriveFiles.ps1: standalone WinForms tool for when a user reports missing files — connects to a single user's OneDrive and builds a searchable, filterable, exportable list of every file, covering both the live Documents library and the Recycle Bin (first-stage user-recoverable and second-stage admin-recoverable)",
+        "Uses PnP PowerShell with interactive browser sign-in (as a SharePoint/Global admin) rather than app-only auth — confirmed Microsoft Graph has no API to list a OneDrive-for-Business Recycle Bin, and the classic SharePoint REST recycle-bin API requires the legacy Azure ACS app-only auth model, which Microsoft retired on 2026-04-02, ruling out reuse of the existing Fly/AOS app registration for this",
+        "Temporarily grants the signed-in admin site collection access to the target OneDrive via Set-PnPTenantSite so it can enumerate files and the Recycle Bin; this access is not auto-revoked afterwards (documented in the script's header)"
+      ]
+    },
+    {
+      "version": "2.9.86",
+      "date": "2026-08-13",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Added a headline PoliciesCreated column (Yes/No/Unknown) so you don't need to read all 11 per-check columns to see whether a tenant's baseline is done — Yes only if every check confirms Configured, No if any check confirms something is NOT configured (partial counts as No), Unknown when nothing is confirmed missing but a check couldn't be verified due to an app-registration permission gap",
+        "The per-tenant console line and CSV both show the new column; the existing 11 detail columns are unchanged for troubleshooting which specific policy is missing"
+      ]
+    },
+    {
+      "version": "2.9.85",
+      "date": "2026-08-13",
+      "changes": [
+        "Provision-OneDrives.ps1: Fixed every user failing with 'Authentication needed. Please call Connect-MgGraph.' immediately after a successful-looking Connect-MgGraph — now disconnects any existing session before connecting (a stale session from an earlier script run, possibly with narrower scopes or a different tenant, was otherwise silently reusable), connects with -ContextScope Process, and logs the actually-granted scopes right after sign-in with a clear warning if Sites.ReadWrite.All wasn't granted",
+        "Provision-OneDrives.ps1: Per-user failures now show the full multi-line error (Get-CleanErrorMessage, same helper used elsewhere in this toolkit) instead of just the first line, which was hiding the real cause behind a generic message",
+        "Check-OneDriveStatus.ps1: Same Connect-MgGraph fix applied — this script shares the identical connect pattern and would otherwise silently misreport every user as 'No OneDrive' under the same failure, with no visible error at all since it swallows per-user exceptions by design"
+      ]
+    },
+    {
+      "version": "2.9.84",
+      "date": "2026-08-13",
+      "changes": [
+        "Set-DistributionGroupExternalSenders.ps1: Fixed sign-in falling back to device-code auth, which is blocked tenant-wide by Conditional Access on these tenants ('AADSTS...blocked' style failure) — this script was the only one in the toolkit not yet using -DisableWAM. Now uses -DisableWAM directly (plain browser popup) like every other Exchange Online connect in this codebase, with no device-code fallback attempted at all",
+        "(App registrations were considered as an alternative but ruled out: the stored per-tenant app registrations use a client secret, and Exchange Online's app-only auth only supports certificate-based auth, not secrets — reusing them would need new certificate + RBAC infrastructure per tenant)"
+      ]
+    },
+    {
+      "version": "2.9.83",
+      "date": "2026-08-13",
+      "changes": [
+        "Renamed 'License Report' to 'Check Licenses' and 'Domain Readiness' to 'Check Domain Readiness' throughout the sidebar, view titles, and buttons for consistency with 'Check Baseline Status'",
+        "Set-DistributionGroupExternalSenders.ps1: Added -TenantDomain, passed to Connect-ExchangeOnline -Organization so sign-in targets a specific tenant; when set, any existing Exchange Online session is disconnected first so a cached connection to a different tenant is never silently reused",
+        "MigrationToolkit-Web: DL External Senders panel now has a Tenant dropdown (from Settings > Customers) plus a one-off tenant-domain override, matching the OneDrive Provisioning panel's pattern"
+      ]
+    },
+    {
+      "version": "2.9.82",
+      "date": "2026-08-13",
+      "changes": [
+        "Standardized cutover-column skip logic across all three multi-tenant Excel-driven scripts: column N ('cutover done') is now ALWAYS skipped, even with -ProcessAll / 'Process all' checked in the UI — a migrated tenant is never worth re-checking",
+        "Check-DomainMigrationReadiness.ps1: Fixed the GUI mislabeling its skip column as 'J' when the code has always actually used column L ('DNS Already Requested') — GUI text now correctly says L; -ProcessAll now only bypasses L, never N (previously bypassed both)",
+        "Check-TenantBaselineStatus.ps1: Removed the now-meaningless -ProcessAll switch (and its 'Process all tenants' checkbox in the UI) — it only ever bypassed column N, which is now always enforced, so the switch had nothing left to do",
+        "Get-TenantLicenseReport.ps1: No behavior change (its -ProcessAll already only bypassed column J, never N) — corrected a misleading doc comment that implied ProcessAll bypassed both"
+      ]
+    },
+    {
+      "version": "2.9.81",
+      "date": "2026-08-13",
+      "changes": [
+        "Added Set-DistributionGroupExternalSenders.ps1: Audits every distribution group in the connected tenant for whether it accepts external (outside-org) senders (RequireSenderAuthenticationEnabled), reporting to a timestamped CSV; -Commit fixes any group found blocking external mail",
+        "MigrationToolkit-Web: Added 'DL External Senders' under Misc Scripts — dry-run/Commit checkbox, optional CSV output folder override, streaming log panel"
+      ]
+    },
+    {
+      "version": "2.9.80",
+      "date": "2026-08-13",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: -TenantIDsPath now defaults to the 'Tenant IDs Xlsx Path' set in Settings > Discovery (config.json's TenantsFilePath), same as Get-TenantLicenseReport.ps1 — was previously hardcoded to a specific user's OneDrive path, which silently used a stale/wrong file on any other machine or account",
+        "MigrationToolkit-Web: Domain Readiness's 'Tenant IDs Excel File' field is now an optional override (blank by default) instead of a required field pre-filled with the same stale hardcoded path"
+      ]
+    },
+    {
+      "version": "2.9.79",
+      "date": "2026-08-13",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Fixed 'if is not recognized as a name of a cmdlet' crash on line 502 — Write-Host -ForegroundColor used an `(if ...)` grouping expression, which PowerShell doesn't allow for statement keywords; changed to `$(if ...)` subexpression syntax"
+      ]
+    },
+    {
+      "version": "2.9.78",
+      "date": "2026-08-12",
+      "changes": [
+        "Added a 'Tenant IDs Xlsx Path' field to Settings > Discovery — set the Tenant IDs.xlsx path once per machine through the UI instead of hand-editing a config.json file",
+        "Get-TenantLicenseReport.ps1 and Check-TenantBaselineStatus.ps1 now read TenantsFilePath from %APPDATA%\\FlyMigration\\config.json (the same file/field Settings writes) instead of a hardcoded default or a separate VGMigrations\\config.json — each device can point at its own copy since OneDrive paths differ by username"
+      ]
+    },
+    {
+      "version": "2.9.77",
+      "date": "2026-08-11",
+      "changes": [
+        "Restore-ProxyAddresses.ps1: Recipients not found by PrimarySmtpAddress/UserPrincipalName now also get matched by local-part across any domain — the destination mailbox may already be sitting on the tenant's default onmicrosoft.com address (e.g. user@mbubinarysystems.onmicrosoft.com) rather than the vanity domain the CSV was captured against, and that default domain varies per tenant so it can't be assumed"
+      ]
+    },
+    {
+      "version": "2.9.76",
+      "date": "2026-08-11",
+      "changes": [
+        "All script-run logs (main.js's centralized per-run log, and every VGMigrations script's own internal log) now write to a shared OneDrive folder — C:\\Users\\andyw\\OneDrive - Andy White\\Contracts\\Jolera\\Migrations\\Logs — instead of each machine's local %APPDATA%\\FlyMigration\\Logs or VGMigrations\\logs, so logs from all 3 devices land in one place",
+        "The 'Open Logs' button (Settings) now opens the same shared folder",
+        "Remove-EntraUsers.ps1: Fixed Get-MgUser -Filter \"endsWith(...)\" failing with 'ConsistencyLevel:eventual header is missing' — added -ConsistencyLevel eventual -CountVariable, required by Microsoft Graph for the endsWith/startsWith advanced query operators"
+      ]
+    },
+    {
+      "version": "2.9.75",
+      "date": "2026-08-11",
+      "changes": [
+        "Fixed a systemic stale-CSV-filename bug across the Domain Removal workflow: search-domain.ps1 renumbered its output (Teams inserted as section 11 pushed Devices 11→12 and ProxyAddresses 12→13, and Mailboxes was renamed 02_Mailboxes→02_ADUsers), but Hide-AddressBook.ps1, Remove-AliasAddresses.ps1, remove-domain.ps1, Rename-DomainObjects.ps1, Remove-devices.ps1, Retire-Devices.ps1, and the UI were all still referencing the old names — silently skipping those sections entirely ('Skipped (not found)')",
+        "Remove-AliasAddresses.ps1: Exchange Online checking is now opt-in via -CheckExchangeOnline (new 'Also check Exchange Online' checkbox, off by default) — on-prem AD alone gives a much shorter, clearer log for the common hybrid case; turn it on for cloud-only accounts or cloud-only addresses"
+      ]
+    },
+    {
+      "version": "2.9.74",
+      "date": "2026-08-11",
+      "changes": [
+        "Clear-EmployeeId.ps1: Fixed 150/151 users showing NOT FOUND when the mapping CSV's Source domain had already been renamed on-prem earlier in the Domain Removal workflow — now falls back to matching by local-part (UserPrincipalName/mail/SamAccountName) when the exact pre-rename identity isn't found"
+      ]
+    },
+    {
+      "version": "2.9.73",
+      "date": "2026-08-11",
+      "changes": [
+        "Remove-AliasAddresses.ps1: Fixed a confusing false-alarm where a successful on-prem AD removal was immediately followed by a PROTECTED report for the exact same addresses — Exchange Online's copy still shows them for a while after removal since Azure AD Connect sync isn't instant. The Exchange Online check now excludes anything already removed on-prem before deciding what (if anything) still needs attention there"
+      ]
+    },
+    {
+      "version": "2.9.72",
+      "date": "2026-08-11",
+      "changes": [
+        "Update-SIPDomain.ps1: Exchange Online failures caused by hybrid write-protection ('object is being synchronized from your on-premises organization') are now reported as PROTECTED with an explanation, instead of a generic FAILED — matches the improvement already made to Remove-AliasAddresses.ps1"
+      ]
+    },
+    {
+      "version": "2.9.71",
+      "date": "2026-08-11",
+      "changes": [
+        "Hide-AddressBook.ps1: Now sets msExchHideFromAddressLists in on-prem AD first for hybrid/synced objects (Mailboxes, Distribution Groups, Mail Contacts, Shared Mailboxes), falling back to Exchange Online only when not found on-prem or AD is unavailable — HiddenFromAddressListsEnabled in EXO is sourced from on-prem AD in a hybrid tenant and gets overwritten back by the next AD Connect sync if only set in the cloud",
+        "Hide-AddressBook.ps1: M365 Groups/Teams are unaffected — always via Exchange Online since they're cloud-native with no on-prem AD equivalent",
+        "Remove-AliasAddresses.ps1: Same on-prem-first approach for proxyAddresses, but now also always checks Exchange Online regardless of the on-prem result — some addresses (notably Teams/Skype-for-Business-Online auto-generated SIP addresses) are provisioned entirely cloud-side and never appear in on-prem proxyAddresses even on a DirSync'd object",
+        "Remove-AliasAddresses.ps1: When Exchange Online refuses an edit because the object is synchronized from on-premises, that's now reported as PROTECTED (with a clear explanation) instead of a generic FAILED"
+      ]
+    },
+    {
+      "version": "2.9.70",
+      "date": "2026-08-11",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: Fixed every interactive sign-in fallback dying with 'Isolated sign-in window closed without producing a result (exit code -1073741510)' over RDP — UseShellExecute=$true resolves through Windows' default terminal handler (Windows Terminal on Win11), whose GPU-accelerated rendering can fail to initialize over RDP and kill the hosted process before it runs; switched to UseShellExecute=$false, which uses the plain conhost console path instead",
+        "discovery-menu.ps1: Same fix applied to its isolated MSAL sign-in window spawn",
+        "Fixed config.json.example still showing the old stale Tenant IDs.xlsx path"
+      ]
+    },
+    {
+      "version": "2.9.69",
+      "date": "2026-08-11",
+      "changes": [
+        "Check-TenantBaselineStatus.ps1: Fixed every tenant failing to authenticate with 'Could not load file or assembly Microsoft.Graph.Authentication ... Assembly with same name is already loaded' — the script called Get-MgOrganization (from Microsoft.Graph.Identity.DirectoryManagement) without pinning that module through Ensure-GraphModules.ps1, so PowerShell auto-loaded a mismatched version alongside the pinned Microsoft.Graph.Authentication",
+        "Check-TenantBaselineStatus.ps1: Now pins Microsoft.Graph.Identity.DirectoryManagement the same way Get-TenantLicenseReport.ps1 already does"
+      ]
+    },
+    {
+      "version": "2.9.68",
+      "date": "2026-08-11",
+      "changes": [
+        "Fixed stale default Tenant IDs.xlsx path (C:\\Users\\Andy White\\Volaris Group\\...) across Check-TenantBaselineStatus.ps1, Get-TenantLicenseReport.ps1, Check-DomainMigrationReadiness.ps1, discovery-menu.ps1, New-Package.ps1, and the Domain Verification Check UI panel — corrected to C:\\Users\\andyw\\OneDrive - Volaris Group\\...- 3. Execution\\M365 Migrations",
+        "License Report and Domain Verification Check were silently pointing at a nonexistent path with no way to override it since the file-picker UI field was removed in a recent update"
+      ]
+    },
+    {
+      "version": "2.9.67",
+      "date": "2026-08-11",
+      "changes": [
+        "Added Check-TenantBaselineStatus.ps1: Read-only, multi-tenant report on whether Invoke-TenantBaseline.ps1's configuration has already been applied — authorization policy, admin consent workflow, Intune MDM scope, dynamic device groups, enrollment restrictions, BitLocker/Windows compliance, iOS/Android app protection, Conditional Access policy set, LAPS",
+        "Check-TenantBaselineStatus.ps1: Reuses the same per-tenant app registration as License Report (no new app registration created); tenants with none on file are skipped, no interactive fallback",
+        "Check-TenantBaselineStatus.ps1: A 403 on an individual check is reported as 'Unknown (insufficient permission)' rather than failing the tenant — the license-report app registration needs Policy.Read.All/Group.Read.All/DeviceManagementConfiguration.Read.All/DeviceManagementApps.Read.All/DeviceManagementServiceConfig.Read.All added for full results",
+        "Check-TenantBaselineStatus.ps1: Exchange Online settings (EOP/ATP presets, transport rules, audit logging) are not covered — app-only Graph credentials don't reach Exchange Online",
+        "Invoke-TenantBaseline.ps1: Added 'Block Device Code Flow' Conditional Access policy (disabled by default, same as the other baseline CA policies)",
+        "MigrationToolkit-Web: Added 'Check Baseline Status' under Misc Scripts"
+      ]
+    },
+    {
+      "version": "2.9.66",
+      "date": "2026-08-11",
+      "changes": [
+        "Added Restore-ProxyAddresses.ps1: Re-adds proxy addresses captured before migration (13_ProxyAddresses.csv) to matching accounts in the new tenant, as secondary aliases",
+        "Restore-ProxyAddresses.ps1: Matches recipients by PrimarySmtpAddress, falls back to UserPrincipalName; never overrides the destination mailbox's current primary address",
+        "Restore-ProxyAddresses.ps1: X500 addresses skipped by default (-IncludeX500 to opt in) since they're tied to the old mailbox's GUID",
+        "MigrationToolkit-Web: Added 'Restore Proxy Addresses' under Misc Scripts"
+      ]
+    },
+    {
+      "version": "2.9.65",
+      "date": "2026-08-11",
+      "changes": [
+        "Update-SIPDomain.ps1: Fixed Exchange Online search finding 0 matches even when SIP addresses genuinely existed (e.g. binarysystem.eu) — a type-prefixed wildcard filter ('EmailAddresses -like ''SIP:*@domain''') doesn't reliably match server-side in EXO",
+        "Update-SIPDomain.ps1: Now uses the same broad-filter-then-client-side-match approach already proven working elsewhere in this repo (search-domain.ps1)"
+      ]
+    },
+    {
+      "version": "2.9.64",
+      "date": "2026-08-11",
+      "changes": [
+        "Update-SIPDomain.ps1: Now checks both on-premises AD (proxyAddresses) and Exchange Online, and updates whichever location actually holds the matching SIP/EUM/IM address per recipient",
+        "Update-SIPDomain.ps1: Fixes cloud-migrated tenants (e.g. mailboxes already moved to Exchange Online) showing 0 matches when the on-prem-only search found nothing",
+        "Update-SIPDomain.ps1: Added -SkipOnPrem and -SkipExchangeOnline switches for known single-location tenants",
+        "MigrationToolkit-Web: Removed stale 'Licence SKU ID' / 'Wait (minutes)' fields from the SIP/IM Addresses panel — leftover from the pre-v2.9.49 temp-license flow, they were being passed as -LicenseSkuId/-WaitMinutes to a script that no longer accepts them, breaking every Remove-mode run"
+      ]
+    },
+    {
+      "version": "2.9.63",
+      "date": "2026-08-10",
+      "changes": [
+        "MigrationToolkit-Web: Fixed sidebar 'License Report' pointing at a script that never existed (Check-TenantLicenses.ps1), causing exit code 64",
+        "MigrationToolkit-Web: Removed the broken duplicate License Report panel and its mismatched auto-auth/process-all checkboxes",
+        "MigrationToolkit-Web: Sidebar 'License Report' now opens the working panel that correctly calls Get-TenantLicenseReport.ps1",
+        "VGMigrations: .gitignore now excludes backup-*/ folders and appdata-config.json/localappdata-shared-config.json/config.json (previously an uncommitted config backup was leaking an encrypted API secret blob into the working tree diff)"
+      ]
+    },
+    {
+      "version": "2.9.62",
+      "date": "2026-08-08",
+      "changes": [
+        "Added Remove-DomainDependants.ps1: Pre-flight check for remaining M365 domain references",
+        "Remove-DomainDependants.ps1: Scans Entra ID users and Exchange Online objects (mailboxes, contacts, groups, M365 groups, public folders)",
+        "Added Check-ADDomainReferences.ps1: Pre-flight check for remaining on-prem AD domain references",
+        "Check-ADDomainReferences.ps1: Checks mail, userPrincipalName, and proxyAddresses attributes in AD discovery CSV",
+        "Domain Removal: Added '✅ Check M365 References' and '✅ Check AD References' menu items",
+        "Domain Removal: Both checks run in dry-run mode by default with detailed CSV logs",
+        "Domain Removal: Add -Apply switch to actually fix issues found during checks",
+        "MigrationToolkit-Web: Added UI views for both pre-flight check scripts with streaming output"
+      ]
+    },
+    {
+      "version": "2.9.61",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Added 'Skip rename operations' option to Rename Domain",
+        "MigrationToolkit-Web: Allows removing domain from tenant without renaming objects",
+        "MigrationToolkit-Web: Useful when objects already renamed manually or via other scripts",
+        "MigrationToolkit-Web: When checked, disables all rename checkboxes and only removes domain registration"
+      ]
+    },
+    {
+      "version": "2.9.60",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Reordered Domain Removal sidebar menu to match workflow order",
+        "MigrationToolkit-Web: Added step numbers (1-8) to sidebar items for clarity",
+        "MigrationToolkit-Web: Rename Domain now appears as step 8 (last step)",
+        "MigrationToolkit-Web: Remove Entra Users remains at bottom as last-resort option"
+      ]
+    },
+    {
+      "version": "2.9.59",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Fixed browse buttons opening both folder AND file picker dialogs",
+        "MigrationToolkit-Web: Added return statements to prevent fall-through in event handler",
+        "MigrationToolkit-Web: Folder browse buttons now only open folder picker",
+        "MigrationToolkit-Web: File browse buttons now only open file picker"
+      ]
+    },
+    {
+      "version": "2.9.58",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: All target domain fields now use Settings > Discovery target domain",
+        "MigrationToolkit-Web: Applied to Update On-Prem UPNs, Update Cloud UPNs, and SIP/IM Addresses",
+        "MigrationToolkit-Web: All target domain fields now readonly and auto-populated",
+        "MigrationToolkit-Web: Set target domain once in Settings - used everywhere automatically"
+      ]
+    },
+    {
+      "version": "2.9.57",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Fixed all Discovery Folder browse buttons to open folder picker instead of file picker",
+        "MigrationToolkit-Web: Affects Rename Domain, Hide from Address Book, Remove Aliases, Retire Devices, Remove Devices",
+        "MigrationToolkit-Web: CSV file browse buttons now correctly open file picker with CSV filter"
+      ]
+    },
+    {
+      "version": "2.9.56",
+      "date": "2026-08-08",
+      "changes": [
+        "MigrationToolkit-Web: Added Target Domain setting in Settings > Discovery",
+        "MigrationToolkit-Web: Domain Rename now uses target domain from settings (defaults to ourvolaris.onmicrosoft.com)",
+        "MigrationToolkit-Web: Removed editable New Domain field - now auto-populated and readonly",
+        "MigrationToolkit-Web: Change target domain in Settings instead of entering each time"
+      ]
+    },
+    {
+      "version": "2.9.55",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Domain dropdown now falls back to Customers array from config.json",
+        "MigrationToolkit-Web: Works without VBU CSV file - uses existing customer configuration",
+        "MigrationToolkit-Web: Dropdown shows customer prefix and domain from config"
+      ]
+    },
+    {
+      "version": "2.9.54",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Fixed M365 Discovery domain dropdown not working",
+        "MigrationToolkit-Web: Added missing readVbuCsv bridge function to preload.js",
+        "MigrationToolkit-Web: Domain dropdown now populates from VBU CSV file"
+      ]
+    },
+    {
+      "version": "2.9.53",
+      "date": "2026-08-07",
+      "changes": [
+        "Deduplicate-Inventory.ps1: Fixed -UseSystemBrowser parameter error",
+        "Deduplicate-Inventory.ps1: Changed from switch to boolean parameter (-UseSystemBrowser:$true)",
+        "Deduplicate-Inventory.ps1: Fixes 'Missing an argument for parameter UseSystemBrowser' error"
+      ]
+    },
+    {
+      "version": "2.9.52",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Fixed browse buttons not working - added missing showOpenDialog to preload.js",
+        "MigrationToolkit-Web: All file/folder browse buttons now work correctly",
+        "MigrationToolkit-Web: Fixes 'window.electronAPI.showOpenDialog is not a function' error"
+      ]
+    },
+    {
+      "version": "2.9.51",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Added debug logging to browse button click handler",
+        "MigrationToolkit-Web: Helps diagnose why Deduplicate Inventory browse button not responding"
+      ]
+    },
+    {
+      "version": "2.9.50",
+      "date": "2026-08-07",
+      "changes": [
+        "MigrationToolkit-Web: Fixed Deduplicate Inventory browse button not working",
+        "MigrationToolkit-Web: Added missing data-target attribute to browse button"
+      ]
+    },
+    {
+      "version": "2.9.49",
+      "date": "2026-08-06",
+      "changes": [
+        "Update-SIPDomain.ps1: Completely rewritten to target on-premises Active Directory instead of Exchange Online",
+        "Update-SIPDomain.ps1: Now uses ActiveDirectory module to update proxyAddresses attribute directly",
+        "Update-SIPDomain.ps1: No longer requires Exchange Online or Microsoft Graph connections",
+        "Update-SIPDomain.ps1: Removed license provisioning logic (not needed for on-prem AD)",
+        "Update-SIPDomain.ps1: Added SearchBase parameter for targeting specific OUs"
+      ]
+    },
+    {
+      "version": "2.9.48",
+      "date": "2026-08-06",
+      "changes": [
+        "remove-domain.ps1: Fixed SIP/IM address removal to target on-premises AD instead of Exchange Online",
+        "remove-domain.ps1: Proxy Addresses section now separates SIP/IM addresses from SMTP addresses",
+        "remove-domain.ps1: SIP/IM addresses are now removed from on-prem AD proxyAddresses attribute",
+        "remove-domain.ps1: SMTP addresses continue to be processed via Exchange Online as before",
+        "remove-domain.ps1: On-prem AD update section now handles SIP, IM, and SMTP proxy addresses"
+      ]
+    },
+    {
+      "version": "2.9.47",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Fixed CSV sort to use correct column number for ReadinessStatus (column H/8)",
+        "Check-DomainMigrationReadiness.ps1: Report now correctly sorts by ReadinessStatus then TenantName"
+      ]
+    },
+    {
+      "version": "2.9.46",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: CSV report now auto-formats when opened in Excel",
+        "Check-DomainMigrationReadiness.ps1: All columns auto-fit for better readability",
+        "Check-DomainMigrationReadiness.ps1: Report sorted by ReadinessStatus then TenantName (Not Ready domains at top)",
+        "Check-DomainMigrationReadiness.ps1: Falls back to default app if Excel not available"
+      ]
+    },
+    {
+      "version": "2.9.45",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Simplified ReadinessStatus to only two values: 'Ready - Pre-Cutover (Exact Match)' or 'Not Ready'",
+        "Check-DomainMigrationReadiness.ps1: Removed ambiguous status values for clearer reporting",
+        "Check-DomainMigrationReadiness.ps1: All domains with correct DNS records now consistently show 'Ready - Pre-Cutover (Exact Match)'"
+      ]
+    },
+    {
+      "version": "2.9.44",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Domains with wrong MS= records from previous migrations now marked as 'Not Ready'",
+        "Check-DomainMigrationReadiness.ps1: Clearer error messaging when DNS has old verification record that doesn't match target tenant",
+        "Check-DomainMigrationReadiness.ps1: Prevents cutover failures due to stale MS= records in DNS"
+      ]
+    },
+    {
+      "version": "2.9.43",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Added fallback output path when OneDrive directory doesn't exist",
+        "Check-DomainMigrationReadiness.ps1: Reports now save to script directory/Reports if specified path not found",
+        "Check-DomainMigrationReadiness.ps1: Fixes 'Could not find a part of the path' error on servers"
+      ]
+    },
+    {
+      "version": "2.9.42",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Replaced COM Excel automation with ImportExcel PowerShell module",
+        "Check-DomainMigrationReadiness.ps1: No longer requires Microsoft Excel to be installed on server",
+        "Check-DomainMigrationReadiness.ps1: Auto-installs ImportExcel module if missing",
+        "Check-DomainMigrationReadiness.ps1: Fixes 'Class not registered' (REGDB_E_CLASSNOTREG) error on servers without Office"
+      ]
+    },
+    {
+      "version": "2.9.41",
+      "date": "2026-08-06",
+      "changes": [
+        "Domain Readiness Web UI: Added Tenant IDs Excel file path input field with Browse button",
+        "Domain Readiness Web UI: File path can now be customized per environment (fixes server OneDrive path issue)",
+        "Domain Readiness Web UI: Script accepts -TenantIDsPath parameter for flexible file location"
+      ]
+    },
+    {
+      "version": "2.9.40",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: DNS queries now use public DNS servers (Google 8.8.8.8, Cloudflare 1.1.1.1) to avoid cached/corporate DNS issues",
+        "Check-DomainMigrationReadiness.ps1: Enhanced detection of unverified domains - now correctly identifies domains added to target but still active in source tenant",
+        "Check-DomainMigrationReadiness.ps1: Added comprehensive DNS record logging - shows all TXT records found with byte-level comparison for troubleshooting",
+        "Check-DomainMigrationReadiness.ps1: Improved pre-cutover validation - attempts exact match first, then accepts any MS= record if different",
+        "Check-DomainMigrationReadiness.ps1: Reports 'Ready - Pre-Cutover (Exact Match)' when DNS record matches target tenant's expected value exactly",
+        "Check-DomainMigrationReadiness.ps1: Warns when source tenant MS= record differs from target's expected value (DNS update needed after transfer)",
+        "Check-DomainMigrationReadiness.ps1: Added detailed debug logging for troubleshooting DNS resolution and domain verification status"
+      ]
+    },
+    {
+      "version": "2.9.39",
+      "date": "2026-08-06",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Now handles domains that are currently in another tenant (pre-cutover state)",
+        "Check-DomainMigrationReadiness.ps1: Checks for ANY MS= verification record when domain cannot be added to target tenant",
+        "Check-DomainMigrationReadiness.ps1: Reports 'Ready - Pre-Cutover' status when MS= record exists but domain is in source tenant",
+        "Check-DomainMigrationReadiness.ps1: Provides clear guidance that exact record validation will happen after cutover"
+      ]
+    },
+    {
+      "version": "2.9.38",
+      "date": "2026-08-06",
+      "changes": [
+        "License Report: Added 'Process all domains' option to ignore column J (licenses checked) while still respecting column N (cutover done)",
+        "Check-TenantLicenses.ps1: Added -ProcessAll switch parameter to bypass column J skip flag",
+        "Check-TenantLicenses.ps1: Column N (cutover done) is always respected regardless of ProcessAll setting",
+        "MigrationToolkit-Web: Added checkbox to License Report UI for processing all domains"
+      ]
+    },
+    {
+      "version": "2.9.37",
+      "date": "2026-07-29",
+      "changes": [
+        "Check-TenantLicenses.ps1: Fixed Excel column reading - now correctly reads Tenant ID from Column B instead of Column C",
+        "Check-TenantLicenses.ps1: Improved mailbox license detection - now uses service plan checking (EXCHANGE_S_*, SHAREPOINT*) instead of hardcoded SKU list",
+        "Check-TenantLicenses.ps1: Excludes EXCHANGE_S_FOUNDATION and SHAREPOINTWAC (internal plumbing, not real mailboxes/storage)",
+        "Check-TenantLicenses.ps1: Output CSV and TXT files now save to Logs subfolder to avoid cluttering main directory",
+        "Check-TenantLicenses.ps1: Auto-creates Logs folder if it doesn't exist",
+        "MigrationToolkit-Web: Fixed auto-open of license report CSV - added missing streamPowerShell, onPsOutput, offPsOutput, and openFile functions to preload.js",
+        "MigrationToolkit-Web: Added ##OPEN_FILE## signal detection to renderer.js for Check-TenantLicenses output handler",
+        "MigrationToolkit-Web: CSV reports now automatically open in default application when script completes (requires app restart to load updated JavaScript)",
+        "Setup-LicenseReportApp.ps1: Credential files now use correct Tenant IDs from Excel Column B for proper app registration storage"
+      ]
+    },
+    {
+      "version": "2.9.36",
+      "date": "2026-07-29",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Fixed verification record retrieval - now uses Get-MgDomainVerificationDnsRecord instead of ServiceConfigurationRecord",
+        "Check-DomainMigrationReadiness.ps1: Now correctly retrieves MS= verification records instead of SPF records",
+        "Check-DomainMigrationReadiness.ps1: Added Column L skip condition - rows with 'Yes' in Column L (DNS Already Requested) are now skipped",
+        "Check-DomainMigrationReadiness.ps1: DNS checking now shows detailed logs of records found and comparison results",
+        "Check-DomainMigrationReadiness.ps1: DNS verification now correctly identifies domains with missing verification records vs configured records",
+        "Setup-DomainReadinessApp.ps1: Uses browser authentication instead of device code to avoid MFA confusion",
+        "Permission upgraded from Domain.Read.All to Domain.ReadWrite.All to support adding domains to target tenants"
+      ]
+    },
+    {
+      "version": "2.9.35",
+      "date": "2026-07-28",
+      "changes": [
+        "Check-DomainMigrationReadiness.ps1: Now uses app registration with stored credentials",
+        "First run: Device code authentication to create app registration per tenant",
+        "Subsequent runs: Automatic authentication using stored credentials",
+        "No more repeated device code prompts - authenticate once per tenant",
+        "Credentials stored in domaincheck_<tenantid>.json for reuse",
+        "Required permission: Domain.Read.All (application)",
+        "App name: VG-DomainReadiness-Reporter",
+        "Added Archive-OldLogs.ps1 - Auto-archives logs older than 7 days to Old_Logs.zip on startup"
+      ]
+    },
+    {
+      "version": "2.9.34",
+      "date": "2026-07-28",
+      "changes": [
+        "Added Check-TenantLicenses.ps1 - License report with auto-app registration",
+        "Counts licenses granting Exchange Online mailboxes by domain",
+        "Auto-creates app registration per tenant with credential storage/reuse",
+        "Added Check-DomainMigrationReadiness.ps1 - Domain verification checker",
+        "Reads source/destination from Tenant IDs.xlsx columns P/Q",
+        "Checks if domains exist in target tenant and DNS verification status",
+        "Handles multiple comma-separated source tenants",
+        "Web: Added License Report and Domain Readiness buttons to Discovery section",
+        "Web: Updated to v2.9.34 to match PowerShell toolkit version"
+      ]
+    },
+    {
+      "version": "2.9.33",
+      "date": "2026-07-22",
+      "changes": [
+        "Deduplicate-Inventory.ps1: fixed SharePoint sign-in failing outright — PnP's -DeviceLogin is now blocked tenant-wide by Conditional Access (same block as Graph/EXO elsewhere), and the SPO module fallback's plain Connect-SPOService popup has no window to open against since this script is spawned headlessly, so it failed silently with 'No valid OAuth 2.0 authentication session exists'",
+        "Now connects directly via Connect-SPOService -UseSystemBrowser (the current SPO module's replacement for the removed -UseWebLogin) — opens the OS default browser instead, which needs no window handle on this process at all. Removed the PnP device-code attempt entirely since it can no longer succeed on this tenant"
+      ]
+    },
+    {
+      "version": "2.9.32",
+      "date": "2026-07-22",
+      "changes": [
+        "search-domain.ps1: fixed Discovery hanging indefinitely at '[22/22] User Licenses (Graph)' with no further output after a non-retryable Graph error — neither Graph call in this section had a hard timeout, so a single stuck request (auth context or network) could hang the whole run forever with nothing written to the log",
+        "The subscribedSkus prefetch now runs via Start-ThreadJob with a 30s timeout instead of a direct call — falls back to per-licenseDetails values (existing behaviour) if it times out or fails",
+        "The parallel per-user licenseDetails lookup now passes -TimeoutSeconds (min 300s, or 2s/user) to ForEach-Object -Parallel, and collects results into a ConcurrentBag instead of the pipeline — if the timeout fires, whatever results were already collected are kept and the section completes with a WARN instead of hanging the entire Discovery run"
+      ]
+    },
+    {
+      "version": "2.9.31",
+      "date": "2026-07-18",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: the 2.9.30 retry didn't help — both attempts failed identically on a real run, ruling out simple MSAL cache staleness and confirming a process-level resource issue (most likely a stuck loopback redirect listener) that persists for the life of the PowerShell process, not just the auth context",
+        "Interactive sign-in now runs in a brand-new isolated pwsh.exe window per tenant (new Get-TenantLicenseReport-InteractiveWorker.ps1, spawned and waited on, result read back via a temp JSON file) instead of the main long-running process — guarantees no sign-in state can ever leak between tenants regardless of the exact underlying cause, same isolation pattern search-domain.ps1 already uses for Power Platform for a similar conflict",
+        "App-only auth (client-credentials) is unaffected and still runs in the main process — this issue was specific to the interactive/browser path"
+      ]
+    },
+    {
+      "version": "2.9.30",
+      "date": "2026-07-18",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: the console-capture fix in 2.9.29 found nothing swallowed on a real run — 5 tenants in a row failed interactive sign-in with a genuinely blank error, even though the user completed sign-in correctly in the browser each time. That pattern (clean for the first couple of tenants, then a consistent run of identical failures) points to degraded MSAL state carried over between tenants in the same long-running process — most likely a loopback redirect listener that didn't fully release, so the browser's callback has nowhere to land",
+        "Interactive sign-in now retries once (clean Disconnect-MgGraph + 3s pause + fresh attempt) before giving up on a tenant, testing whether that resets the stuck state. If this doesn't fully resolve it, the next step is isolating each tenant's Graph connection into its own child process (same pattern search-domain.ps1 already uses for Power Platform for a similar shared-state conflict)"
+      ]
+    },
+    {
+      "version": "2.9.29",
+      "date": "2026-07-18",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: fixed truncated error messages — MSAL/WAM broker diagnostics get written directly to .NET's Console.Out/Error, bypassing PowerShell's exception object entirely, so a failed interactive sign-in showed a blank 'InteractiveBrowserCredential authentication failed: ' with nothing after it. Console.Out/Error are now captured during the interactive connect attempt and folded into the error, same fix search-domain.ps1 already uses for its own Graph/EXO connects",
+        "New Get-CleanErrorMessage helper joins the first few non-blank lines of an exception instead of taking only the first line, which was also silently discarding real detail on multi-line errors",
+        "Suppressed Connect-MgGraph/Disconnect-MgGraph pipeline output (piped to Out-Null) — these were leaking raw context object dumps (ClientId/TenantId/Scopes/...) into the log between tenants, making it hard to read"
+      ]
+    },
+    {
+      "version": "2.9.28",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: always reads from a local copy of the tenants workbook now, never the original — the original stays free to have open in Excel (verified Copy-Item works even while the file is open in Excel, which was blocking Import-Excel directly). The copy is stored under %LOCALAPPDATA%\\FlyMigration and refreshed automatically at most every 3.5 days (twice a week) — self-managing, no Windows Scheduled Task needed",
+        "New -RefreshIntervalDays (default 3.5) and -ForceRefreshLookup params to override the cadence or force an immediate re-sync from the original"
+      ]
+    },
+    {
+      "version": "2.9.27",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: fixed a control-flow bug causing 'Authorization_IdentityNotFound: The identity of the calling application could not be established' errors on several tenants (AEP, Trans Track, Transloc, Signature) — Connect-MgGraph -ClientSecretCredential can issue a token even when the app was never actually consented in that tenant (no service principal there), so the connect step 'succeeded' but the first real Graph call then failed with no interactive fallback attempted",
+        "App-only auth is now verified with a real Get-MgOrganization call before being treated as successful — if that fails, it falls back to interactive sign-in exactly like an outright connect failure does, instead of surfacing as an unrecoverable error"
+      ]
+    },
+    {
+      "version": "2.9.26",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: fixed false positives in the mailbox/OneDrive filter — trial/add-on SKUs like FLOW_FREE, MDATP_XPLAT, WINDOWS_STORE, and Teams Exploratory/EEA were incorrectly showing up because they bundle EXCHANGE_S_FOUNDATION (plumbing only, not a real mailbox) or SHAREPOINTWAC (Office-for-the-web viewing rights, not storage) — both are now explicitly excluded",
+        "Tenants that fail to connect or query (both app-only and interactive auth failed) now get an error row in the CSV (SkuPartNumber '(ERROR)', TenantName '(FAILED)', error message in FriendlyName) instead of silently vanishing from the report — this was why some tenants weren't showing up at all"
+      ]
+    },
+    {
+      "version": "2.9.25",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: excludes the ourvolaris management tenant itself from the report (new -ExcludeDomains param, default @('ourvolaris')) — it's the source/management tenant, not a customer to check",
+        "Tenants with no mailbox/OneDrive-capable license now get a single 0 row in the CSV (SkuPartNumber '(none)') instead of being silently omitted, so it's clear the tenant was actually checked"
+      ]
+    },
+    {
+      "version": "2.9.24",
+      "date": "2026-07-14",
+      "changes": [
+        "Sidebar: Discovery is now an expandable section (matching AvePoint Fly / Misc Scripts / Domain Removal) with two entries — 'M365 Discovery' (unchanged) and 'License Report' (moved here from Misc Scripts, since it's a discovery-adjacent tenant check)",
+        "Get-TenantLicenseReport.ps1: added a second skip condition — column I ('Licenses available' = Yes) is now excluded alongside column L ('Cutover' = Yes), since those tenants already have confirmed-correct licenses",
+        "Finished report now auto-opens on screen — the script signals ##OPEN_FILE:<path>## (same convention as New-AzureAppRegistration.ps1) and the app opens the CSV natively via Electron's shell.openPath the moment the run completes"
+      ]
+    },
+    {
+      "version": "2.9.23",
+      "date": "2026-07-14",
+      "changes": [
+        "Get-TenantLicenseReport.ps1: now reads columns A (Domain) and C/D (App ID / App Secret) from the tenant workbook alongside tenant ID and skip flag",
+        "Tenants with a stored App ID + App Secret connect automatically via client-credentials (app-only) auth — no sign-in at all — falling back to interactive if that fails (e.g. the app registration lacks Organization.Read.All)",
+        "Tenants without stored app credentials show a prominent '>>> SIGN IN TO: <domain> <<<' banner in the log right before the browser opens, so it's always clear which tenant/account to sign in with",
+        "Report CSV now includes the tenant's Domain column"
+      ]
+    },
+    {
+      "version": "2.9.22",
+      "date": "2026-07-14",
+      "changes": [
+        "Misc Scripts: added 'Tenant License Report' — reads tenant IDs from the standing Volaris tenant workbook (column B, skipping rows with 'Yes' in column L) and connects to each in turn, reporting only licenses that grant a mailbox and/or OneDrive (excludes add-on-only SKUs like EMS, Entra ID P1/P2, Power BI, Defender, Visio, Project, Teams Phone), writing one consolidated CSV",
+        "New Get-TenantLicenseReport.ps1: reads .xlsx (ImportExcel, positional column-letter access) or .csv (auto-detected header column), reuses search-domain.ps1's SKU friendly-name lookup table, uses the pinned-module Graph connect pattern (no device code, no WAM mandate issue). -TenantsFile/-TenantIdColumn/-SkipColumn/-SkipValue all overridable via parameters"
+      ]
+    },
+    {
+      "version": "2.9.21",
+      "date": "2026-07-14",
+      "changes": [
+        "Rolled the device-code fix out to every script that connects to Graph/Exchange Online headlessly (spawned by the app with no visible window) — confirmed live failures today on Update-SIPDomain.ps1 ('A window handle must be configured') and Retire-Devices.ps1 (same error) showed the problem wasn't limited to Discovery: WAM hard-requires a window that a headless spawn simply doesn't have, and its device-code fallback is now blocked tenant-wide by a Conditional Access policy",
+        "New Ensure-GraphModules.ps1 — shared helper (dot-sourced) that pins whichever Microsoft.Graph.* submodules a script uses to 2.33.0 (last version before the SDK made WAM mandatory), installing side-by-side if missing. Replaces duplicated ad-hoc module-check blocks in every script below",
+        "Graph: removed -UseDeviceCode/-UseDeviceAuthentication and added the pinned-module helper to Add-ExchangeAdmin.ps1, Check-OneDriveStatus.ps1, Connect-MicrosoftGraph.ps1, New-AzureAppRegistration.ps1, Provision-OneDrives.ps1, Remove-EntraUsers.ps1, Remove-devices.ps1, Retire-Devices.ps1, Set-TeamsOwners-Run.ps1, Update-SIPDomain.ps1, Update-UPN.ps1 (all 3 connect sites, including the visible-window device-code helper script it spawns for its WinForms Connect button)",
+        "Exchange Online: added -DisableWAM (documented fix for 'A window handle must be configured') to every bare Connect-ExchangeOnline call — Hide-AddressBook.ps1 (x2), Remove-AliasAddresses.ps1, Rename-DomainObjects.ps1, remove-domain.ps1 (x2), search-domain.ps1's two mid-run parallel-runspace reconnects, Update-SIPDomain.ps1",
+        "Fixed an unrelated pre-existing bug found along the way: Rename-DomainObjects.ps1 and remove-domain.ps1 both had \"$label:\" inside a double-quoted string (PowerShell parses this as an invalid scope-qualified variable reference) — this was a genuine parse error that would have made both scripts fail to run at all past that point. Fixed to \"${label}:\" in both"
+      ]
+    },
+    {
+      "version": "2.9.20",
+      "date": "2026-07-14",
+      "changes": [
+        "Domain Removal Workflow: added 'Clear Employee ID (On-Prem)' as step 4, right after 'Hide from Address Book' — steps renumbered 1-9 and the Next-button chain updated (Hide → Clear Employee ID → Remove Aliases) so the guided flow includes it"
+      ]
+    },
+    {
+      "version": "2.9.19",
+      "date": "2026-07-13",
+      "changes": [
+        "Moved 'Clear Employee ID (On-Prem)' from Misc Scripts to Domain Removal, positioned right after 'Hide from Address Book' — it's an on-prem AD cleanup step used during domain removal, not a general-purpose misc tool",
+        "View renamed from miscClearEmployeeIdView to domainClearEmployeeIdView and gained the '← Workflow' back button to match its Domain Removal siblings; no changes to Clear-EmployeeId.ps1 itself"
+      ]
+    },
+    {
+      "version": "2.9.18",
+      "date": "2026-07-13",
+      "changes": [
+        "Misc Scripts: added 'Clear Employee ID (On-Prem)' — reads the Source identity column from an AvePoint mapping CSV and clears the EmployeeID attribute for each matching user in on-premise Active Directory",
+        "New Clear-EmployeeId.ps1: auto-detects the Source column (same convention as Import-FlyMappings.ps1), looks users up by UserPrincipalName or mail, WhatIf preview checked by default. Requires the ActiveDirectory RSAT module — this is an on-prem AD operation, not Entra ID/cloud"
+      ]
+    },
+    {
+      "version": "2.9.17",
+      "date": "2026-07-13",
+      "changes": [
+        "search-domain.ps1 (v2.12.2): the SharePoint and Power Platform sections were silently skipping themselves whenever their module (Microsoft.Online.SharePoint.PowerShell / Microsoft.PowerApps.Administration.PowerShell) wasn't already installed on the machine, instead of installing it",
+        "Ensure-Module now actually auto-installs missing modules from PSGallery (CurrentUser scope) rather than just checking for them and telling you to install manually — applies to all four SPO/Power-Platform module checks (upfront scan + mid-run fallback, for each)"
+      ]
+    },
+    {
+      "version": "2.9.16",
+      "date": "2026-07-13",
+      "changes": [
+        "CORRECTION to v2.9.15: confirmed live against celcat.com that Set-MgGraphOption -DisableLoginByWAM does NOT actually stop WAM being used — it's a documented Microsoft SDK bug/limitation (only works if paired with a custom app registration, which this toolkit doesn't have)",
+        "search-domain.ps1 (v2.12.1), Invoke-TenantBaseline.ps1: now pin Microsoft.Graph.Authentication (and, for the baseline script, Groups/DeviceManagement/DeviceManagement.Enrollment) to 2.33.0 — the last SDK version before WAM became mandatory in 2.34.0 — installed side-by-side, doesn't touch any newer version already on a machine",
+        "This actually restores plain browser-popup interactive sign-in with no new app registration or per-tenant admin consent needed; device-code fallback paths are kept as a last resort but should no longer be needed"
+      ]
+    },
+    {
+      "version": "2.9.15",
+      "date": "2026-07-13",
+      "changes": [
+        "search-domain.ps1 (v2.12.0), Invoke-TenantBaseline.ps1: interactive Graph/Exchange Online sign-in now disables the WAM broker upfront (Set-MgGraphOption -DisableLoginByWAM / Connect-ExchangeOnline -DisableWAM) instead of relying on WAM to work and falling back to device code when it doesn't",
+        "Root cause: some tenants now block device-code flow tenant-wide via a Conditional Access 'Authentication flows' policy, so the long-standing WAM-fails-fall-back-to-device-code pattern in this codebase no longer has a working fallback on those tenants — avoiding WAM in the first place (browser popup instead) sidesteps both the WAM breakage and the device-code block",
+        "Device-code fallback paths are kept for older module versions that predate -DisableLoginByWAM/-DisableWAM, but now surface a clear 'blocked by tenant Conditional Access policy' message instead of a raw AADSTS error",
+        "This entry's fix turned out not to work — see v2.9.16"
+      ]
+    },
+    {
+      "version": "2.9.14",
+      "date": "2026-07-13",
+      "changes": [
+        "Invoke-TenantBaseline.ps1: Step 11's 'Block Access Outside Approved Countries' Conditional Access policy now trusts Ireland (IE) in addition to CA/US/GB — UK ISP traffic can geolocate to Dublin at the Microsoft/Azure network edge, which was blocking genuine GB sign-ins with AADSTS53003",
+        "If a tenant was already baselined before this fix, add a Trusted Country - IE named location and exclude it on that policy manually via the Entra admin portal (Conditional Access > Named locations)"
+      ]
+    },
+    {
+      "version": "2.9.13",
+      "date": "2026-07-13",
+      "changes": [
+        "Misc Scripts: added 'Tenant Baseline Config' — runs the full Entra ID/Intune/Exchange baseline pass in-app with a streaming log panel, same as the other Misc Scripts tools",
+        "New Invoke-TenantBaseline.ps1 (copy of the Jolera all-in-one baseline script): always invoked with -Restarted so it never kills other pwsh/powershell sessions or relaunches itself in a new window when run from the app; admin UPN is collected from the form instead of a Read-Host prompt",
+        "Invoke-TenantBaseline.ps1 writes its run log and Exchange audit log to %APPDATA%\\FlyMigration\\Logs instead of the script folder (read-only in a perMachine install)"
+      ]
+    },
+    {
+      "version": "2.9.12",
+      "date": "2026-07-13",
+      "changes": [
+        "Fix discovery-menu.ps1: child pwsh process now launches with a Normal window instead of Minimized — a minimized window has no HWND for the WAM broker to parent its sign-in dialog to, which silently forced Connect-MgGraph to fall back to device-code auth on every discovery run",
+        "Root cause: device-code auth is now blocked outright (AADSTS53003) on tenants whose Conditional Access baseline denies the Device Code Flow authentication transfer method, so discovery could no longer sign in on newly-baselined tenants"
+      ]
+    },
+    {
+      "version": "2.9.11",
+      "date": "2026-07-09",
+      "changes": [
+        "New Connect-MicrosoftGraph.ps1: authenticates to Graph once via device code with Sites.ReadWrite.All and User.Read.All scopes; shows existing session if already connected",
+        "New Provision-OneDrive-User.ps1: provisions OneDrive for one or more UPNs passed as parameters; reuses the existing Graph session without re-authenticating — run Connect-MicrosoftGraph.ps1 once, then call this script as many times as needed"
+      ]
+    },
+    {
+      "version": "2.9.10",
+      "date": "2026-07-09",
+      "changes": [
+        "discovery-menu.ps1: added SharePoint Admin URL field — enter the destination tenant's admin URL (https://tenant-admin.sharepoint.com) to override the saved config; leave blank to use the saved value",
+        "search-domain.ps1: added -SharePointAdminUrl parameter; takes priority over shared-config.json and the hardcoded default"
+      ]
+    },
+    {
+      "version": "2.9.9",
+      "date": "2026-07-06",
+      "changes": [
+        "New Rename-DomainObjects.ps1: clean standalone script containing only the rename logic — no WinForms GUI, no delete commands",
+        "App now calls Rename-DomainObjects.ps1 instead of remove-domain.ps1 for the in-app Rename Domain Objects view",
+        "remove-domain.ps1 retained as-is for the legacy standalone GUI window (launched without -DiscoveryFolder)"
+      ]
+    },
+    {
+      "version": "2.9.8",
+      "date": "2026-07-04",
+      "changes": [
+        "Fix Provision-OneDrives.ps1: replaced SPO module (Connect-SPOService + Request-SPOPersonalSite) with Microsoft Graph; authenticates via device code (code appears in log panel); triggers provisioning by calling Get-MgUserDrive per user — no browser popup required",
+        "Fix Check-OneDriveStatus.ps1: same Graph migration; checks drive existence via Get-MgUserDrive per user instead of Get-SPOSite bulk query",
+        "Fix New-SharePointSites.ps1, Remove-DeletedSharePointSites.ps1, Deduplicate-Inventory.ps1: now prefer PnP.PowerShell with -DeviceLogin (device code appears in log, no popup); fall back to SPO module if PnP not installed",
+        "Root cause: -UseWebLogin removed in SPO module v16.0.27313.12000; default Connect-SPOService MSAL browser popup is invisible when spawned as Electron child process"
+      ]
+    },
+    {
+      "version": "2.9.7",
+      "date": "2026-07-04",
+      "changes": [
+        "Fix SharePoint Online sign-in for all in-app scripts: added -UseWebLogin to Connect-SPOService in Provision-OneDrives.ps1, Check-OneDriveStatus.ps1, New-SharePointSites.ps1, Remove-DeletedSharePointSites.ps1, Deduplicate-Inventory.ps1 — the interactive popup dialog does not appear when spawned from Electron; -UseWebLogin opens the OS default browser instead, which works correctly"
+      ]
+    },
+    {
+      "version": "2.9.6",
+      "date": "2026-06-26",
+      "changes": [
+        "App Registration: after creating the app, Notepad opens automatically with Tenant ID, App ID, and Client Secret — file saved to Desktop as AppReg_<tenant>_<id>.txt",
+        "App Registration: credentials section now uses Write-Output (guaranteed stdout) so the secret is visible in the log; credential block clearly separated with markers",
+        "Added open-file IPC handler in main.js + preload.js; PS scripts can signal ##OPEN_FILE:<path>## to open any file via Electron shell.openPath instead of spawning from a child process"
+      ]
+    },
+    {
+      "version": "2.9.5",
+      "date": "2026-06-26",
+      "changes": [
+        "AOS Setup: added Step 1 — Assign Exchange Administrator role; enter the consent account UPN and click Assign Role before anything else; required for the Fly Exchange consent to succeed",
+        "New Add-ExchangeAdmin.ps1: connects to Microsoft Graph, looks up Exchange Administrator role definition, checks for existing assignment, and permanently assigns the role to the specified account; idempotent (no error if already assigned)",
+        "AOS Setup view restructured as 3 numbered steps: (1) Assign Exchange Admin, (2) Sign in to AOS, (3) Create App Profile and Grant Consent"
+      ]
+    },
+    {
+      "version": "2.9.4",
+      "date": "2026-06-26",
+      "changes": [
+        "Domain Removal workflow step 7: replaced 'Remove Devices' with 'Retire Devices' — disables devices in Entra ID (AccountEnabled = false) rather than permanently deleting them; device records are preserved",
+        "New Retire-Devices.ps1: reads 11_Devices.csv, disables each device via Update-MgDevice, same CSV format and Graph modules as Remove-devices.ps1",
+        "Misc Scripts: added 'Remove Entra Devices' (permanent delete) — moved from Domain Removal section; now a separate tool for when full deletion is required"
+      ]
+    },
+    {
+      "version": "2.9.3",
+      "date": "2026-06-25",
+      "changes": [
+        "Rename Domain Objects: completely rewritten — no longer deletes M365 objects; renames email domain on mailboxes, shared mailboxes, distribution groups, mail contacts, M365 groups/Teams, and proxy addresses using Set-Mailbox/Set-DistributionGroup/Set-UnifiedGroup/Set-MailContact",
+        "Rename Domain Objects: only the Accepted Domain entry is removed from the tenant (domain registration); all M365 objects are preserved",
+        "UI: view renamed from 'Remove Domain' to 'Rename Domain Objects'; added Old Domain and New Domain fields; removed App Registrations, Enterprise Apps, Devices from checkboxes; button changed from red to blue",
+        "Workflow step 8: relabelled 'Rename Domain Objects + Remove from Tenant'"
+      ]
+    },
+    {
+      "version": "2.9.2",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal Workflow: added Remove Devices as step 7 (after AD sync, before Remove Domain)"
+      ]
+    },
+    {
+      "version": "2.9.1",
+      "date": "2026-06-25",
+      "changes": [
+        "Fix Remove Devices, Remove Entra Users, Update SIP Domain (Remove mode): now explicitly imports Microsoft.Graph modules before connecting — fixes 'Connect-MgGraph is not recognized' error when Graph module not auto-loaded"
+      ]
+    },
+    {
+      "version": "2.9.0",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal: added 'Remove Devices' in-app tool — reads 11_Devices.csv from a discovery folder (or a specific CSV file) and removes devices from Entra ID via Microsoft Graph; WhatIf support; accepts DeviceObjectId or DeviceId column"
+      ]
+    },
+    {
+      "version": "2.8.9",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal: added 'Remove Entra Users' last-resort tool — exports full backup CSV (UPN, display name, licences, group memberships, proxy addresses, etc.) then deletes cloud-only users blocking domain removal; on-prem synced users skipped automatically",
+        "Domain Removal Workflow: last-resort callout box links directly to Remove Entra Users"
+      ]
+    },
+    {
+      "version": "2.8.8",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal: each step view now has '← Workflow' and 'Next: …→' navigation buttons to move between steps or return to the workflow overview",
+        "Remove Domain: now runs in-app — browse discovery folder, tick object types (Mailboxes, Groups, Contacts, Apps, Devices, Proxy Addresses, etc.), WhatIf preview, streaming output; no separate PowerShell window",
+        "remove-domain.ps1: added headless mode (-DiscoveryFolder, -Sections, -WhatIf params) used by the in-app form"
+      ]
+    },
+    {
+      "version": "2.8.7",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal Workflow: redesigned as a 7-step guide with 'Go →' buttons to navigate directly to each tool (Update On-Prem UPNs, Update Cloud UPNs, Hide from Address Book, Remove Aliases, SIP / IM Addresses, Entra Sync note, Remove Domain)"
+      ]
+    },
+    {
+      "version": "2.8.6",
+      "date": "2026-06-25",
+      "changes": [
+        "SIP / IM Addresses: Old Domain and New Domain fields are now blank by default — enter any domain, not just tarantosystems.com"
+      ]
+    },
+    {
+      "version": "2.8.5",
+      "date": "2026-06-25",
+      "changes": [
+        "SIP / IM Addresses: new Remove mode — assigns a temporary Exchange/Teams licence, waits for provisioning, deletes the SIP/EUM addresses, then revokes the licence; licence SKU auto-detected from tenant or can be specified manually",
+        "SIP / IM Addresses: mode selector in UI (Remove / Replace); Remove mode shows licence SKU and wait-time fields; Replace mode shows new-domain field",
+        "Sidebar label updated to 'SIP / IM Addresses'"
+      ]
+    },
+    {
+      "version": "2.8.4",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal: Added 'Update SIP Domain' in-app view — enter old and new domain, replaces SIP/EUM address domains across all EXO recipients; WhatIf checked by default for safety"
+      ]
+    },
+    {
+      "version": "2.8.3",
+      "date": "2026-06-25",
+      "changes": [
+        "Fix Remove-AliasAddresses.ps1: replaced [bool] params with [switch] (-SkipAliases, -SkipSIP) to fix 'Cannot convert System.String to Boolean' error when called from the app"
+      ]
+    },
+    {
+      "version": "2.8.2",
+      "date": "2026-06-25",
+      "changes": [
+        "Added Update-SIPDomain.ps1 — replaces the domain on SIP/EUM addresses across all EXO recipients (default: tarantosystems.com → ourvolaris.onmicrosoft.com); supports -WhatIf"
+      ]
+    },
+    {
+      "version": "2.8.1",
+      "date": "2026-06-25",
+      "changes": [
+        "Remove Aliases: added separate checkboxes to control what is removed — 'Alias SMTP addresses (smtp:)' and 'IM/SIP addresses (SIP:, EUM:)' can now be run independently"
+      ]
+    },
+    {
+      "version": "2.8.0",
+      "date": "2026-06-25",
+      "changes": [
+        "Domain Removal: Update On-Prem UPNs now runs in-app — browse CSV folder, enter source/target domain, stream output directly (no separate PowerShell window)",
+        "Domain Removal: Update Cloud UPNs now runs in-app — enter old/new domain, device-code sign-in appears in the log panel",
+        "Domain Removal: Hide from Address Book now runs in-app — browse discovery folder, stream EXO progress in-app",
+        "Domain Removal: Added 'Remove Aliases' tool — strips secondary smtp: and IM (SIP/EUM) addresses from recipients in discovery CSVs, optional domain filter",
+        "All three converted scripts support WhatIf mode for safe preview before making changes",
+        "Removed debug console logging from renderer and index.html"
+      ]
+    },
+    {
+      "version": "2.7.3",
+      "date": "2026-06-19",
+      "changes": [
+        "Discovery: domain combobox now works as plain text when no VBU CSV is configured — no longer blocks typing",
+        "Discovery: arrow keys (Up/Down) navigate the domain list; Enter selects; Escape closes",
+        "Check-Updates: auto-installs without asking — shows what's new and proceeds immediately"
+      ]
+    },
+    {
+      "version": "2.7.2",
+      "date": "2026-06-19",
+      "changes": [
+        "Settings: Check for Updates now streams output in real time so you can see each step",
+        "Settings: fixed Update Available banner never showing (UPDATE_AVAILABLE signal was missing from script)",
+        "Check-Updates: added 20-second timeout on GitHub version check — fails clearly instead of hanging",
+        "Import-FlyMappings: DNS pre-check logs whether API hostname resolves before connecting",
+        "Import-FlyMappings: BOM-aware CSV encoding detection (handles UTF-8, UTF-16, ANSI)",
+        "Import-FlyMappings: smarter source/destination column detection (prefers email/URL columns over plain name columns)",
+        "Added Check-OneDriveStatus.ps1, Get-UserMailboxLicenses.ps1, Set-DestinationLicenses.ps1",
+        "Added show-save-dialog IPC handler for native file save dialogs"
+      ]
+    },
+    {
+      "version": "2.7.1",
+      "date": "2026-06-19",
+      "changes": [
+        "Connections: added Stop Jobs button (red, right-aligned next to Clear) to stop in-progress Fly migration jobs",
+        "Added Stop-FlyMigrationStage.ps1 — calls Fly REST API DELETE to stop running jobs per workload",
+        "Discovery: default output folder changed to E:\\Work\\Jolera\\Volaris\\Discovery"
+      ]
+    },
+    {
+      "version": "2.7.0",
+      "date": "2026-06-16",
+      "changes": [
+        "Discovery: domain field replaced with searchable combobox — click ▾ or type to filter by domain or VBU name",
+        "Discovery: now runs search-domain.ps1 directly in the Electron UI (no separate window)",
+        "Discovery: domain list populated from VBU ID CSV; VBU ID auto-fills on selection",
+        "Discovery: Graph authentication falls back to device-code flow when WAM/HWND unavailable (fixes 0-users issue)",
+        "Discovery: output folder Browse now opens a folder picker; path is also editable",
+        "Discovery: -OutputPath parameter added to search-domain.ps1",
+        "Settings: added VBU CSV path field in Discovery tab",
+        "Fix: Save Settings no longer fails with JSON parse error on BOM-prefixed config.json (PS 5.1 compat)",
+        "Fix: settings.ps1 now writes config.json without UTF-8 BOM",
+        "Added Fix-ConfigBOM.ps1 — cleanup script for servers with existing BOM-prefixed config.json",
+        "Added Install-Prerequisites.bat + Install-Prerequisites.ps1 for one-step server setup"
+      ]
+    },
+    {
+      "version": "2.6.2",
+      "date": "2026-06-12",
+      "changes": [
+        "Added New-SharePointSites.ps1: creates missing destination SharePoint sites from a mapping CSV",
+        "Connections view: new 'Create Sites' button runs site creation before Verify (SharePoint only)",
+        "Connections view: added 'SharePoint site owner' email input for destination tenant admin UPN",
+        "Sites are created as modern team sites (STS#3 template) using Microsoft.Online.SharePoint.PowerShell"
+      ]
+    },
+    {
+      "version": "2.6.1",
+      "date": "2026-06-12",
+      "changes": [
+        "Fixed Import-FlyMappings: bypassed Fly.Client module's broken project lookup entirely",
+        "Root cause: Fly API search returns no results for names containing ' - ' (e.g. 'Pcentra - Exchange')",
+        "Fix: now searches with customer prefix only ('Pcentra'), finds project by exact name, posts mappings via REST API directly",
+        "Supports all workloads: Exchange, SharePoint, OneDrive, Teams, TeamChat, Groups"
+      ]
+    },
+    {
+      "version": "2.6.0",
+      "date": "2026-06-12",
+      "changes": [
+        "Added Deduplicate Inventory script to Misc Scripts (classifies Teams, Groups, SharePoint from discovery workbook)",
+        "Fixed Import-FlyMappings: removed unreliable project pre-check that blocked valid imports",
+        "Fixed Import-FlyMappings: NaN response from Fly API now correctly reported as a failure with diagnostics",
+        "Fixed Import-FlyMappings: CSV always normalised to UTF-8 BOM before passing to Fly.Client",
+        "Fixed Import-FlyMappings: source file encoding auto-detected from BOM (handles UTF-8, UTF-16, ANSI)",
+        "Fixed Import-FlyMappings: duplicate/same-row detection uses OrdinalIgnoreCase for non-ASCII characters",
+        "Fixed Import-FlyMappings: CSV column names and detected source/destination columns now logged",
+        "Fixed Start-FlyMigrationStage: removed hanging Get-FlyMigrationProject fallback scan",
+        "Fixed runner.ps1: removed invalid -Top parameter from Get-FlyMigrationProject call",
+        "Deduplicate Inventory: hardcoded SharePoint Admin URL to ourvolaris-admin.sharepoint.com",
+        "Log panels: added max-height cap so output scrolls instead of growing off-screen",
+        "Node.js: installed as portable (no admin required) with user PATH registration"
+      ]
+    },
+    {
+      "version": "2.5.0",
+      "date": "2026-06-08",
+      "changes": [
+        "Project monitor rows now open directly in Fly portal at the correct project URL",
+        "Fixed Fly portal URL construction to use /#/project/{id}/mappings format",
+        "Get-MigrationData: FailedItems and WarningItems now correctly populated from API",
+        "Get-MigrationData: ProjectId now included in workload summary for portal links",
+        "Start-FlyMigrationStage: skips workloads with no mappings imported",
+        "Start-FlyMigrationStage: handles already-in-progress mappings gracefully without error noise",
+        "Fixed open-logs button to open correct log directory (%APPDATA%\\FlyMigration\\Logs)",
+        "Fixed silent error in project monitor click handler (undeclared _cachedPortalUrl)",
+        "Improved error logging in Get-MigrationData (Write-Verbose -> Write-Warning)"
+      ]
+    },
+    {
+      "version": "2.4.0",
+      "date": "2026-06-03",
+      "changes": [
+        "Added Progress by Workload section with 4 workload cards",
+        "Shows progress for Exchange Online, OneDrive, SharePoint, and Teams",
+        "Visual progress bars with current/total counts",
+        "Added sidebar navigation to web edition",
+        "Web app now has Dashboard, Discovery, AvePoint Fly, Misc Scripts, Domain Removal quick links",
+        "Disabled DevTools auto-open in web app (Ctrl+Shift+I still works)",
+        "All menus now open maximized but remain resizable"
+      ]
+    },
+    {
+      "version": "2.3.1",
+      "date": "2026-06-03",
+      "changes": [
+        "Improved stat card labels - now show above values for clarity",
+        "Made stat labels uppercase and bold",
+        "Changed status text to muted color for better visual hierarchy",
+        "Stats now clearly indicate what each number represents"
+      ]
+    },
+    {
+      "version": "2.3.0",
+      "date": "2026-06-03",
+      "changes": [
+        "Redesigned main launcher as at-a-glance dashboard with live stats",
+        "Added 4 stat cards at top: Active Projects, Users Migrated, Success Rate, Total Data",
+        "Reorganized main menu tiles into 3-column grid layout",
+        "Enlarged main launcher to 1000x700px for better dashboard visibility",
+        "Added Quick Actions section header",
+        "Updated footer with version display",
+        "Moved dashboard stats from AvePoint Fly to main launcher"
+      ]
+    },
+    {
+      "version": "2.2.0",
+      "date": "2026-06-03",
+      "changes": [
+        "Redesigned AvePoint Fly menu as at-a-glance dashboard with live stats",
+        "Added 4 stat cards: Active Projects, Users Migrated, Success Rate, Total Data",
+        "Reorganized action cards into 3x2 grid layout",
+        "Added rounded corners to Discovery menu cards",
+        "Added smooth hover animations to all cards",
+        "Enlarged dashboard to 1000x700px for better visibility",
+        "Added Documentation quick action card"
+      ]
+    },
+    {
+      "version": "2.1.14",
+      "date": "2026-06-03",
+      "changes": [
+        "Refined UI to match official design system specifications",
+        "Standardized all colors to design system palette",
+        "Unified font definitions across all windows and dialogs",
+        "Improved dark grid styling in Project Monitor",
+        "Added complete color token library to lib.ps1"
+      ]
+    },
+    {
+      "version": "2.1.4",
+      "date": "2026-06-02",
+      "changes": [
+        "Rebranded from 'VG Migration Tools' to 'Migration Toolkit'",
+        "Updated all UI elements to use new branding",
+        "Updated documentation to reflect new product name",
+        "Added visual progress feedback during update installation"
+      ]
+    },
+    {
+      "version": "2.1.3",
+      "date": "2026-06-01",
+      "changes": [
+        "Improved auto-update visibility with notification banner",
+        "Update check now shows yellow banner when updates available",
+        "Added one-click 'Install Update' button to notification",
+        "Removed 'Update Cloud UPNs' from Domain Removal menu"
+      ]
+    },
+    {
+      "version": "2.1.2",
+      "date": "2026-06-01",
+      "changes": [
+        "Updated New-Package.ps1 to include all new domain removal files",
+        "Added version.json and Check-Updates.ps1 to package",
+        "Package now includes complete auto-update system"
+      ]
+    },
+    {
+      "version": "2.1.1",
+      "date": "2026-06-01",
+      "changes": [
+        "Added 'Check for Updates' button in Settings > Config tab",
+        "Removed 'Remove Devices' from Domain Removal menu"
+      ]
+    },
+    {
+      "version": "2.1.0",
+      "date": "2026-06-01",
+      "changes": [
+        "Added Domain-Removal-Workflow.ps1 - 3-step guided workflow",
+        "Added Update-OnPremUPN.ps1 for on-premise Active Directory",
+        "Fixed Hide-AddressBook.ps1 ExchangeOnlineManagement module errors",
+        "Added account preview list to Hide-AddressBook",
+        "Integrated Azure AD Sync functionality (VOL-ane-aad1)",
+        "Split Domain Removal menu: Workflow + individual tools",
+        "Hardcoded target domain to @ourvolaris.onmicrosoft.com"
+      ]
+    },
+    {
+      "version": "2.0.0",
+      "date": "2026-05-31",
+      "changes": [
+        "Added Update-UPN.ps1 with checkbox selection",
+        "Added Remove-devices.ps1 with DeviceObjectId support",
+        "Fixed column sorting in Update-UPN",
+        "Improved error handling across all scripts",
+        "Added comprehensive README documentation"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-05-20",
+      "changes": [
+        "Initial release",
+        "Main menu system",
+        "Discovery tools",
+        "Domain removal tools",
+        "AvePoint Fly integration"
+      ]
     }
   ],
   "minimumVersion": "2.9.0",

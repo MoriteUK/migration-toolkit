@@ -350,115 +350,78 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   })();
 
-  // FLY Brief customer combobox - initialize once
+  // FLY Brief customer combobox - initialize once. Customers come from Settings (config.Customers);
+  // FLY projects are named "{Prefix} - {Workload}", so the Prefix is what the brief script matches on.
   (function initFlyBriefCustomerCombobox() {
     const input  = document.getElementById('flyBriefCustomer');
     const btn    = document.getElementById('flyBriefCustomerBtn');
     const panel  = document.getElementById('flyBriefCustomerPanel');
     const list   = document.getElementById('flyBriefCustomerList');
+    const nameEl = document.getElementById('flyBriefClientName');
+    const domEl  = document.getElementById('flyBriefInternalDomains');
+    if (!input || !btn || !panel || !list) return;
 
-    console.log('FLY Brief dropdown init:', {
-      input: !!input,
-      btn: !!btn,
-      panel: !!panel,
-      list: !!list
-    });
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let customers = [];   // [{ Prefix, AccountName, Domain }]
 
-    if (!input || !btn || !panel || !list) {
-      console.error('FLY Brief dropdown elements not found on page load!');
-      return;
-    }
-
-    console.log('FLY Brief dropdown initialized successfully');
-
-    let customerNames = [];
-
-    function selectCustomer(customerName) {
-      input.value = customerName;
+    function selectCustomer(prefix) {
+      input.value = prefix;
+      const c = customers.find(x => x.Prefix === prefix);
+      if (c) {
+        if (nameEl) nameEl.value = c.AccountName || c.Prefix;
+        if (domEl) domEl.value = c.Domain || '';
+      }
       closePanel();
     }
 
     function renderItems(filter) {
       const q = (filter || '').toLowerCase();
-      const filtered = customerNames.filter(name => !q || name.toLowerCase().includes(q));
-
+      const filtered = customers.filter(c => !q || c.Prefix.toLowerCase().includes(q) || (c.AccountName || '').toLowerCase().includes(q));
       if (filtered.length === 0) {
         list.innerHTML = '<div class="domain-dropdown-empty">No matches</div>';
-      } else {
-        list.innerHTML = filtered.map(name =>
-          `<div class="domain-dropdown-item" data-customer="${name}">
-            <span class="di-domain">${name}</span>
-          </div>`
-        ).join('');
-        list.querySelectorAll('.domain-dropdown-item').forEach(el => {
-          el.addEventListener('mousedown', e => {
-            e.preventDefault();
-            selectCustomer(el.dataset.customer);
-          });
-        });
+        return;
       }
+      list.innerHTML = filtered.map(c =>
+        `<div class="domain-dropdown-item" data-customer="${esc(c.Prefix)}">
+          <span class="di-domain">${esc(c.Prefix)}</span>
+          ${c.AccountName && c.AccountName !== c.Prefix ? `<span class="di-vbu">${esc(c.AccountName)}</span>` : ''}
+        </div>`
+      ).join('');
+      list.querySelectorAll('.domain-dropdown-item').forEach(el => {
+        el.addEventListener('mousedown', e => { e.preventDefault(); selectCustomer(el.dataset.customer); });
+      });
     }
 
     function openPanel() {
-      if (customerNames.length === 0) { closePanel(); return; }
+      if (customers.length === 0) { closePanel(); return; }
       renderItems(input.value);
       panel.classList.remove('hidden');
     }
+    function closePanel() { panel.classList.add('hidden'); }
 
-    function closePanel() {
-      panel.classList.add('hidden');
-    }
-
-    btn.addEventListener('click', (e) => {
-      console.warn('=== FLY BRIEF BUTTON CLICKED ===');
-      console.log('Customers loaded:', customerNames.length);
-      console.log('Panel current state:', panel.classList.contains('hidden') ? 'HIDDEN' : 'VISIBLE');
-
-      if (customerNames.length === 0) {
-        console.log('→ No customers loaded yet, just focusing input');
-        input.focus();
-        return;
-      }
-      if (panel.classList.contains('hidden')) {
-        console.log('→ Opening panel');
-        input.focus();
-        openPanel();
-      } else {
-        console.log('→ Closing panel');
-        closePanel();
-      }
+    btn.addEventListener('click', () => {
+      input.focus();
+      if (panel.classList.contains('hidden')) openPanel(); else closePanel();
+    });
+    input.addEventListener('input', openPanel);
+    input.addEventListener('focus', openPanel);
+    input.addEventListener('blur', () => setTimeout(closePanel, 150));
+    input.addEventListener('change', () => {
+      const c = customers.find(x => x.Prefix.toLowerCase() === input.value.trim().toLowerCase());
+      if (c) selectCustomer(c.Prefix);
     });
 
-    input.addEventListener('input', () => { openPanel(); });
-    input.addEventListener('focus', () => { openPanel(); });
-    input.addEventListener('blur', () => {
-      setTimeout(() => closePanel(), 150);
-    });
-
-    document.addEventListener('click', e => {
-      if (!input.contains(e.target) && !btn.contains(e.target) && !panel.contains(e.target)) {
-        closePanel();
-      }
-    });
-
-    // Export function to populate customer names when view loads
-    window._loadFlyBriefCustomerNames = async function() {
+    // Called from switchView when the Reports → FLY Executive Brief view opens
+    window._loadFlyBriefCustomerNames = async function () {
       try {
         const cfgResult = await window.electronAPI.getConfig();
-        const customers = cfgResult?.config?.Customers;
-        if (customers && customers.length > 0) {
-          customerNames = [...new Set(customers
-            .filter(c => c.Prefix)
-            .map(c => c.Prefix)
-          )].sort();
-          console.log(`Loaded ${customerNames.length} customers for FLY Brief`);
-        } else {
-          customerNames = [];
-          console.log('No customers found in config');
-        }
+        const seen = new Set();
+        customers = (cfgResult?.config?.Customers || [])
+          .filter(c => c.Prefix && !seen.has(c.Prefix) && seen.add(c.Prefix))
+          .sort((a, b) => a.Prefix.localeCompare(b.Prefix));
       } catch (err) {
         console.error('Failed to load FLY Brief customers:', err);
-        customerNames = [];
+        customers = [];
       }
     };
   })();
@@ -4663,25 +4626,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // FLY EXECUTIVE BRIEF
+  // FLY EXECUTIVE BRIEF  (VGMigrations\FlyBrief\Invoke-FlyBriefs.ps1)
   // ══════════════════════════════════════════════════════════════════════════
-
-
-  // Email checkbox toggle
-  const flyBriefSendEmailCheckbox = document.getElementById('flyBriefSendEmail');
-  const flyBriefEmailOptions = document.getElementById('flyBriefEmailOptions');
-
-  if (flyBriefSendEmailCheckbox && flyBriefEmailOptions) {
-    flyBriefSendEmailCheckbox.addEventListener('change', (e) => {
-      if (e.target.checked) {
-        flyBriefEmailOptions.classList.remove('hidden');
-      } else {
-        flyBriefEmailOptions.classList.add('hidden');
-      }
-    });
-  }
-
-  // Generate Brief button handler
   const generateFlyBriefBtn = document.getElementById('generateFlyBriefBtn');
   const flyBriefLog = document.getElementById('flyBriefLog');
   const flyBriefLogOutput = document.getElementById('flyBriefLogOutput');
@@ -4689,152 +4635,107 @@ document.addEventListener('DOMContentLoaded', () => {
   const openFlyBriefBtn = document.getElementById('openFlyBriefBtn');
   const flyBriefPreview = document.getElementById('flyBriefPreview');
   const flyBriefPreviewContent = document.getElementById('flyBriefPreviewContent');
+  const flyEsc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const flyNum = (n) => (typeof n === 'number' ? n.toLocaleString() : '-');
 
   if (generateFlyBriefBtn) {
     generateFlyBriefBtn.addEventListener('click', async () => {
-      console.log('Generate FLY Brief clicked');
+      const customerPrefix = document.getElementById('flyBriefCustomer').value.trim();
+      if (!customerPrefix) { alert('Please select a customer'); return; }
 
-      // Get form values
-      const customerName = document.getElementById('flyBriefCustomer').value.trim();
-      const outputPath = document.getElementById('flyBriefOutputPath').value.trim();
-      const generatePdf = document.getElementById('flyBriefGeneratePdf').checked;
-      const autoOpen = document.getElementById('flyBriefAutoOpen').checked;
-      const sendEmail = document.getElementById('flyBriefSendEmail').checked;
+      const options = {
+        customerPrefix,
+        clientName: document.getElementById('flyBriefClientName').value.trim(),
+        internalDomains: document.getElementById('flyBriefInternalDomains').value.trim(),
+        outputPath: document.getElementById('flyBriefOutputPath').value.trim(),
+        generatePdf: document.getElementById('flyBriefGeneratePdf').checked,
+        autoOpen: document.getElementById('flyBriefAutoOpen').checked
+      };
 
-      // Validation
-      if (!customerName) {
-        alert('Please enter a customer name');
-        return;
-      }
-
-      // Email options
-      let emailOptions = null;
-      if (sendEmail) {
-        const emailTo = document.getElementById('flyBriefEmailTo').value.trim();
-        const emailSubject = document.getElementById('flyBriefEmailSubject').value.trim() ||
-                            `Migration Executive Brief - ${customerName}`;
-        const emailBody = document.getElementById('flyBriefEmailBody').value.trim();
-
-        if (!emailTo) {
-          alert('Please enter recipient email address(es)');
-          return;
-        }
-
-        emailOptions = {
-          to: emailTo,
-          subject: emailSubject,
-          body: emailBody
-        };
-      }
-
-      // Show log section
       flyBriefLog.classList.remove('hidden');
-      flyBriefLogOutput.textContent = 'Connecting to AvePoint FLY...\n';
-
-      // Disable button
+      flyBriefPreview.classList.add('hidden');
+      downloadFlyBriefBtn.classList.add('hidden');
+      openFlyBriefBtn.classList.add('hidden');
+      flyBriefLogOutput.textContent = `Exporting FLY reports for "${customerPrefix}" - this can take several minutes per workload...\n\n`;
       generateFlyBriefBtn.disabled = true;
       generateFlyBriefBtn.textContent = 'Processing...';
 
+      const stopBtn = document.getElementById('globalStopBtn');
+      if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '■ Stop Script'; stopBtn.style.display = 'inline-flex'; }
+      window.electronAPI.onPsOutput((text) => {
+        flyBriefLogOutput.textContent += text;
+        flyBriefLogOutput.scrollTop = flyBriefLogOutput.scrollHeight;
+      });
+
       try {
-        const result = await window.electronAPI.generateFlyBriefFromApi({
-          customerName,
-          outputPath,
-          generatePdf,
-          autoOpen,
-          email: emailOptions
-        });
+        const result = await window.electronAPI.generateFlyBrief(options);
+        const briefs = result.briefs || [];
+        const ok = briefs.filter(b => b.status === 'OK');
+        const failed = briefs.filter(b => b.status !== 'OK');
 
         if (result.success) {
-          flyBriefLogOutput.textContent += '\n✅ Briefs generated successfully!\n';
-
-          if (result.briefs && result.briefs.length > 0) {
-            flyBriefLogOutput.textContent += `\n${result.briefs.length} brief(s) created:\n\n`;
-
-            result.briefs.forEach((brief, index) => {
-              flyBriefLogOutput.textContent += `${index + 1}. ${brief.workload}:\n`;
-              flyBriefLogOutput.textContent += `   HTML: ${brief.htmlPath}\n`;
-              if (brief.pdfPath) {
-                flyBriefLogOutput.textContent += `   PDF:  ${brief.pdfPath}\n`;
-              }
-              flyBriefLogOutput.textContent += '\n';
-            });
-
-            // Use first PDF for download button
-            const firstPdf = result.briefs.find(b => b.pdfPath);
-            if (firstPdf) {
-              downloadFlyBriefBtn.classList.remove('hidden');
-              downloadFlyBriefBtn.setAttribute('data-pdf-path', firstPdf.pdfPath);
-            }
-          }
-
-          // Show preview with combined stats
-          if (result.briefs && result.briefs.length > 0 && flyBriefPreview && flyBriefPreviewContent) {
-            flyBriefPreview.classList.remove('hidden');
-
-            let previewHtml = '<div style="font-family: monospace; font-size: 12px;">';
-            previewHtml += `<strong>Migration Summary - ${customerName}</strong><br>`;
-            previewHtml += `<strong>Generated:</strong> ${new Date().toLocaleDateString()}<br><br>`;
-
-            result.briefs.forEach(brief => {
-              if (brief.summary) {
-                const s = brief.summary;
-                previewHtml += `<strong>━━━ ${brief.workload} ━━━</strong><br>`;
-                previewHtml += `<strong>Mappings:</strong> ${s.m.total} total, ${s.m.finished} finished, ${s.m.failed} failed<br>`;
-                previewHtml += `<strong>Objects:</strong> ${s.m.ok.toLocaleString()} migrated successfully<br>`;
-                previewHtml += `<strong>Data Size:</strong> ${s.m.gb.toFixed(2)} GB<br>`;
-                if (s.sec) {
-                  previewHtml += `<strong>Permissions:</strong> ${s.sec.ok} / ${s.sec.total} OK<br>`;
-                }
-                if (s.links) {
-                  previewHtml += `<strong>Shared Links:</strong> ${s.links.total} total, ${s.links.anyoneEdit} anonymous edit<br>`;
-                }
-                previewHtml += '<br>';
-              }
-            });
-
-            previewHtml += '</div>';
-            flyBriefPreviewContent.innerHTML = previewHtml;
-          }
-
-          if (result.emailSent) {
-            flyBriefLogOutput.textContent += `\n📧 Email sent to: ${emailOptions.to}\n`;
-          }
-
-          if (result.outputFolder) {
-            openFlyBriefBtn.classList.remove('hidden');
-            openFlyBriefBtn.setAttribute('data-output-path', result.outputFolder);
-          }
-
+          flyBriefLogOutput.textContent += `\n✅ ${ok.length} brief(s) built${failed.length ? `, ${failed.length} failed` : ''}.\n`;
         } else {
-          flyBriefLogOutput.textContent += `\n❌ Error: ${result.error}\n`;
+          flyBriefLogOutput.textContent += `\n❌ ${result.error}\n`;
+        }
+        failed.forEach(b => { flyBriefLogOutput.textContent += `   ✗ ${b.project}: ${b.status}\n`; });
+        flyBriefLogOutput.scrollTop = flyBriefLogOutput.scrollHeight;
+
+        const firstPdf = ok.find(b => b.pdfPath);
+        if (firstPdf) {
+          downloadFlyBriefBtn.classList.remove('hidden');
+          downloadFlyBriefBtn.setAttribute('data-pdf-path', firstPdf.pdfPath);
+        }
+        if (result.outputFolder) {
+          openFlyBriefBtn.classList.remove('hidden');
+          openFlyBriefBtn.setAttribute('data-output-path', result.outputFolder);
+        }
+
+        if (ok.length) {
+          let html = `<div style="font-size:12px;line-height:1.6;"><strong>${flyEsc(options.clientName || customerPrefix)}</strong> &middot; generated ${flyEsc(new Date().toLocaleString())}<br><br>`;
+          ok.forEach(b => {
+            const s = b.summary;
+            html += `<div style="margin-bottom:12px;"><strong>${flyEsc(b.workload)}</strong> &mdash; ${flyEsc(b.project)}`;
+            if (b.pdfPath) html += ` &middot; <a href="#" data-open-path="${flyEsc(b.pdfPath)}">PDF</a>`;
+            if (b.htmlPath) html += ` &middot; <a href="#" data-open-path="${flyEsc(b.htmlPath)}">HTML</a>`;
+            html += '<br>';
+            if (s && s.m) {
+              html += `Mappings: ${flyNum(s.m.total)} total, ${flyNum(s.m.finished)} finished, ${flyNum(s.m.exceptions)} with exceptions, ${flyNum(s.m.failed)} failed<br>`;
+              html += `Objects migrated: ${flyNum(s.m.ok)} &middot; Data: ${typeof s.m.gb === 'number' ? s.m.gb.toFixed(1) : '-'} GB<br>`;
+              if (s.sec) html += `Permissions: ${flyNum(s.sec.ok)} / ${flyNum(s.sec.total)} OK<br>`;
+              if (s.links) html += `Sharing links: ${flyNum(s.links.total)} total, ${flyNum(s.links.anyoneEdit)} "anyone can edit"<br>`;
+            }
+            html += '</div>';
+          });
+          html += '</div>';
+          flyBriefPreviewContent.innerHTML = html;
+          flyBriefPreviewContent.querySelectorAll('[data-open-path]').forEach(a => {
+            a.addEventListener('click', (e) => { e.preventDefault(); window.electronAPI.openPath(a.dataset.openPath); });
+          });
+          flyBriefPreview.classList.remove('hidden');
         }
       } catch (err) {
         console.error('Generate FLY Brief error:', err);
         flyBriefLogOutput.textContent += `\n❌ Error: ${err.message}\n`;
       } finally {
+        window.electronAPI.offPsOutput();
+        if (stopBtn) stopBtn.style.display = 'none';
         generateFlyBriefBtn.disabled = false;
-        generateFlyBriefBtn.textContent = '📄 Generate Brief';
+        generateFlyBriefBtn.innerHTML = '<span class="btn-icon">📄</span> Generate Brief';
       }
     });
   }
 
-  // Download PDF button
   if (downloadFlyBriefBtn) {
-    downloadFlyBriefBtn.addEventListener('click', async () => {
-      const pdfPath = downloadFlyBriefBtn.getAttribute('data-pdf-path');
-      if (pdfPath) {
-        await window.electronAPI.openPath(pdfPath);
-      }
+    downloadFlyBriefBtn.addEventListener('click', () => {
+      const p = downloadFlyBriefBtn.getAttribute('data-pdf-path');
+      if (p) window.electronAPI.openPath(p);
     });
   }
-
-  // Open output folder button
   if (openFlyBriefBtn) {
-    openFlyBriefBtn.addEventListener('click', async () => {
-      const outputPath = openFlyBriefBtn.getAttribute('data-output-path');
-      if (outputPath) {
-        await window.electronAPI.openPath(outputPath);
-      }
+    openFlyBriefBtn.addEventListener('click', () => {
+      const p = openFlyBriefBtn.getAttribute('data-output-path');
+      if (p) window.electronAPI.openPath(p);
     });
   }
 

@@ -533,334 +533,91 @@ function registerIPCHandlers() {
     }
   });
 
-  // Generate FLY Executive Brief
-  ipcMain.handle('generate-fly-brief', async (event, options) => {
+  // ── FLY Executive Brief (Reports → FLY Executive Brief) ──────────────────────────────────
+  // Runs VGMigrations\FlyBrief\Invoke-FlyBriefs.ps1 for one customer prefix: it exports each
+  // workload's FLY migration report and builds a one-page brief per project. Output streams on
+  // 'ps-output' like every other panel (and sets currentPsProcess so the global Stop button works);
+  // the per-project results come back from the JSON file the script writes (-ResultPath), not by
+  // scraping its console table.
+  ipcMain.handle('generate-fly-brief', async (event, options = {}) => {
+    const fs = require('fs');
+    const os = require('os');
+    const { shell } = require('electron');
+    const { customerPrefix, clientName, internalDomains, outputPath, generatePdf = true, autoOpen = false } = options;
+    if (!customerPrefix) return { success: false, error: 'No customer selected.' };
+
+    const scriptPath = path.join(PS_SCRIPT_PATH, 'FlyBrief', 'Invoke-FlyBriefs.ps1');
+    if (!fs.existsSync(scriptPath)) return { success: false, error: `Brief script not found: ${scriptPath}` };
+
+    const resultPath = path.join(os.tmpdir(), `fly-brief-${Date.now()}.json`);
+    const outputRoot = outputPath || path.join(LOGS_DIR, 'FlyBriefs');
+    const args = [customerPrefix, '-OutputRoot', outputRoot, '-ResultPath', resultPath];
+    if (clientName) args.push('-ClientName', clientName);
+    if (internalDomains) args.push('-InternalDomains', internalDomains);
+    if (!generatePdf) args.push('-NoPdf');
+
+    const code = await new Promise((resolve) => {
+      const ps = spawn('pwsh.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args],
+        { cwd: path.dirname(scriptPath) });
+      currentPsProcess = ps;
+      const logFile = openScriptLog('FlyBrief/Invoke-FlyBriefs.ps1');
+      logFile.write(`Args: ${args.join(' ')}\n\n`);
+      let done = false;
+      const relay = (data) => {
+        const text = data.toString();
+        if (!done) logFile.write(text);
+        if (!event.sender.isDestroyed()) event.sender.send('ps-output', text);
+      };
+      const finish = (c, note) => {
+        if (done) return;
+        done = true;
+        if (currentPsProcess === ps) currentPsProcess = null;
+        logFile.write(`\n=== ${note} ===\n`);
+        logFile.end();
+        resolve(c);
+      };
+      ps.stdout.on('data', relay);
+      ps.stderr.on('data', relay);
+      ps.on('close', (c) => finish(c, `Exit code: ${c}`));
+      ps.on('error', (err) => { relay(`Failed to start pwsh.exe: ${err.message}\n`); finish(-1, `Error: ${err.message}`); });
+    });
+
+    let briefs = [];
     try {
-      const { spawn } = require('child_process');
-      const path = require('path');
-      const fs = require('fs');
-
-      const {
-        clientName,
-        workload,
-        exportPath,
-        internalDomains,
-        outputPath,
-        generatePdf,
-        autoOpen,
-        email
-      } = options;
-
-      // Validate export path exists
-      if (!fs.existsSync(exportPath)) {
-        return { success: false, error: 'Export folder not found' };
+      briefs = JSON.parse(fs.readFileSync(resultPath, 'utf8').replace(/^﻿/, ''));
+      fs.unlinkSync(resultPath);
+    } catch { /* script failed before writing results */ }
+    if (!Array.isArray(briefs)) briefs = [briefs];
+    for (const b of briefs) {
+      if (b.summaryPath && fs.existsSync(b.summaryPath)) {
+        try { b.summary = JSON.parse(fs.readFileSync(b.summaryPath, 'utf8')); } catch { /* preview only */ }
       }
-
-      // Find the FLY template directory
-      // Located at migration-toolkit-main/FLY/Template
-      const templatePath = path.join(__dirname, '..', 'FLY', 'Template');
-      const flyBriefScript = path.join(templatePath, 'fly-brief.js');
-
-      if (!fs.existsSync(flyBriefScript)) {
-        return { success: false, error: `FLY brief script not found at: ${flyBriefScript}` };
-      }
-
-      // Build node command arguments
-      const args = [
-        flyBriefScript,
-        '--in', exportPath,
-        '--client', clientName
-      ];
-
-      if (workload) {
-        args.push('--workload', workload);
-      }
-
-      if (internalDomains) {
-        args.push('--internal', internalDomains);
-      }
-
-      if (outputPath && outputPath !== exportPath) {
-        args.push('--out', outputPath);
-      }
-
-      if (!generatePdf) {
-        args.push('--no-pdf');
-      }
-
-      console.log('Running FLY brief generation:', 'node', args.join(' '));
-
-      // Run the fly-brief.js script
-      return new Promise((resolve, reject) => {
-        const nodeProcess = spawn('node', args, {
-          cwd: templatePath,
-          env: process.env
-        });
-
-        let stdout = '';
-        let stderr = '';
-
-        nodeProcess.stdout.on('data', (data) => {
-          stdout += data.toString();
-          console.log('FLY Brief:', data.toString());
-        });
-
-        nodeProcess.stderr.on('data', (data) => {
-          stderr += data.toString();
-          console.error('FLY Brief Error:', data.toString());
-        });
-
-        nodeProcess.on('close', async (code) => {
-          if (code !== 0) {
-            resolve({
-              success: false,
-              error: stderr || `Process exited with code ${code}`
-            });
-            return;
-          }
-
-          // Extract output paths from stdout
-          const htmlMatch = /HTML:\s*(.+?)$/m.exec(stdout);
-          const pdfMatch = /PDF:\s*(.+?)$/m.exec(stdout);
-
-          const result = {
-            success: true,
-            htmlPath: htmlMatch ? htmlMatch[1].trim() : null,
-            pdfPath: pdfMatch ? pdfMatch[1].trim() : null
-          };
-
-          // Read summary JSON if it exists
-          const baseFileName = clientName.replace(/[^\w.-]+/g, '_') +
-                              (workload ? '_' + workload : '') +
-                              '_Executive_Brief';
-          const summaryPath = path.join(outputPath || exportPath, baseFileName + '.summary.json');
-
-          if (fs.existsSync(summaryPath)) {
-            try {
-              const summaryContent = fs.readFileSync(summaryPath, 'utf8');
-              result.summary = JSON.parse(summaryContent);
-            } catch (err) {
-              console.error('Failed to read summary:', err);
-            }
-          }
-
-          // Auto-open PDF if requested
-          if (autoOpen && result.pdfPath && fs.existsSync(result.pdfPath)) {
-            const { shell } = require('electron');
-            await shell.openPath(result.pdfPath);
-          }
-
-          // Send email if requested
-          if (email && result.pdfPath && fs.existsSync(result.pdfPath)) {
-            try {
-              // Note: Email functionality would require additional setup
-              // For now, we'll just indicate that email was requested
-              // You would need to integrate with an email service here
-              console.log('Email requested but not implemented yet');
-              console.log('Email to:', email.to);
-              console.log('Subject:', email.subject);
-              result.emailSent = false;
-              result.emailNote = 'Email functionality requires additional setup';
-            } catch (emailErr) {
-              console.error('Email error:', emailErr);
-              result.emailError = emailErr.message;
-            }
-          }
-
-          resolve(result);
-        });
-
-        nodeProcess.on('error', (err) => {
-          reject(new Error(`Failed to start process: ${err.message}`));
-        });
-      });
-
-    } catch (error) {
-      console.error('Generate FLY Brief error:', error);
-      return { success: false, error: error.message };
     }
+
+    const ok = briefs.filter(b => b.status === 'OK');
+    if (!ok.length) {
+      const error = code !== 0 ? `Script exited with code ${code} - see the log above.`
+        : briefs.length ? 'No briefs were built - see the failures above.'
+        : `No FLY projects found for "${customerPrefix}" (expected names like "${customerPrefix} - Exchange").`;
+      return { success: false, code, briefs, error };
+    }
+
+    if (autoOpen) {
+      const first = ok.find(b => b.pdfPath) || ok[0];
+      await shell.openPath(first.pdfPath || first.htmlPath);
+    }
+    // Same folder-name rule as $safeName in Invoke-FlyBriefs.ps1
+    const safe = (s) => s.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
+    return { success: true, code, briefs, outputFolder: path.join(outputRoot, safe(clientName || customerPrefix)) };
   });
 
-  // Helper to open file or folder
+  // Open a file or folder with its default handler (brief PDF / output folder)
   ipcMain.handle('open-path', async (event, filePath) => {
-    try {
-      const { shell } = require('electron');
-      await shell.openPath(filePath);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+    const { shell } = require('electron');
+    const error = await shell.openPath(filePath);
+    return error ? { success: false, error } : { success: true };
   });
 
-  // Generate FLY Executive Brief from API (auto-download reports)
-  ipcMain.handle('generate-fly-brief-from-api', async (event, options) => {
-    try {
-      const { spawn } = require('child_process');
-      const path = require('path');
-      const fs = require('fs');
-
-      const {
-        customerName,
-        outputPath,
-        generatePdf,
-        autoOpen,
-        email
-      } = options;
-
-      console.log('Generating FLY briefs from API for:', customerName);
-      console.log('Processing all workloads');
-
-      // Find the FLY template directory
-      const templatePath = path.join(__dirname, '..', 'FLY', 'Template');
-      const invokeFlyScript = path.join(templatePath, 'Invoke-FlyBriefs.ps1');
-
-      if (!fs.existsSync(invokeFlyScript)) {
-        return { success: false, error: `FLY script not found at: ${invokeFlyScript}` };
-      }
-
-      // Build PowerShell command arguments
-      const psArgs = [
-        '-NoProfile',
-        '-ExecutionPolicy', 'Bypass',
-        '-File', invokeFlyScript,
-        customerName
-      ];
-
-      // Add output path if specified
-      if (outputPath) {
-        // We'll handle this via config - for now just use default
-      }
-
-      console.log('Running Invoke-FlyBriefs.ps1:', psArgs.join(' '));
-
-      // Run the PowerShell script
-      return new Promise((resolve, reject) => {
-        const psProcess = spawn('pwsh', psArgs, {
-          cwd: templatePath,
-          env: process.env
-        });
-
-        let stdout = '';
-        let stderr = '';
-        const briefsGenerated = [];
-
-        psProcess.stdout.on('data', (data) => {
-          const text = data.toString();
-          stdout += text;
-          console.log('FLY Brief PS:', text);
-
-          // Send progress to renderer
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('ps-output', text);
-          }
-        });
-
-        psProcess.stderr.on('data', (data) => {
-          stderr += data.toString();
-          console.error('FLY Brief PS Error:', data.toString());
-        });
-
-        psProcess.on('close', async (code) => {
-          if (code !== 0) {
-            resolve({
-              success: false,
-              error: stderr || `Process exited with code ${code}`
-            });
-            return;
-          }
-
-          // Parse output to find generated files
-          // Look for lines like "Project: X - Y Status: OK Folder: C:\path"
-          const lines = stdout.split(/\r?\n/);
-          const projectRegex = /Project\s+Status\s+Folder/i;
-          const dataRegex = /^(.+?)\s+(OK|Failed:.*?)\s+(.+)$/;
-
-          let inResultsTable = false;
-          for (const line of lines) {
-            if (projectRegex.test(line)) {
-              inResultsTable = true;
-              continue;
-            }
-
-            if (inResultsTable && line.trim()) {
-              const match = dataRegex.exec(line.trim());
-              if (match) {
-                const [, project, status, folder] = match;
-                if (status === 'OK' && folder && fs.existsSync(folder)) {
-                  // Find the generated files
-                  const files = fs.readdirSync(folder);
-                  const pdfFile = files.find(f => f.endsWith('_Executive_Brief.pdf'));
-                  const htmlFile = files.find(f => f.endsWith('_Executive_Brief.html'));
-                  const summaryFile = files.find(f => f.endsWith('_Executive_Brief.summary.json'));
-
-                  if (htmlFile) {
-                    const briefInfo = {
-                      workload: project.split(' - ').pop() || 'Unknown',
-                      htmlPath: path.join(folder, htmlFile),
-                      pdfPath: pdfFile ? path.join(folder, pdfFile) : null,
-                      folder: folder
-                    };
-
-                    // Read summary if available
-                    if (summaryFile) {
-                      try {
-                        const summaryPath = path.join(folder, summaryFile);
-                        const summaryContent = fs.readFileSync(summaryPath, 'utf8');
-                        briefInfo.summary = JSON.parse(summaryContent);
-                      } catch (err) {
-                        console.error('Failed to read summary:', err);
-                      }
-                    }
-
-                    briefsGenerated.push(briefInfo);
-                  }
-                }
-              }
-            }
-          }
-
-          if (briefsGenerated.length === 0) {
-            resolve({
-              success: false,
-              error: 'No briefs were generated. Check that FLY projects exist for this client.'
-            });
-            return;
-          }
-
-          // Auto-open first PDF if requested
-          if (autoOpen && briefsGenerated.length > 0) {
-            const firstBrief = briefsGenerated[0];
-            if (firstBrief.pdfPath && fs.existsSync(firstBrief.pdfPath)) {
-              const { shell } = require('electron');
-              await shell.openPath(firstBrief.pdfPath);
-            }
-          }
-
-          // Email functionality placeholder
-          let emailSent = false;
-          if (email && briefsGenerated.length > 0) {
-            console.log('Email requested but not implemented yet');
-            // Email integration would go here
-          }
-
-          resolve({
-            success: true,
-            briefs: briefsGenerated,
-            outputFolder: briefsGenerated[0]?.folder ? path.dirname(briefsGenerated[0].folder) : null,
-            emailSent
-          });
-        });
-
-        psProcess.on('error', (err) => {
-          reject(new Error(`Failed to start PowerShell: ${err.message}`));
-        });
-      });
-
-    } catch (error) {
-      console.error('Generate FLY Brief from API error:', error);
-      return { success: false, error: error.message };
-    }
-  });
 }
 
 // App lifecycle
