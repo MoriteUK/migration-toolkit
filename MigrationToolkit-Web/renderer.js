@@ -1993,6 +1993,7 @@ function switchView(viewName) {
     'avepoint-monitor': 'avepointMonitorView',
     // Reports sub-views
     'reports-fly-brief': 'flyBriefView',
+    'reports-fly-tech': 'flyTechView',
     // Misc Scripts sub-views
     'misc-baseline': 'miscBaselineView',
     'misc-baseline-status': 'miscBaselineStatusView',
@@ -2052,6 +2053,10 @@ function switchView(viewName) {
         loadCustomerDropdownInto('addDgMembersCustomerPrefix', 'Select customer...');
       } else if (viewName === 'reports-fly-brief') {
         if (window._loadFlyBriefCustomerNames) window._loadFlyBriefCustomerNames();
+      } else if (viewName === 'reports-fly-tech') {
+        const sel = document.getElementById('flyTechCustomer');
+        const keep = sel ? sel.value : '';
+        loadCustomerDropdownInto('flyTechCustomer', 'Select customer...').then(() => { if (keep && sel) sel.value = keep; });
       } else if (viewName === 'avepoint-monitor') {
         loadMonitorProjects();
       } else if (viewName === 'avepoint-aos') {
@@ -4725,6 +4730,52 @@ document.addEventListener('DOMContentLoaded', () => {
         generateFlyBriefBtn.innerHTML = '<span class="btn-icon">📄</span> Generate Brief';
       }
     });
+  }
+
+  // ── Fly TechTeam Report: interactive drill-down HTML (no PDF), opened automatically by main.js ──
+  const genTechBtn = document.getElementById('generateFlyTechBtn');
+  if (genTechBtn) {
+    const techLog = document.getElementById('flyTechLog'), techOut = document.getElementById('flyTechLogOutput');
+    const openTechBtn = document.getElementById('openFlyTechBtn'), openTechFolderBtn = document.getElementById('openFlyTechFolderBtn');
+    genTechBtn.addEventListener('click', async () => {
+      const customerPrefix = document.getElementById('flyTechCustomer').value.trim();
+      if (!customerPrefix) { alert('Please select a customer'); return; }
+      const exportFolder = document.getElementById('flyTechReportsFolder').value.trim();
+      techLog.classList.remove('hidden');
+      openTechBtn.classList.add('hidden'); openTechFolderBtn.classList.add('hidden');
+      techOut.textContent = `Building the TechTeam report for "${customerPrefix}"${exportFolder ? ' from ' + exportFolder + ' + live FLY status' : ' from live FLY status'}...\n\n`;
+      genTechBtn.disabled = true;
+      const stopBtn = document.getElementById('globalStopBtn');
+      if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = '■ Stop Script'; stopBtn.style.display = 'inline-flex'; }
+      window.electronAPI.onPsOutput((text) => {
+        // keep the log readable: drop the per-part progress lines of large multi-file reports
+        const shown = text.split(/(?<=\n)/).filter(l => !/objects\(\d+\)\.csv:/.test(l)).join('');
+        if (!shown) return;
+        techOut.textContent += shown;
+        techOut.scrollTop = techOut.scrollHeight;
+      });
+      try {
+        const result = await window.electronAPI.generateFlyBrief({ customerPrefix, mode: 'tech', exportFolder });
+        const report = (result.briefs || []).find(b => b.status === 'OK' && b.htmlPath);
+        if (result.success && report) {
+          techOut.textContent += `\n✅ TechTeam report ready and opened in your browser:\n   ${report.htmlPath}\n`;
+          openTechBtn.classList.remove('hidden'); openTechBtn.setAttribute('data-path', report.htmlPath);
+        } else {
+          techOut.textContent += `\n❌ ${result.error || 'The report was not built - see the log above.'}\n`;
+        }
+        if (result.outputFolder) { openTechFolderBtn.classList.remove('hidden'); openTechFolderBtn.setAttribute('data-path', result.outputFolder); }
+      } catch (err) {
+        techOut.textContent += `\n❌ Error: ${err.message}\n`;
+      } finally {
+        window.electronAPI.offPsOutput();
+        if (stopBtn) stopBtn.style.display = 'none';
+        genTechBtn.disabled = false;
+        techOut.scrollTop = techOut.scrollHeight;
+      }
+    });
+    [openTechBtn, openTechFolderBtn].forEach(b => b && b.addEventListener('click', () => {
+      const p = b.getAttribute('data-path'); if (p) window.electronAPI.openPath(p);
+    }));
   }
 
   if (downloadFlyBriefBtn) {

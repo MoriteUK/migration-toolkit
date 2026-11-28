@@ -544,16 +544,24 @@ function registerIPCHandlers() {
     const os = require('os');
     const { shell } = require('electron');
     const { customerPrefix, clientName, internalDomains, outputPath, generatePdf = true, autoOpen = false } = options;
+    // mode 'tech' = Reports → Fly TechTeam Report: interactive drill-down HTML only (no PDF), opened when done.
+    // exportFolder (optional, tech mode) = downloaded FLY reports for item-level detail.
+    const tech = options.mode === 'tech', exportFolder = tech ? (options.exportFolder || '') : '';
     if (!customerPrefix) return { success: false, error: 'No customer selected.' };
+    if (exportFolder && !fs.existsSync(exportFolder)) return { success: false, error: `Reports folder not found: ${exportFolder}` };
 
     const scriptPath = path.join(PS_SCRIPT_PATH, 'FlyBrief', 'Invoke-FlyBriefs.ps1');
     if (!fs.existsSync(scriptPath)) return { success: false, error: `Brief script not found: ${scriptPath}` };
 
     const resultPath = path.join(os.tmpdir(), `fly-brief-${Date.now()}.json`);
-    const outputRoot = outputPath || path.join(LOGS_DIR, 'FlyBriefs');
-    // Every "{Prefix} - {Workload}" project: full FLY report via the portal when the AOS sign-in is
-    // valid, otherwise live project data straight from the FLY API.
+    // Same folder-name rule as $safeName in Invoke-FlyBriefs.ps1
+    const safe = (s) => s.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
+    const outputRoot = tech
+      ? (outputPath || (exportFolder ? path.join(exportFolder, 'TechTeam Report') : path.join(LOGS_DIR, 'FlyBriefs', safe(customerPrefix), 'TechTeam Report')))
+      : (outputPath || path.join(LOGS_DIR, 'FlyBriefs'));
+    // Briefs: every "{Prefix} - {Workload}" project. TechTeam: downloaded reports (item level) + live status for the rest.
     const args = [customerPrefix, '-OutputRoot', outputRoot, '-ResultPath', resultPath];
+    if (tech) { args.push('-TechReport'); if (exportFolder) args.push('-ExportFolder', exportFolder); }
     if (clientName) args.push('-ClientName', clientName);
     if (internalDomains) args.push('-InternalDomains', internalDomains);
     if (!generatePdf) args.push('-NoPdf');
@@ -604,13 +612,14 @@ function registerIPCHandlers() {
       return { success: false, code, briefs, error };
     }
 
-    if (autoOpen) {
+    if (tech) {
+      const report = ok.find(b => b.htmlPath);
+      if (report) await shell.openPath(report.htmlPath);   // always open the TechTeam HTML when it's ready
+    } else if (autoOpen) {
       const first = ok.find(b => b.pdfPath) || ok[0];
       await shell.openPath(first.pdfPath || first.htmlPath);
     }
-    // Same folder-name rule as $safeName in Invoke-FlyBriefs.ps1
-    const safe = (s) => s.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
-    const outputFolder = path.join(outputRoot, safe(clientName || customerPrefix));
+    const outputFolder = tech ? outputRoot : path.join(outputRoot, safe(clientName || customerPrefix));
     return { success: true, code, briefs, outputFolder };
   });
 

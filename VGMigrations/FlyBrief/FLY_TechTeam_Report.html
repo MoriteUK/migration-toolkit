@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FLY TechTeam Report</title>
+<style>
+:root{
+  --bg:#eef1f3; --paper:#fff; --fg:#16202a; --muted:#5b6771; --line:#dfe4e8; --accent:#0f6b78; --accent-bg:#e3f1f3;
+  --err:#b3261e; --err-bg:#fbe4e2; --warn:#9a6200; --warn-bg:#fbf0d9; --sec:#6b3fa0; --sec-bg:#efe7f8; --info:#5b6771; --info-bg:#eceff1; --ok:#1f7a4d; --ok-bg:#e2f3ea;
+  --body:"Segoe UI",system-ui,-apple-system,sans-serif; --mono:Consolas,ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.45 var(--body)}
+header{background:var(--fg);color:#fff;padding:14px 22px;display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+header h1{margin:0;font-size:1.25rem;font-weight:600}
+header .meta{font-size:.8rem;opacity:.75}
+.shell{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:calc(100vh - 52px)}
+nav{background:var(--paper);border-right:1px solid var(--line);padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+nav a{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-radius:5px;color:var(--fg);text-decoration:none}
+nav a:hover{background:var(--bg)} nav a.on{background:var(--accent-bg);color:var(--accent);font-weight:600}
+nav .sub{font-size:.72rem;color:var(--muted);font-weight:400}
+main{padding:18px 22px;min-width:0}
+h2{font-size:1.15rem;margin:0 0 4px} h3{font-size:.95rem;margin:18px 0 8px}
+.crumbs{font-size:.8rem;color:var(--muted);margin-bottom:10px} .crumbs a{color:var(--accent);text-decoration:none} .crumbs a:hover{text-decoration:underline}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.card b{display:block;font-size:1.35rem;font-variant-numeric:tabular-nums} .card span{font-size:.75rem;color:var(--muted)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:14px 0 10px}
+.tabs a{padding:7px 12px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs a.on{color:var(--accent);border-color:var(--accent);font-weight:600}
+table{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line)}
+th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:7px 8px;border-bottom:2px solid var(--line);background:#f7f9fa;position:sticky;top:0;cursor:pointer;user-select:none}
+td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.click{cursor:pointer} tr.click:hover td{background:#f3f8f9}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:.78rem}
+.muted{color:var(--muted)} .small{font-size:.76rem}
+.pill{display:inline-block;font:600 .66rem var(--body);text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:3px;white-space:nowrap}
+.pill.Error{color:var(--err);background:var(--err-bg)} .pill.Warning{color:var(--warn);background:var(--warn-bg)}
+.pill.Security{color:var(--sec);background:var(--sec-bg)} .pill.Info{color:var(--info);background:var(--info-bg)} .pill.ok{color:var(--ok);background:var(--ok-bg)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 10px}
+.filters input,.filters select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.filters input[type=search]{min-width:280px;flex:1}
+.note{background:var(--warn-bg);color:var(--warn);padding:8px 10px;border-radius:4px;font-size:.8rem;margin:8px 0}
+.more{margin:10px 0}
+button{font:600 .8rem var(--body);padding:6px 12px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+.wrap{word-break:break-word}
+.bar{display:inline-block;height:6px;border-radius:3px;background:var(--err);vertical-align:middle}
+@media (max-width:800px){.shell{grid-template-columns:1fr} nav{flex-direction:row;overflow-x:auto}}
+</style>
+</head>
+<body>
+<header><h1 id="title">FLY TechTeam Report</h1><div class="meta" id="meta"></div></header>
+<div class="shell"><nav id="nav"></nav><main id="main"></main></div>
+<script>
+var DATA = /*__DATA__*/null;
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var n0 = function (v) { return v == null ? '–' : Math.round(v).toLocaleString('en-GB'); };
+  var SEVS = ['Error', 'Warning', 'Security', 'Info'];
+  var SEV_HELP = { Error: 'failed', Warning: 'migrated with problems', Security: 'security exposure carried over', Info: 'not supported / informational' };
+  if (!DATA) { $('main').innerHTML = '<p>No data in this report.</p>'; return; }
+  document.title = DATA.client + ' - FLY TechTeam Report';
+  $('title').textContent = DATA.client + ' – FLY TechTeam Report';
+  $('meta').textContent = 'Generated ' + new Date(DATA.generated).toLocaleString('en-GB') + ' · read-only · successful and skipped items are not listed';
+  var byWl = {}; DATA.areas.forEach(function (A) { byWl[A.id] = A; });
+  var total = function (A) { return A.counts.Error + A.counts.Warning + A.counts.Security + A.counts.Info; };
+  var openMappings = function (A) { return A.mappings.filter(function (m) { return !/^(Finished|Successful|Completed)$/i.test(m.status); }).length; };
+
+  function navHtml(cur) {
+    var h = '<a href="#/" class="' + (!cur ? 'on' : '') + '"><span>Overview</span></a>';
+    DATA.areas.forEach(function (A) {
+      h += '<a href="#/a/' + A.id + '/types" class="' + (cur === A.id ? 'on' : '') + '"><span>' + esc(A.title) + '<br><span class="sub">' + esc(A.source) + '</span></span>' +
+        (A.counts.Error ? '<span class="pill Error">' + n0(A.counts.Error) + '</span>' : total(A) ? '<span class="pill Warning">' + n0(total(A)) + '</span>' : '<span class="pill ok">0</span>') + '</a>';
+    });
+    return h;
+  }
+  function sevPills(c) { return SEVS.filter(function (s) { return c[s]; }).map(function (s) { return '<span class="pill ' + s + '" title="' + SEV_HELP[s] + '">' + n0(c[s]) + ' ' + s + '</span>'; }).join(' ') || '<span class="pill ok">no issues</span>'; }
+
+  // ---------- views ----------
+  function overview() {
+    var h = '<h2>All areas</h2><p class="muted">Click an area to see its issue types, the users and sites affected, and the individual items. Use this to work through problems before the management PDF is produced.</p>';
+    h += '<table><thead><tr><th>Area</th><th>Source</th><th class="n">Mappings</th><th class="n">Not finished cleanly</th><th>Issues</th><th>Biggest issue types</th></tr></thead><tbody>';
+    DATA.areas.forEach(function (A) {
+      var top = A.groups.slice().sort(function (a, b) { return b.n - a.n; }).slice(0, 3).map(function (g) { return esc(g.code || g.kind) + ' <span class="muted">(' + n0(g.n) + ')</span>'; }).join('<br>');
+      h += '<tr class="click" data-go="#/a/' + A.id + '/types"><td><b>' + esc(A.title) + '</b></td><td class="small muted">' + esc(A.source) + '</td><td class="n">' + n0(A.mappings.length) + '</td><td class="n">' + n0(openMappings(A)) + '</td><td>' + sevPills(A.counts) + '</td><td class="small">' + (top || '–') + '</td></tr>';
+    });
+    return h + '</tbody></table>';
+  }
+
+  function areaHead(A, tab) {
+    var h = '<div class="crumbs"><a href="#/">All areas</a> › ' + esc(A.title) + '</div><h2>' + esc(A.title) + '</h2><div class="muted small">' + esc(A.source) + '</div>';
+    h += '<div class="cards">' + SEVS.map(function (s) { return '<div class="card"><b>' + n0(A.counts[s]) + '</b><span>' + s + ' – ' + SEV_HELP[s] + '</span></div>'; }).join('') +
+      '<div class="card"><b>' + n0(openMappings(A)) + ' / ' + n0(A.mappings.length) + '</b><span>mappings not finished cleanly</span></div></div>';
+    if (A.capped) h += '<div class="note">' + n0(A.capped) + ' items are not listed individually because their issue type has more than the per-type limit. The counts include them; FLY\'s report has the full list.</div>';
+    h += '<div class="tabs">' + [['types', 'Issue types (' + A.groups.length + ')'], ['users', 'Users & sites (' + A.owners.filter(function (o) { return o.n; }).length + ')'], ['mappings', 'Mappings (' + A.mappings.length + ')'], ['items', 'All items']]
+      .map(function (t) { return '<a href="#/a/' + A.id + '/' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</div>';
+    return h;
+  }
+
+  function types(A) {
+    var gs = A.groups.map(function (g, i) { return { g: g, i: i }; }).sort(function (a, b) { return SEVS.indexOf(a.g.sev) - SEVS.indexOf(b.g.sev) || b.g.n - a.g.n; });
+    var h = areaHead(A, 'types') + '<table><thead><tr><th>Severity</th><th>Kind</th><th>Error code</th><th>What FLY reported (example)</th><th class="n">Items</th><th class="n">Users / sites</th></tr></thead><tbody>';
+    gs.forEach(function (x) {
+      var g = x.g;
+      h += '<tr class="click" data-go="#/a/' + A.id + '/g/' + x.i + '"><td><span class="pill ' + g.sev + '">' + g.sev + '</span></td><td>' + esc(g.kind) + '</td><td class="mono">' + esc(g.code || '–') + '</td><td class="wrap">' + esc(g.msg) + '</td><td class="n">' + n0(g.n) + '</td><td class="n">' + n0(g.users) + '</td></tr>';
+    });
+    return h + (gs.length ? '' : '<tr><td colspan="6" class="muted">No issues recorded for this area.</td></tr>') + '</tbody></table>';
+  }
+
+  function users(A, q) {
+    var per = A.owners.map(function (o, i) { return { o: o, i: i, c: { Error: 0, Warning: 0, Security: 0, Info: 0 } }; });
+    A.groups.forEach(function (g) { g.top.forEach(function (t) { per[t[0]].c[g.sev] += t[1]; }); });
+    var rows = per.filter(function (p) { return p.o.n; }).sort(function (a, b) { return b.c.Error - a.c.Error || b.o.n - a.o.n; });
+    var h = areaHead(A, 'users') + '<div class="filters"><input type="search" id="q" placeholder="Filter users / sites…" value="' + esc(q || '') + '"></div>';
+    h += '<table><thead><tr><th>User / site</th><th>Mapping status</th><th class="n">Errors</th><th class="n">Warnings</th><th class="n">Security</th><th class="n">Info</th><th class="n">Total</th></tr></thead><tbody id="rows">';
+    rows.forEach(function (p) {
+      var m = p.o.mapping != null ? A.mappings[p.o.mapping] : null;
+      h += '<tr class="click" data-go="#/a/' + A.id + '/o/' + p.i + '" data-text="' + esc(p.o.label.toLowerCase()) + '"><td class="wrap">' + esc(p.o.label) + '</td><td class="small">' + esc(m ? m.status : '–') + '</td>' +
+        SEVS.map(function (s) { return '<td class="n">' + (p.c[s] ? n0(p.c[s]) : '<span class="muted">–</span>') + '</td>'; }).join('') + '<td class="n"><b>' + n0(p.o.n) + '</b></td></tr>';
+    });
+    return h + '</tbody></table>';
+  }
+
+  function mappings(A) {
+    var h = areaHead(A, 'mappings') + '<div class="filters"><input type="search" id="q" placeholder="Filter mappings…"></div><table><thead><tr><th>Source</th><th>Destination</th><th>Last job status</th><th class="n">GB</th><th class="n">Successful</th><th class="n">With exceptions</th><th class="n">Errors</th><th>Last job</th><th>Comment</th></tr></thead><tbody id="rows">';
+    A.mappings.slice().sort(function (a, b) { return (/^(Finished|Successful|Completed)$/i.test(a.status) ? 1 : 0) - (/^(Finished|Successful|Completed)$/i.test(b.status) ? 1 : 0) || b.err - a.err; }).forEach(function (m) {
+      var oi = A.owners.findIndex(function (o, i) { return o.mapping === A.mappings.indexOf(m); });
+      h += '<tr' + (oi >= 0 ? ' class="click" data-go="#/a/' + A.id + '/o/' + oi + '"' : '') + ' data-text="' + esc((m.src + ' ' + m.dst + ' ' + m.status).toLowerCase()) + '"><td class="wrap">' + esc(m.src) + '</td><td class="wrap small muted">' + esc(m.dst) + '</td><td class="small">' + esc(m.status) + '</td><td class="n">' + (m.gb ? m.gb.toFixed(1) : '–') + '</td><td class="n">' + n0(m.ok) + '</td><td class="n">' + n0(m.exc) + '</td><td class="n">' + n0(m.err) + '</td><td class="small muted">' + esc(m.start) + '</td><td class="small wrap">' + esc(m.comment) + '</td></tr>';
+    });
+    return h + '</tbody></table>';
+  }
+
+  var PAGE = 300;
+  function items(A, filt) {
+    var title = 'All items', crumb = '';
+    if (filt.g != null) { var g = A.groups[filt.g]; title = (g.code || g.kind) + ' – ' + n0(g.n) + ' items, ' + n0(g.users) + ' users / sites'; crumb = '<a href="#/a/' + A.id + '/types">Issue types</a> › ' + esc(g.code || g.kind); }
+    if (filt.o != null) { var o = A.owners[filt.o]; title = o.label + ' – ' + n0(o.n) + ' items'; crumb = '<a href="#/a/' + A.id + '/users">Users & sites</a> › ' + esc(o.label); }
+    var h = '<div class="crumbs"><a href="#/">All areas</a> › <a href="#/a/' + A.id + '/types">' + esc(A.title) + '</a>' + (crumb ? ' › ' + crumb : '') + '</div>';
+    h += filt.g == null && filt.o == null ? areaHead(A, 'items') : '<h2 class="wrap">' + esc(title) + '</h2>';
+    if (filt.g != null) h += '<p class="wrap"><span class="pill ' + A.groups[filt.g].sev + '">' + A.groups[filt.g].sev + '</span> ' + esc(A.groups[filt.g].msg) + '</p>' +
+      (A.groups[filt.g].kept < A.groups[filt.g].n ? '<div class="note">Listing the first ' + n0(A.groups[filt.g].kept) + ' of ' + n0(A.groups[filt.g].n) + ' items of this type. The rest are in FLY\'s migration report.</div>' : '');
+    h += '<div class="filters"><input type="search" id="q" placeholder="Search item, user, path or message…"><select id="sev"><option value="">All severities</option>' + SEVS.map(function (s) { return '<option>' + s + '</option>'; }).join('') + '</select>' +
+      '<select id="kind"><option value="">All kinds</option>' + Object.keys(A.groups.reduce(function (m, g) { m[g.kind] = 1; return m; }, {})).map(function (k) { return '<option>' + esc(k) + '</option>'; }).join('') + '</select><span class="muted small" id="count"></span></div>';
+    h += '<table><thead><tr><th>Severity</th>' + (filt.o == null ? '<th>User / site</th>' : '') + '<th>Item</th><th>Details</th><th>Status</th><th>Error code</th><th>FLY message</th></tr></thead><tbody id="rows"></tbody></table><div class="more" id="more"></div>';
+    return h;
+  }
+  function fillItems(A, filt) {
+    var q = ($('q').value || '').toLowerCase(), sev = $('sev').value, kind = $('kind').value, shown = 0, matched = 0, limit = PAGE;
+    var list = A.items.filter(function (it) {
+      var g = A.groups[it[0]];
+      if (filt.g != null && it[0] !== filt.g) return false;
+      if (filt.o != null && it[1] !== filt.o) return false;
+      if (sev && g.sev !== sev) return false;
+      if (kind && g.kind !== kind) return false;
+      if (q && (it[2] + ' ' + it[3] + ' ' + it[4] + ' ' + A.owners[it[1]].label + ' ' + A.msgs[it[6]] + ' ' + g.code).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    matched = list.length;
+    function render() {
+      $('rows').innerHTML = list.slice(0, limit).map(function (it) {
+        var g = A.groups[it[0]];
+        return '<tr><td><span class="pill ' + g.sev + '">' + g.sev + '</span></td>' + (filt.o == null ? '<td class="wrap small"><a href="#/a/' + A.id + '/o/' + it[1] + '">' + esc(A.owners[it[1]].label) + '</a></td>' : '') +
+          '<td class="wrap"><b>' + esc(it[2]) + '</b><div class="small muted wrap">' + esc(it[4]) + '</div></td><td class="small">' + esc(g.kind) + (it[3] ? '<br>' + esc(it[3]) : '') + '</td><td class="small">' + esc(it[5]) + '</td>' +
+          '<td class="mono"><a href="#/a/' + A.id + '/g/' + it[0] + '">' + esc(g.code || '–') + '</a></td><td class="small wrap">' + esc(A.msgs[it[6]]) + '</td></tr>';
+      }).join('') || '<tr><td colspan="7" class="muted">No items match.</td></tr>';
+      shown = Math.min(limit, matched);
+      $('count').textContent = 'Showing ' + n0(shown) + ' of ' + n0(matched) + ' items';
+      $('more').innerHTML = matched > limit ? '<button id="moreBtn">Show ' + n0(Math.min(PAGE, matched - limit)) + ' more</button>' : '';
+      if ($('moreBtn')) $('moreBtn').onclick = function () { limit += PAGE; render(); };
+    }
+    render();
+  }
+
+  // ---------- routing ----------
+  function route() {
+    var p = (location.hash || '#/').slice(2).split('/'), A = p[0] === 'a' ? byWl[p[1]] : null, view = p[2] || 'types';
+    $('nav').innerHTML = navHtml(A ? A.id : '');
+    var m = $('main');
+    if (!A) m.innerHTML = overview();
+    else if (view === 'types') m.innerHTML = types(A);
+    else if (view === 'users') m.innerHTML = users(A);
+    else if (view === 'mappings') m.innerHTML = mappings(A);
+    else {
+      var filt = view === 'g' ? { g: +p[3] } : view === 'o' ? { o: +p[3] } : {};
+      m.innerHTML = items(A, filt);
+      ['q', 'sev', 'kind'].forEach(function (id) { $(id).addEventListener(id === 'q' ? 'input' : 'change', function () { fillItems(A, filt); }); });
+      fillItems(A, filt);
+    }
+    if ((view === 'users' || view === 'mappings') && $('q')) $('q').addEventListener('input', function () {
+      var q = this.value.toLowerCase();
+      Array.prototype.forEach.call($('rows').children, function (tr) { tr.style.display = !q || (tr.getAttribute('data-text') || '').indexOf(q) >= 0 ? '' : 'none'; });
+    });
+    m.querySelectorAll('tr[data-go]').forEach(function (tr) { tr.addEventListener('click', function (e) { if (e.target.tagName !== 'A') location.hash = tr.getAttribute('data-go'); }); });
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
+</body>
+</html>

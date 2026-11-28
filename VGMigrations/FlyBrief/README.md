@@ -32,6 +32,14 @@ From reports you downloaded from the FLY portal (full figures, including permiss
 ```
 Zips are expanded and each `*Mappings.csv` is paired only with its own detail files (same workload, same export time), so a folder holding every area, or copies of the same extract, never mixes data between areas. Areas with no downloaded report are filled from live FLY data for that customer's project. Output goes to `<ExportFolder>\Executive Brief\` (or `-OutputRoot`).
 
+### Fly TechTeam Report (Reports → Fly TechTeam Report)
+An interactive, read-only HTML for the tech team to work through problems mid-migration, before the management PDF. HTML only, with no PDF. It opens automatically when ready.
+- **Drill-down:** All areas → an area → **Issue types** (grouped by FLY error code, with item and user counts) or **Users & sites** (errors, warnings and security per mailbox, OneDrive, site, team or chat) → the individual items (file, mail item, permission, sharing link, chat member) with FLY's status, error code and message. **Mappings** lists each mapping's last-job result. Search, plus severity and kind filters. The browser's Back button works.
+- **Severities:** Error = failed. Warning = migrated with problems. Security = anonymous edit links carried over. Info = not supported / informational. Successful and skipped items are not listed. Very large issue types list their first 1,500 items; the counts include everything.
+- **Sources:** with a **Downloaded FLY Reports Folder**, each downloaded area is read down to item level (this reads every object file, about 35 seconds for Amickiel's ~3.5M rows). Areas without a download, or all areas if no folder is given, show each user or site's **live** migration status from FLY.
+- Output: `<folder>\TechTeam Report\<Customer>_TechTeam_Report.html`, or `Logs\FlyBriefs\<Customer>\TechTeam Report\` without a folder.
+- Command line: `.\Invoke-FlyBriefs.ps1 -TechReport -Company Amickiel [-ExportFolder "E:\Avepoint\Reports\Extracts"]`. Built by `fly-issues.js` into the `FLY_TechTeam_Report.html` template.
+
 ## 2. Manual: open the template and choose an export
 1. Open `FLY_Executive_Brief.html` in Edge or Chrome.
 2. Choose the export folder. The brief needs the `…Mappings.csv` file, plus `…Site security.csv` and `…SharedLink.csv` for the security section. It skips the large "Site objects" files.

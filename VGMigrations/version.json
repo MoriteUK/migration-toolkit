@@ -1,7 +1,18 @@
 {
-  "version": "2.9.246",
+  "version": "2.9.247",
   "releaseDate": "2026-11-28",
   "changelog": [
+    {
+      "version": "2.9.247",
+      "date": "2026-11-28",
+      "changes": [
+        "New Reports > Fly TechTeam Report: an interactive, read-only HTML drill-down for the tech team to work through migration problems mid-migration, before the management PDF. HTML only (no PDF), opened automatically when ready",
+        "Drill-down: all areas > area > issue types (grouped by FLY error code, with item and user counts) or users & sites > individual failed items (file, mail item, permission, sharing link, chat member) with FLY's status, error code and message. Plus each mapping's last-job result, search, severity/kind filters, and working browser Back",
+        "Sources: downloaded FLY reports (optional folder) are read down to item level, including every object file (Amickiel: ~3.5M rows in ~35s, 5.8 MB HTML). Areas without a download, or all areas with no folder, show each user/site's live migration status from FLY",
+        "Invoke-FlyBriefs.ps1 -TechReport; new fly-issues.js + FLY_TechTeam_Report.html. Report discovery (dedupe, zip expansion) and live-mapping paging are shared with the executive brief"
+      ],
+      "breaking": false
+    },
     {
       "version": "2.9.246",
       "date": "2026-11-28",

@@ -70,6 +70,7 @@ param(
   [switch]$ListOnly,
   [switch]$NoPdf,
   [switch]$NoPortal,      # skip the FLY-portal report download; use live API data only
+  [switch]$TechReport,    # build the interactive TechTeam drill-down HTML instead of the briefs
   [switch]$UseApiReport   # also try Fly.Client's report export (broken while Fly.Client issue #16 is open)
 )
 $ErrorActionPreference = 'Stop'
@@ -189,7 +190,8 @@ function Get-WorkList {
 # Brief summary built from FLY's live project + mapping data (no report files). Matches the report's
 # mapping-level figures (status counts, migrated GB, job dates); item-level, permission and sharing-link
 # figures are not available from the API, so the brief renders in its "api" mode.
-function Get-FlyLiveSummary([string]$ProjectId, [string]$Workload) {
+# Every mapping of a FLY project with its live status (mappings/summaries, paged)
+function Get-FlyLiveMappings([string]$ProjectId) {
   $conf = & (Get-Module Fly.Client) { Get-FlyConfiguration }
   $base = ([string]$conf['BaseUrl']).TrimEnd('/')
   $maps = [System.Collections.Generic.List[object]]::new()
@@ -201,6 +203,29 @@ function Get-FlyLiveSummary([string]$ProjectId, [string]$Workload) {
     foreach ($x in $page) { $maps.Add($x) }
     $skip += $page.Count
   } while ($r.data.nextLink -and $page.Count)
+  , $maps
+}
+
+# Downloaded FLY reports under a folder: one entry per distinct report (workload + export second),
+# preferring the copy nearest the top folder. Zips are expanded first.
+function Get-ExportReports([string]$Folder, [string]$ExcludeUnder) {
+  Get-ChildItem $Folder -Filter *.zip -Recurse | ForEach-Object {
+    $dest = Join-Path $_.DirectoryName $_.BaseName
+    if (-not (Test-Path $dest)) { Write-Host "Expanding $($_.Name)"; Expand-Archive $_.FullName -DestinationPath $dest -Force }
+  }
+  $reports = [ordered]@{}
+  Get-ChildItem $Folder -Recurse -File -Filter '*Mappings.csv' |
+    Where-Object { -not $ExcludeUnder -or $_.FullName -notlike "$ExcludeUnder*" } |
+    Sort-Object { ($_.FullName -split '\\').Count }, FullName | ForEach-Object {
+      if ($_.Name -match '^(\w+?)(?:Summary|Migration)Report_(\d{14})') { $key = "$($Matches[1])|$($Matches[2])"; $wl = $Matches[1] } else { $key = $_.FullName; $wl = '' }
+      if (-not $reports.Contains($key)) { $reports[$key] = [pscustomobject]@{ workload = $wl; path = $_.FullName } }
+      else { Write-Host "Skipping duplicate copy: $($_.FullName)" }
+    }
+  , @($reports.Values)
+}
+
+function Get-FlyLiveSummary([string]$ProjectId, [string]$Workload) {
+  $maps = Get-FlyLiveMappings $ProjectId
 
   # lastMigrationStatus: 0 not run, 4 finished, 5 finished with exceptions, 6 failed (others = running/stopped/queued)
   $ran = @($maps | Where-Object { [int]$_.lastMigrationStatus -ne 0 })
@@ -286,6 +311,65 @@ function New-FlyBriefPack($rows, [string]$Client, [string]$OutDir) {
 $areaOrder = 'Exchange', 'OneDrive', 'SharePoint', 'Teams', 'M365Group', 'TeamChat'
 $platformArea = @{ 0 = 'Exchange'; 1 = 'Teams'; 2 = 'SharePoint'; 3 = 'OneDrive'; 4 = 'M365Group'; 5 = 'TeamChat' }   # FLY sourcePlatform codes
 
+# ── TechTeam report: interactive drill-down HTML for the tech team (HTML only, no PDF) ────────────
+# Areas come from downloaded FLY reports in -ExportFolder (item-level detail); every other area of the
+# customer's FLY projects (-Company) comes from live mapping status. Output: <Client>_TechTeam_Report.html
+if ($TechReport) {
+  if (-not $ExportFolder -and -not $Company) { throw 'The TechTeam report needs -Company (live FLY status) and/or -ExportFolder (downloaded FLY reports).' }
+  $client = if ($ClientName) { $ClientName } elseif ($Company) { $Company } else { 'Migration' }
+  $outDir = if ($OutputRoot) { $OutputRoot }
+            elseif ($ExportFolder) { Join-Path (Resolve-Path $ExportFolder).Path 'TechTeam Report' }
+            else { Join-Path (Join-Path $cfg.OutputRoot (& $safeName $client)) 'TechTeam Report' }
+  New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+  $areas = [System.Collections.Generic.List[object]]::new()
+  if ($ExportFolder) {
+    if (-not (Test-Path $ExportFolder -PathType Container)) { throw "Export folder not found: $ExportFolder" }
+    foreach ($r in (Get-ExportReports (Resolve-Path $ExportFolder).Path $outDir)) {
+      if ($r.workload) { $areas.Add([pscustomobject]@{ workload = $r.workload; report = $r.path }); Write-Host "[$($r.workload)] downloaded report: $(Split-Path $r.path -Leaf)" }
+    }
+  }
+  if ($Company) {
+    try {
+      Connect-FlyFromConfig
+      $covered = @($areas | ForEach-Object workload)
+      $projects = @(Get-AllFlyProjects | Where-Object {
+          $area = $platformArea[[int]$_.sourcePlatform]
+          $area -and $area -notin $covered -and ($_.name -like "$Company - *" -or ($_.name -split '\s+-\s+', 2)[0].Trim() -eq $Company)
+        } | Sort-Object name)
+      foreach ($fp in $projects) {
+        $wl = $platformArea[[int]$fp.sourcePlatform]
+        Write-Host "[$($fp.name)] reading live mapping status from FLY..."
+        $maps = Get-FlyLiveMappings $fp.id   # assign first: piping the function directly passes the whole list as one object
+        $rows = @($maps | ForEach-Object {
+            [pscustomobject]@{ src = $_.sourceIdentity; dst = $_.destinationIdentity; status = [int]$_.lastMigrationStatus
+              gb = [math]::Round([long]$_.migratedSize / 1GB, 2); errorItems = [int]$_.errorItemCount
+              start = $(if ([long]$_.lastMigrationStartTime -gt 0) { ([datetime]::new([long]$_.lastMigrationStartTime)).ToString('yyyy-MM-dd HH:mm') } else { '' }) }
+          })
+        $areas.Add([pscustomobject]@{ workload = $wl; live = [pscustomobject]@{ project = $fp.name; mappings = $rows } })
+      }
+    } catch { Write-Warning "Could not read live FLY status: $($_.Exception.Message)" }
+    finally { try { Disconnect-Fly | Out-Null } catch {} }
+  }
+  if (-not $areas.Count) { Save-Results @(); throw "Nothing to report: no downloaded FLY reports$(if ($ExportFolder) { " under $ExportFolder" }) and no FLY projects for '$Company'." }
+
+  $manifest = Join-Path ([IO.Path]::GetTempPath()) ("fly-tech-" + [guid]::NewGuid().ToString('N') + '.json')
+  [pscustomobject]@{ client = $client; areas = $areas } | ConvertTo-Json -Depth 8 -Compress | Set-Content $manifest -Encoding UTF8
+  $row = [ordered]@{ project = "$client - TechTeam report"; client = $client; workload = 'TechTeam'; status = ''; source = "$($areas.Count) areas"; folder = $outDir; htmlPath = $null; pdfPath = $null; summaryPath = $null }
+  try {
+    $lines = @(& node (Join-Path $PSScriptRoot 'fly-issues.js') --manifest $manifest --out $outDir 2>&1 | ForEach-Object { "$_" })
+    $lines | Where-Object { $_ -notmatch '^TECH HTML:' } | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE) { throw "fly-issues.js exited with $LASTEXITCODE" }
+    $row.htmlPath = ($lines | Where-Object { $_ -match '^TECH HTML:\s+(.+)$' } | ForEach-Object { $Matches[1].Trim() } | Select-Object -First 1)
+    $row.status = 'OK'
+    Write-Host "TechTeam report: $($row.htmlPath)" -ForegroundColor Green
+  } catch {
+    Write-Warning $_.Exception.Message
+    $row.status = 'Failed: ' + $_.Exception.Message
+  } finally { Remove-Item $manifest -ErrorAction SilentlyContinue }
+  Save-Results @([pscustomobject]$row)
+  return
+}
+
 # ── Export-folder mode: briefs from reports downloaded from the FLY portal ───────────────────────
 # Every *Mappings.csv is one report; its detail files are matched by workload + export time, so a folder
 # holding several areas (or copies of the same extract) never mixes their data. Duplicate copies of the
@@ -297,23 +381,11 @@ if ($ExportFolder) {
   $client = if ($ClientName) { $ClientName } elseif ($Company) { $Company } else { 'Migration' }
   $outDir = if ($OutputRoot) { $OutputRoot } else { Join-Path $ExportFolder 'Executive Brief' }
   New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-  Get-ChildItem $ExportFolder -Filter *.zip -Recurse | ForEach-Object {
-    $dest = Join-Path $_.DirectoryName $_.BaseName
-    if (-not (Test-Path $dest)) { Write-Host "Expanding $($_.Name)"; Expand-Archive $_.FullName -DestinationPath $dest -Force }
-  }
-  # One entry per distinct report (workload + export second), preferring the copy nearest the top folder
-  $reports = [ordered]@{}
-  Get-ChildItem $ExportFolder -Recurse -File -Filter '*Mappings.csv' |
-    Where-Object { $_.FullName -notlike "$outDir*" } |
-    Sort-Object { ($_.FullName -split '\\').Count }, FullName | ForEach-Object {
-      if ($_.Name -match '^(\w+?)(?:Summary|Migration)Report_(\d{14})') { $key = "$($Matches[1])|$($Matches[2])"; $wl = $Matches[1] } else { $key = $_.FullName; $wl = '' }
-      if (-not $reports.Contains($key)) { $reports[$key] = [pscustomobject]@{ workload = $wl; path = $_.FullName } }
-      else { Write-Host "Skipping duplicate copy: $($_.FullName)" }
-    }
-  if (-not $reports.Count -and -not $Company) { Save-Results @(); throw "No *Mappings.csv found under $ExportFolder. Download each project's migration report (CSV) from the FLY portal's Download Center and unzip it there." }
+  $reportList = Get-ExportReports $ExportFolder $outDir
+  if (-not $reportList.Count -and -not $Company) { Save-Results @(); throw "No *Mappings.csv found under $ExportFolder. Download each project's migration report (CSV) from the FLY portal's Download Center and unzip it there." }
 
   $results = @()
-  foreach ($r in ($reports.Values | Sort-Object { $i = $areaOrder.IndexOf($_.workload); if ($i -lt 0) { 99 } else { $i } })) {
+  foreach ($r in ($reportList | Sort-Object { $i = $areaOrder.IndexOf($_.workload); if ($i -lt 0) { 99 } else { $i } })) {
     $row = [ordered]@{ project = "$client - $(if ($r.workload) { $r.workload } else { 'export' })"; client = $client; workload = $r.workload; status = ''; source = 'FLY report (downloaded)'; folder = $null; htmlPath = $null; pdfPath = $null; summaryPath = $null }
     try {
       Write-Host "[$($row.project)] building brief from $(Split-Path $r.path -Leaf)"

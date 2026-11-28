@@ -203,6 +203,9 @@
             <button type="button" class="sidebar-subitem" data-view="reports-fly-brief">
               <span class="sidebar-sublabel">FLY Executive Brief</span>
             </button>
+            <button type="button" class="sidebar-subitem" data-view="reports-fly-tech">
+              <span class="sidebar-sublabel">Fly TechTeam Report</span>
+            </button>
           </div>
 
           <div class="sidebar-divider"></div>
@@ -2296,6 +2299,57 @@
         </div>
       </div>
 
+      <!-- Fly TechTeam Report View: interactive drill-down HTML for the tech team (HTML only) -->
+      <div id="flyTechView" class="view-container hidden">
+        <h2 class="view-title">🛠️ Fly TechTeam Report</h2>
+
+        <div class="form-card form-card-compact">
+          <h3 class="form-card-title">Migration Issues Drill-down</h3>
+          <p class="form-card-subtitle">Builds an interactive HTML report for the tech team: click an area, then an issue type or a user/site, down to the individual failed items with FLY's error. Opens automatically when ready.</p>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">Customer Name</label>
+              <select class="form-input form-input-compact" id="flyTechCustomer">
+                <option value="">Select customer...</option>
+              </select>
+              <p class="form-help">Every FLY project named "{Customer} - {Workload}" is included</p>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">Downloaded FLY Reports Folder (optional)</label>
+              <div class="input-with-button">
+                <input type="text" class="form-input form-input-compact" id="flyTechReportsFolder" placeholder="e.g. E:\Avepoint\Reports\Extracts">
+                <button type="button" data-folder="true">Browse</button>
+              </div>
+              <p class="form-help">For item-level detail (each failed file, mail item, permission and sharing link), point at the migration reports downloaded from the FLY portal. Areas without a downloaded report - or all areas if left blank - show each user/site's live migration status from FLY.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" id="generateFlyTechBtn">
+            <span class="btn-icon">🛠️</span>
+            Generate TechTeam Report
+          </button>
+          <button type="button" class="btn btn-secondary hidden" id="openFlyTechBtn">
+            <span class="btn-icon">🌐</span>
+            Open Report
+          </button>
+          <button type="button" class="btn btn-secondary hidden" id="openFlyTechFolderBtn">
+            <span class="btn-icon">📂</span>
+            Open Output Folder
+          </button>
+        </div>
+
+        <div class="log-section hidden" id="flyTechLog">
+          <h3 class="form-card-title">Generation Log</h3>
+          <div class="log-output" id="flyTechLogOutput"></div>
+        </div>
+      </div>
+
       <!-- FLY Executive Brief View -->
       <div id="flyBriefView" class="view-container hidden">
         <h2 class="view-title">📊 FLY Executive Brief</h2>
@@ -2552,7 +2606,7 @@
     </div>
   </div>
 
-  <script src="renderer.js?v=2.9.246"></script>
+  <script src="renderer.js?v=2.9.247"></script>
 
   <!-- Monitor detail modal -->
   <div id="monitorDetailOverlay" class="dialog-overlay hidden" style="z-index:2000;">
