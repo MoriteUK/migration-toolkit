@@ -543,21 +543,17 @@ function registerIPCHandlers() {
     const fs = require('fs');
     const os = require('os');
     const { shell } = require('electron');
-    const { customerPrefix, clientName, internalDomains, outputPath, exportFolder, generatePdf = true, autoOpen = false } = options;
-    if (!customerPrefix && !exportFolder) return { success: false, error: 'No customer selected.' };
-    if (exportFolder && !fs.existsSync(exportFolder)) return { success: false, error: `Export folder not found: ${exportFolder}` };
+    const { customerPrefix, clientName, internalDomains, outputPath, generatePdf = true, autoOpen = false } = options;
+    if (!customerPrefix) return { success: false, error: 'No customer selected.' };
 
     const scriptPath = path.join(PS_SCRIPT_PATH, 'FlyBrief', 'Invoke-FlyBriefs.ps1');
     if (!fs.existsSync(scriptPath)) return { success: false, error: `Brief script not found: ${scriptPath}` };
 
     const resultPath = path.join(os.tmpdir(), `fly-brief-${Date.now()}.json`);
     const outputRoot = outputPath || path.join(LOGS_DIR, 'FlyBriefs');
-    // Export-folder mode builds from reports downloaded from the FLY portal (no API export, briefs
-    // written next to the CSVs); otherwise the script exports every "{Prefix} - {Workload}" project.
-    const args = exportFolder
-      ? ['-ExportFolder', exportFolder, '-ResultPath', resultPath]
-      : [customerPrefix, '-OutputRoot', outputRoot, '-ResultPath', resultPath];
-    if (exportFolder && customerPrefix) args.push('-Company', customerPrefix);
+    // Every "{Prefix} - {Workload}" project: full FLY report via the portal when the AOS sign-in is
+    // valid, otherwise live project data straight from the FLY API.
+    const args = [customerPrefix, '-OutputRoot', outputRoot, '-ResultPath', resultPath];
     if (clientName) args.push('-ClientName', clientName);
     if (internalDomains) args.push('-InternalDomains', internalDomains);
     if (!generatePdf) args.push('-NoPdf');
@@ -604,7 +600,6 @@ function registerIPCHandlers() {
     if (!ok.length) {
       const error = code !== 0 ? `Script exited with code ${code} - see the log above.`
         : briefs.length ? 'No briefs were built - see the failures above.'
-        : exportFolder ? 'No FLY report (*Mappings.csv) found in the export folder.'
         : `No FLY projects found for "${customerPrefix}" (expected names like "${customerPrefix} - Exchange").`;
       return { success: false, code, briefs, error };
     }
@@ -615,7 +610,7 @@ function registerIPCHandlers() {
     }
     // Same folder-name rule as $safeName in Invoke-FlyBriefs.ps1
     const safe = (s) => s.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
-    const outputFolder = exportFolder || path.join(outputRoot, safe(clientName || customerPrefix));
+    const outputFolder = path.join(outputRoot, safe(clientName || customerPrefix));
     return { success: true, code, briefs, outputFolder };
   });
 

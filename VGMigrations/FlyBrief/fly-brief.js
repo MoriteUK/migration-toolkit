@@ -30,18 +30,24 @@ function findEdge() {
   return c.find(p => fs.existsSync(p));
 }
 
-async function buildBrief({ input, client, workload, out, internal, noPdf, log = console.log }) {
+async function buildBrief({ input, summaryFile, client, workload, out, internal, noPdf, log = console.log }) {
   const { core, html } = loadCore();
-  const files = [];
-  const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
-  for (const p of walk(input)) {
-    const name = path.basename(p);
-    if (!/\.csv$/i.test(name)) continue;
-    if (/Site objects/i.test(name)) continue; // not needed for the brief
-    const blob = await fs.openAsBlob(p);
-    files.push({ name, size: blob.size, stream: () => blob.stream() });
+  let summary;
+  if (summaryFile) {
+    // Pre-built summary (e.g. from FLY's live API via Invoke-FlyBriefs.ps1) - no report CSVs to read
+    summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8').replace(/^﻿/, ''));
+  } else {
+    const files = [];
+    const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+    for (const p of walk(input)) {
+      const name = path.basename(p);
+      if (!/\.csv$/i.test(name)) continue;
+      if (/Site objects/i.test(name)) continue; // not needed for the brief
+      const blob = await fs.openAsBlob(p);
+      files.push({ name, size: blob.size, stream: () => blob.stream() });
+    }
+    summary = await core.analyse(files);
   }
-  const summary = await core.analyse(files);
   const internalList = internal ? internal.split(',').map(s => s.trim()).filter(Boolean) : summary.domains;
   fs.mkdirSync(out, { recursive: true });
   const base = [client || 'Migration', workload].filter(Boolean).join(' ').replace(/[^\w.-]+/g, '_') + '_Executive_Brief';
@@ -84,7 +90,8 @@ module.exports = { buildBrief };
 
 if (require.main === module) {
   const a = args();
-  if (!a.in) { console.error('Usage: node fly-brief.js --in "<export folder>" --client "<name>" [--out "<folder>"] [--workload OneDrive|SharePoint|Exchange|Teams|M365Group|TeamChat] [--internal "a.com,b.com"] [--no-pdf]'); process.exit(1); }
-  buildBrief({ input: a.in, client: a.client || '', workload: a.workload || '', out: a.out || a.in, internal: a.internal, noPdf: a.noPdf })
+  if (!a.in && !a.summary) { console.error('Usage: node fly-brief.js (--in "<export folder>" | --summary "<summary.json>" --out "<folder>") --client "<name>" [--out "<folder>"] [--workload OneDrive|SharePoint|Exchange|Teams|M365Group|TeamChat] [--internal "a.com,b.com"] [--no-pdf]'); process.exit(1); }
+  if (!a.in && !a.out) { console.error('--out is required with --summary'); process.exit(1); }
+  buildBrief({ input: a.in, summaryFile: a.summary, client: a.client || '', workload: a.workload || '', out: a.out || a.in, internal: a.internal, noPdf: a.noPdf })
     .catch(e => { console.error(e.message); process.exit(1); });
 }

@@ -6,23 +6,22 @@ A one-page CIO/CISO brief built from AvePoint FLY migration reports. You can use
 |---|---|
 | `FLY_Executive_Brief.html` | The brief template, plus the `<script id="core">` analysis code. It also works on its own in a browser. |
 | `fly-brief.js` | Node CLI. Builds the brief from one export folder and writes `.html`, `.pdf` and `.summary.json`. |
-| `Invoke-FlyBriefs.ps1` | Exports reports from FLY with Fly.Client, then runs `fly-brief.js` for each project. |
+| `Invoke-FlyBriefs.ps1` | Gets each project's data from FLY (full report when available, otherwise live API data), then runs `fly-brief.js`. |
 | `Test-FlyPrereqs.ps1` | Read-only check of the machine. `-TryConnect` also signs in to FLY and lists the projects. |
 | `fly-config.example.json` | Optional standalone config (certificate auth, explicit projects, discovery filters). |
 
 ## 1. In the Migration Toolkit app
 Go to **Reports → FLY Executive Brief**.
-1. Pick the customer. The list comes from Settings → Customers, and you pick by Prefix. **Name on Brief** fills in from the customer's AccountName and **Internal Email Domains** from its Domain. You can edit both.
+1. Pick the customer from Settings → Customers. The brief is titled with the customer prefix.
 2. Optionally choose an output folder. The default is `Migrations\Logs\FlyBriefs\`.
 3. Click **Generate Brief**. The app builds one brief for every FLY project named `{Prefix} - {Workload}`, covering Exchange, OneDrive, SharePoint, Teams, M365 Groups and Teams Chat. The log streams live, and the global **Stop** button cancels the run.
 
 The app uses the toolkit's Fly API settings (`%APPDATA%\FlyMigration\config.json`: Url, ClientId, EncSecret), so no extra setup is needed.
 
-**If a workload fails with "returned no report file".** FLY's API can finish an export job yet return `reportUrl: null` (Fly.Client issue #16; seen on 28 Nov 2026 for every export tried). In that case:
-1. In the FLY portal, open the **Download Center**. Generate or download each project's migration report as CSV into one folder; zips are fine.
-2. In the panel, set **Export Folder** to that folder and click **Generate Brief**. The customer is optional, but it sets the name used on the brief.
-
-Every report in the folder gets its own brief. The workload is detected from the file name, and the brief is saved next to its CSVs. No FLY sign-in is needed.
+**Where the figures come from.** For each project, in this order:
+1. **Full FLY migration report through the FLY portal**, using the saved AOS sign-in (`VGMigrations\auth\storageState.json`, the same session AOS Setup uses). This gives every figure, including permissions and sharing links. *Not built yet:* it needs `fly-portal-report.js`, which requires a current AOS sign-in to develop against. Until that exists, this step is skipped. Once it's in place, an expired sign-in is reported in the log and the run falls through to step 3.
+2. **Fly.Client report export.** Only with `-UseApiReport`. FLY currently finishes these jobs but returns `reportUrl: null` (Fly.Client issue #16, open since Oct 2026), so it is off by default.
+3. **Live FLY API data.** Always available, and takes about 5 seconds per project. It gives mapping-level figures that match the report: completed, with exceptions, failed, failed-with-data, GB migrated and job dates. Item counts, permissions and sharing links are not in the API, so the brief says so and flags an access review instead. The preview and run results show which source each brief used.
 
 ## 2. Manual: open the template and choose an export
 1. Open `FLY_Executive_Brief.html` in Edge or Chrome.
@@ -52,6 +51,6 @@ The PDF is rendered with headless Edge or Chrome. Set `EDGE_PATH` if neither is 
 
 **Output.** Briefs are written to `<OutputRoot>\<client>\<project>\<yyyyMMdd-HHmm>\<client>_<workload>_Executive_Brief.{html,pdf,summary.json}`. Exchange, Teams, Groups and Teams Chat briefs have no sharing-link data, so their security column flags what to review separately.
 
-**Known limitation.** Fly.Client issue #16: an export job can finish without returning a report URL. FLY's own `GET /downloadcenter/reporturl` returns `{"reportUrl": null}`, so this is not a client bug. When it happens, the project is reported as failed instead of producing an empty brief. Use `-ExportFolder` with reports downloaded from the portal.
+**Known limitation.** Fly.Client issue #16: an export job can finish without returning a report URL. FLY's own `GET /downloadcenter/reporturl` returns `{"reportUrl": null}`, so this is not a client bug. Briefs fall back to live API data. From a shell, `-ExportFolder` also builds full briefs from reports you have downloaded from the portal yourself.
 
 Thresholds such as the green/amber limits and the "stalled" days are in the `CFG` block at the top of the core script in `FLY_Executive_Brief.html`.

@@ -357,8 +357,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btn    = document.getElementById('flyBriefCustomerBtn');
     const panel  = document.getElementById('flyBriefCustomerPanel');
     const list   = document.getElementById('flyBriefCustomerList');
-    const nameEl = document.getElementById('flyBriefClientName');
-    const domEl  = document.getElementById('flyBriefInternalDomains');
     if (!input || !btn || !panel || !list) return;
 
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -366,17 +364,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function selectCustomer(prefix) {
       input.value = prefix;
-      const c = customers.find(x => x.Prefix === prefix);
-      if (c) {
-        if (nameEl) nameEl.value = c.AccountName || c.Prefix;
-        if (domEl) domEl.value = c.Domain || '';
-      }
       closePanel();
     }
 
     function renderItems(filter) {
       const q = (filter || '').toLowerCase();
-      const filtered = customers.filter(c => !q || c.Prefix.toLowerCase().includes(q) || (c.AccountName || '').toLowerCase().includes(q));
+      const filtered = customers.filter(c => !q || c.Prefix.toLowerCase().includes(q));
       if (filtered.length === 0) {
         list.innerHTML = '<div class="domain-dropdown-empty">No matches</div>';
         return;
@@ -384,7 +377,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       list.innerHTML = filtered.map(c =>
         `<div class="domain-dropdown-item" data-customer="${esc(c.Prefix)}">
           <span class="di-domain">${esc(c.Prefix)}</span>
-          ${c.AccountName && c.AccountName !== c.Prefix ? `<span class="di-vbu">${esc(c.AccountName)}</span>` : ''}
         </div>`
       ).join('');
       list.querySelectorAll('.domain-dropdown-item').forEach(el => {
@@ -4641,14 +4633,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (generateFlyBriefBtn) {
     generateFlyBriefBtn.addEventListener('click', async () => {
       const customerPrefix = document.getElementById('flyBriefCustomer').value.trim();
-      const exportFolder = document.getElementById('flyBriefExportFolder').value.trim();
-      if (!customerPrefix && !exportFolder) { alert('Please select a customer (or pick an Export Folder of downloaded FLY reports)'); return; }
-
+      if (!customerPrefix) { alert('Please select a customer'); return; }
+      // The brief is titled with the customer prefix; internal email domains are detected from FLY's data.
+      // (Settings → Customers AccountName is the admin sign-in and Domain a tenant prefix - neither fits.)
       const options = {
         customerPrefix,
-        exportFolder,
-        clientName: document.getElementById('flyBriefClientName').value.trim(),
-        internalDomains: document.getElementById('flyBriefInternalDomains').value.trim(),
         outputPath: document.getElementById('flyBriefOutputPath').value.trim(),
         generatePdf: document.getElementById('flyBriefGeneratePdf').checked,
         autoOpen: document.getElementById('flyBriefAutoOpen').checked
@@ -4658,9 +4647,7 @@ document.addEventListener('DOMContentLoaded', () => {
       flyBriefPreview.classList.add('hidden');
       downloadFlyBriefBtn.classList.add('hidden');
       openFlyBriefBtn.classList.add('hidden');
-      flyBriefLogOutput.textContent = exportFolder
-        ? `Building briefs from the FLY reports in ${exportFolder}...\n\n`
-        : `Exporting FLY reports for "${customerPrefix}" - this can take several minutes per workload...\n\n`;
+      flyBriefLogOutput.textContent = `Connecting to AvePoint FLY for "${customerPrefix}"...\n\n`;
       generateFlyBriefBtn.disabled = true;
       generateFlyBriefBtn.textContent = 'Processing...';
 
@@ -4703,9 +4690,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (b.pdfPath) html += ` &middot; <a href="#" data-open-path="${flyEsc(b.pdfPath)}">PDF</a>`;
             if (b.htmlPath) html += ` &middot; <a href="#" data-open-path="${flyEsc(b.htmlPath)}">HTML</a>`;
             html += '<br>';
+            if (b.source) html += `<span style="opacity:.7">Source: ${flyEsc(b.source)}</span><br>`;
             if (s && s.m) {
               html += `Mappings: ${flyNum(s.m.total)} total, ${flyNum(s.m.finished)} finished, ${flyNum(s.m.exceptions)} with exceptions, ${flyNum(s.m.failed)} failed<br>`;
-              html += `Objects migrated: ${flyNum(s.m.ok)} &middot; Data: ${typeof s.m.gb === 'number' ? s.m.gb.toFixed(1) : '-'} GB<br>`;
+              html += (s.source === 'api' ? '' : `Objects migrated: ${flyNum(s.m.ok)} &middot; `) + `Data: ${typeof s.m.gb === 'number' ? s.m.gb.toFixed(1) : '-'} GB<br>`;
               if (s.sec) html += `Permissions: ${flyNum(s.sec.ok)} / ${flyNum(s.sec.total)} OK<br>`;
               if (s.links) html += `Sharing links: ${flyNum(s.links.total)} total, ${flyNum(s.links.anyoneEdit)} "anyone can edit"<br>`;
             }

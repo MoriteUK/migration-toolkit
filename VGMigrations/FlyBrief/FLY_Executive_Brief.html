@@ -272,7 +272,9 @@ var BriefCore = (function () {
     var T = WL[wlKey(opts.workload || S.workload)];
     var workload = T.title;
     var objs = M.ok + M.exc + M.err;
-    var contentPct = pct(M.ok + M.exc, objs), errPct = pct(M.err, objs);
+    // api: summary built from FLY's live project/mapping data (no report files) - mapping-level figures only
+    var api = S.source === 'api';
+    var contentPct = api ? pct(M.finished + M.exceptions, M.total) : pct(M.ok + M.exc, objs), errPct = pct(M.err, objs);
     var permPct = C ? pct(C.ok, C.total) : null;
     var permFail = C ? C.total - C.ok - C.skipped : 0;
     var anyoneEdit = L ? L.anyoneEdit : 0;
@@ -284,7 +286,8 @@ var BriefCore = (function () {
     var openIssues = M.failed > 0 || (permPct !== null && permPct < CFG.permGood) || M.err > 0;
     var noData = M.failed - M.failedWithData;
 
-    var contentCls = contentPct >= CFG.contentGood ? 'g' : contentPct >= CFG.contentWarn ? 'a' : 'r';
+    var contentCls = api ? (M.failedWithData === 0 ? 'g' : M.failedWithData / Math.max(M.total, 1) > 0.05 ? 'r' : 'a')
+                         : contentPct >= CFG.contentGood ? 'g' : contentPct >= CFG.contentWarn ? 'a' : 'r';
     var permCls = permPct === null ? 'a' : permPct >= CFG.permGood ? 'g' : permPct >= CFG.permWarn ? 'a' : 'r';
     var anyCls = anyoneEdit === 0 ? 'g' : anyoneEdit > CFG.anyoneRed ? 'r' : 'a';
     var accCls = M.failed === 0 ? 'g' : M.failedWithData === 0 ? 'a' : (M.failed / M.total > 0.1 ? 'r' : 'a');
@@ -301,6 +304,9 @@ var BriefCore = (function () {
     var v1 = contentPct >= CFG.contentGood ? (openIssues ? '<strong>The data has moved safely; ' + (secDone ? 'access and security clean-up is not finished.' : 'some items still need attention.') + '</strong> ' + T.landed + ' in the new tenant with almost no loss.'
                                                          : '<strong>The migration is complete.</strong> ' + T.landed + ' in the new tenant with almost no loss.')
                                            : '<strong>The data migration is not complete.</strong> ' + fmtPct(100 - contentPct) + ' of items have not reached the new tenant.';
+    if (api) v1 = contentCls === 'g'
+      ? '<strong>' + (M.failed ? 'The data has moved; a few ' + T.accts + ' still need attention.' : 'The migration is complete.') + '</strong> ' + n0(M.finished + M.exceptions) + ' of ' + n0(M.total) + ' ' + T.accts + ' finished migrating (' + tb(M.gb) + ').'
+      : '<strong>The data migration is not complete.</strong> ' + cap(w(M.failedWithData)) + ' ' + pl(M.failedWithData, T.acct + ' holds', T.accts + ' hold') + ' ' + T.dataPhrase + ' that has only partly migrated.';
     var v2 = permPct !== null && permPct < CFG.permGood ? ' ' + (permPct >= 70 ? 'A quarter' : permPct >= 45 ? 'Around half' : 'Most') + ' of file permissions did not carry over, so some people will be unable to open files shared with them.' : '';
     if (permPct !== null && permPct < CFG.permGood && permPct >= 70) v2 = ' About ' + Math.round(100 - permPct) + '% of file permissions did not carry over, so some people will be unable to open files shared with them.';
     var v3 = anyoneEdit > 0 ? ' The migration also carried an existing exposure into the new tenant: ' + (anyoneEdit >= 10000 ? 'tens of thousands of' : n0(anyoneEdit)) + ' sharing links let anyone who holds them edit the file.' : '';
@@ -308,7 +314,7 @@ var BriefCore = (function () {
 
     var h = [];
     h.push('<div class="top"><div><div class="eyebrow">Executive brief · M365 tenant migration</div><h1>' + esc(client) + ' ' + esc(workload) + ' Migration</h1></div>' +
-      '<div class="meta">Final migration jobs ' + dt(M.firstStart) + ' – ' + dt(M.lastEnd) + '<br>Status as at ' + dt(S.exportDate || M.lastEnd) + '</div></div>');
+      '<div class="meta">' + (api ? 'Migration jobs started ' : 'Final migration jobs ') + dt(M.firstStart) + ' – ' + dt(M.lastEnd) + '<br>Status as at ' + dt(S.exportDate || M.lastEnd) + '</div></div>');
     h.push('<p class="verdict">' + v1 + v2 + v3 + v4 + '</p>');
     var accTile = '<div class="fig ' + accCls + '"><b>' + n0(M.failed) + '</b><span>of ' + n0(M.total) + ' ' + T.accts + ' not complete' + (M.failed ? '. ' + (M.failedWithData ? 'Only ' + w(M.failedWithData) + ' hold' + (M.failedWithData === 1 ? 's' : '') + ' ' + T.dataPhrase : (M.failed === 1 ? 'It has no' : 'None of them have') + ' data to migrate') : '') + '</span></div>';
     var middle;
@@ -320,17 +326,20 @@ var BriefCore = (function () {
     } else {
       var clean = M.finished, excCls = M.exc ? 'a' : 'g';
       middle = '<div class="fig ' + (clean === M.total ? 'g' : 'a') + '"><b>' + n0(clean) + '</b><span>of ' + n0(M.total) + ' ' + T.accts + ' finished with no issues</span></div>' +
-               '<div class="fig ' + excCls + '"><b>' + n0(M.exc) + '</b><span>' + T.items + ' migrated with warnings that need checking</span></div>';
+               (api ? '<div class="fig ' + (M.exceptions ? 'a' : 'g') + '"><b>' + n0(M.exceptions) + '</b><span>' + T.accts + ' finished with item warnings that need checking</span></div>'
+                    : '<div class="fig ' + excCls + '"><b>' + n0(M.exc) + '</b><span>' + T.items + ' migrated with warnings that need checking</span></div>');
     }
-    h.push('<div class="figs">' +
-      '<div class="fig ' + contentCls + '"><b>' + fmtPct(contentPct) + '</b><span>of ' + (objs >= 1e6 ? (objs / 1e6).toFixed(1) + ' million' : n0(objs)) + ' ' + T.items + ' migrated (' + (M.gb ? tb(M.gb) + ', ' : '') + n0(M.total) + ' ' + pl(M.total, T.unit, T.units) + ')</span></div>' +
-      middle + accTile + '</div>');
+    var headTile = api
+      ? '<div class="fig ' + contentCls + '"><b>' + fmtPct(contentPct) + '</b><span>of ' + n0(M.total) + ' ' + T.accts + ' fully or mostly migrated (' + tb(M.gb) + ')</span></div>'
+      : '<div class="fig ' + contentCls + '"><b>' + fmtPct(contentPct) + '</b><span>of ' + (objs >= 1e6 ? (objs / 1e6).toFixed(1) + ' million' : n0(objs)) + ' ' + T.items + ' migrated (' + (M.gb ? tb(M.gb) + ', ' : '') + n0(M.total) + ' ' + pl(M.total, T.unit, T.units) + ')</span></div>';
+    h.push('<div class="figs">' + headTile + middle + accTile + '</div>');
 
     // delivery
     var d = [];
     var conc = M.err && M.topErr / M.err > 0.5 ? ', and most of those belong to one ' + T.acct + ' whose items need a decision' : '';
     d.push(row(contentCls === 'g' ? 'g' : contentCls, contentCls === 'g' ? 'On track' : contentCls === 'a' ? 'At risk' : 'Off track', contentCls === 'g' ? 'Content complete.' : 'Content incomplete.',
-      'Only ' + (errPct < 0.1 ? errPct.toFixed(2) : errPct.toFixed(1)) + '% of items failed' + conc + '.' + (contentCls === 'g' ? ' No data loss is expected.' : ' Failed items must be re-run before sign-off.')));
+      api ? n0(M.exceptions) + ' ' + pl(M.exceptions, T.acct, T.accts) + ' finished with item warnings' + (M.failed ? ' and ' + w(M.failed) + ' failed' : '') + '. Item-level counts are in FLY\'s migration report, which was not available for this brief.'
+          : 'Only ' + (errPct < 0.1 ? errPct.toFixed(2) : errPct.toFixed(1)) + '% of items failed' + conc + '.' + (contentCls === 'g' ? ' No data loss is expected.' : ' Failed items must be re-run before sign-off.')));
     if (C || L) {
       var ux = permFail + (L ? L.incomplete : 0);
       d.push(row(ux > 100 ? 'a' : 'g', ux > 100 ? 'At risk' : 'On track', 'User experience.',
@@ -364,7 +373,9 @@ var BriefCore = (function () {
       s.push(row('g', 'Low', 'Migration integrity.', 'Permissions failed closed: nothing became more open than it was at source.'));
     }
     if (!s.length) {
-      s.push(row('a', 'Check', 'Access review.', 'FLY\'s ' + esc(T.title) + ' report does not include ' + T.secHint + '. Review these separately before sign-off.'));
+      s.push(row('a', 'Check', 'Access review.', api
+        ? 'Permission and sharing-link results could not be retrieved from FLY for this brief. Review ' + T.secHint + ' in the FLY portal before sign-off.'
+        : 'FLY\'s ' + esc(T.title) + ' report does not include ' + T.secHint + '. Review these separately before sign-off.'));
       s.push(row(contentCls === 'g' ? 'g' : 'a', contentCls === 'g' ? 'Low' : 'Medium', 'Data integrity.', contentCls === 'g' ? 'Content arrived complete, so there is no data-loss exposure from this workload.' : 'Some content has not arrived. Confirm nothing sensitive is left only in the source tenant before it is decommissioned.'));
     }
     h.push('<div class="cols"><div class="col"><h2>Delivery (CIO)</h2>' + d.join('') + '</div>' +
@@ -373,7 +384,8 @@ var BriefCore = (function () {
     var src = [n0(objs) + ' object records'];
     if (C) src.push(n0(C.total) + ' permission entries');
     if (L) src.push(n0(L.total) + ' sharing links');
-    h.push('<p class="foot">Source: AvePoint FLY migration reports exported ' + dt(S.exportDate || M.lastEnd) + ' (' + src.join(', ') + '). A detailed technical report and item-level remediation list are available separately.</p>');
+    if (api) h.push('<p class="foot">Source: live AvePoint FLY project data retrieved ' + dt(S.exportDate) + ' (' + n0(M.total) + ' ' + T.accts + (M.notStarted ? '; ' + n0(M.notStarted) + ' not yet started are excluded' : '') + '). Item-level, permission and sharing-link figures come from FLY\'s migration report, which could not be downloaded for this brief.</p>');
+    else h.push('<p class="foot">Source: AvePoint FLY migration reports exported ' + dt(S.exportDate || M.lastEnd) + ' (' + src.join(', ') + '). A detailed technical report and item-level remediation list are available separately.</p>');
     return h.join('\n');
   }
   return { analyse: analyse, render: render, CFG: CFG };

@@ -68,9 +68,13 @@ param(
   [switch]$SkipExport,
   [string]$Project = '*',
   [switch]$ListOnly,
-  [switch]$NoPdf
+  [switch]$NoPdf,
+  [switch]$NoPortal,      # skip the FLY-portal report download; use live API data only
+  [switch]$UseApiReport   # also try Fly.Client's report export (broken while Fly.Client issue #16 is open)
 )
 $ErrorActionPreference = 'Stop'
+# Plain text output: the toolkit's log panel shows ANSI colour codes from Format-Table literally
+if ($PSStyle) { $PSStyle.OutputRendering = 'PlainText' }
 
 # ── Config: fly-config.json beside the script, else the toolkit's own config ──────────────────
 if (-not $ConfigPath) {
@@ -164,17 +168,80 @@ function Get-WorkList {
       if (-not $wl -or $wl -notin $want) { continue }
       if (@($cfg.Discover.exclude | Where-Object { $_ -and $fp.name -like $_ }).Count) { continue }
       $client = ($fp.name -split '\s+-\s+', 2)[0].Trim()
-      $list[$fp.name] = [pscustomobject]@{ project = $fp.name; client = $client; workload = $wl; internalDomains = @(); source = 'discovered' }
+      $list[$fp.name] = [pscustomobject]@{ project = $fp.name; id = $fp.id; client = $client; workload = $wl; internalDomains = @(); source = 'discovered' }
     }
   }
+  $ids = $null
   foreach ($p in $cfg.Projects) {
     if (-not $p.project -or $p.project -match '^<') { continue }
-    $list[$p.project] = [pscustomobject]@{ project = $p.project; client = $p.client; workload = $p.workload; internalDomains = @($p.internalDomains); source = 'config' }
+    $id = if ($list.Contains($p.project)) { $list[$p.project].id } else {
+      if ($null -eq $ids -and (Get-Module Fly.Client)) { $ids = @{}; Get-AllFlyProjects | ForEach-Object { $ids[$_.name] = $_.id } }
+      if ($ids) { $ids[$p.project] }
+    }
+    $list[$p.project] = [pscustomobject]@{ project = $p.project; id = $id; client = $p.client; workload = $p.workload; internalDomains = @($p.internalDomains); source = 'config' }
   }
   @($list.Values | Where-Object {
       $_.project -like $Project -and
       (-not $Company -or $_.client -eq $Company -or $_.project -like "$Company - *" -or $_.project -eq $Company)
     })
+}
+
+# Brief summary built from FLY's live project + mapping data (no report files). Matches the report's
+# mapping-level figures (status counts, migrated GB, job dates); item-level, permission and sharing-link
+# figures are not available from the API, so the brief renders in its "api" mode.
+function Get-FlyLiveSummary([string]$ProjectId, [string]$Workload) {
+  $conf = & (Get-Module Fly.Client) { Get-FlyConfiguration }
+  $base = ([string]$conf['BaseUrl']).TrimEnd('/')
+  $maps = [System.Collections.Generic.List[object]]::new()
+  $skip = 0
+  do {
+    $headers = @{ Authorization = "Bearer $((& (Get-Module Fly.Client) { Get-FlyConfiguration })['AccessToken'])"; Accept = 'application/json' }
+    $r = Invoke-WithRetry { Invoke-RestMethod "$base/projects/$ProjectId/mappings/summaries?top=200&skip=$skip" -Headers $headers } "mapping summaries"
+    $page = @($r.data.data)
+    foreach ($x in $page) { $maps.Add($x) }
+    $skip += $page.Count
+  } while ($r.data.nextLink -and $page.Count)
+
+  # lastMigrationStatus: 0 not run, 4 finished, 5 finished with exceptions, 6 failed (others = running/stopped/queued)
+  $ran = @($maps | Where-Object { [int]$_.lastMigrationStatus -ne 0 })
+  $toDay = { param($t) if ([long]$t -gt 0) { ([datetime]::new([long]$t)).ToString('yyyy-MM-dd') } }
+  $starts = @($ran | ForEach-Object { & $toDay $_.lastMigrationStartTime } | Where-Object { $_ } | Sort-Object)
+  $failed = @($ran | Where-Object { [int]$_.lastMigrationStatus -eq 6 })
+  $domains = @($maps | ForEach-Object { $_.destinationIdentity, $_.sourceIdentity } | Where-Object { $_ -match '@([^@]+)$' } |
+               ForEach-Object { ($_ -split '@')[-1].ToLower() } | Where-Object { $_ -notmatch 'onmicrosoft\.com$' } | Sort-Object -Unique)
+  [ordered]@{
+    workload   = $Workload
+    source     = 'api'
+    exportDate = (Get-Date).ToString('yyyy-MM-dd')
+    m          = [ordered]@{
+      total          = $ran.Count
+      notStarted     = $maps.Count - $ran.Count
+      finished       = @($ran | Where-Object { [int]$_.lastMigrationStatus -eq 4 }).Count
+      exceptions     = @($ran | Where-Object { [int]$_.lastMigrationStatus -eq 5 }).Count
+      failed         = $failed.Count
+      gb             = [math]::Round((($ran | Measure-Object migratedSize -Sum).Sum) / 1GB, 2)
+      ok = 0; exc = 0; err = 0; skip = 0; topErr = 0
+      failedWithData = @($failed | Where-Object { [long]$_.migratedSize -gt 0 }).Count
+      firstStart     = $(if ($starts) { $starts[0] } else { '' })
+      lastEnd        = $(if ($starts) { $starts[-1] } else { '' })
+    }
+    sec = $null; links = $null
+    domains = $domains
+    files = [ordered]@{ mappings = 'FLY live API'; security = $null; links = $null; skipped = 0 }
+  }
+}
+
+# Full migration report fetched through the FLY portal with the saved AOS sign-in (fly-portal-report.js).
+# Returns $true when report CSVs landed in $OutFolder; $false when the portal route is unavailable.
+function Get-FlyReportViaPortal([string]$ProjectName, [string]$Workload, [string]$OutFolder) {
+  $portalJs = Join-Path $PSScriptRoot 'fly-portal-report.js'
+  if (-not (Test-Path $portalJs)) { return $false }
+  Write-Host "[$ProjectName] requesting the full migration report through the FLY portal..."
+  & node $portalJs --project $ProjectName --workload $Workload --out $OutFolder | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE -eq 3) { Write-Warning 'FLY portal sign-in has expired - sign in again (Settings > AOS session) to get permission and sharing-link figures.'; return $false }
+  if ($LASTEXITCODE) { throw "fly-portal-report.js exited with $LASTEXITCODE" }
+  Get-ChildItem $OutFolder -Filter *.zip -Recurse | ForEach-Object { Expand-Archive $_.FullName -DestinationPath (Join-Path $_.DirectoryName $_.BaseName) -Force }
+  return [bool](Get-ChildItem $OutFolder -Recurse -Filter '*Mappings.csv')
 }
 
 function Save-Results($rows) {
@@ -241,7 +308,7 @@ foreach ($p in $work) {
   $client = if ($ClientName) { $ClientName } else { $p.client }
   $root = Join-Path (Join-Path $cfg.OutputRoot (& $safeName $client)) (& $safeName $p.project)
   $out = $null
-  $row = [ordered]@{ project = $p.project; client = $client; workload = $p.workload; status = ''; folder = $null; htmlPath = $null; pdfPath = $null; summaryPath = $null }
+  $row = [ordered]@{ project = $p.project; client = $client; workload = $p.workload; status = ''; source = $null; folder = $null; htmlPath = $null; pdfPath = $null; summaryPath = $null }
   try {
     if ($SkipExport) {
       $out = Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
@@ -249,22 +316,41 @@ foreach ($p in $work) {
     } else {
       $out = Join-Path $root (Get-Date -Format 'yyyyMMdd-HHmm')
       New-Item -ItemType Directory -Force -Path $out | Out-Null
-      $cmd = "Export-Fly$($p.workload)MigrationReport"
-      if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "Unsupported workload '$($p.workload)' (no $cmd in Fly.Client)" }
-      $exportArgs = @{ Project = $p.project; OutFolder = $out; FileType = 'CSV'; Include = $cfg.Include }
-      if ($cfg.TzOffset) { $exportArgs.TimeZoneOffset = [int]$cfg.TzOffset }
-      Write-Host "[$($p.project)] exporting $($p.workload) report..."
-      Invoke-WithRetry { & $cmd @exportArgs } "$($p.project) report export" | Out-Null
+
+      # 1. Full migration report through the FLY portal (saved AOS sign-in), when that session is valid
+      if (-not $NoPortal) {
+        try { if (Get-FlyReportViaPortal -ProjectName $p.project -Workload $p.workload -OutFolder $out) { $row.source = 'FLY report (portal)' } }
+        catch { Write-Warning "[$($p.project)] portal report not available: $($_.Exception.Message)" }
+      }
+      # 2. Fly.Client report export - only on request: FLY currently returns reportUrl = null (Fly.Client issue #16)
+      if (-not $row.source -and $UseApiReport) {
+        $cmd = "Export-Fly$($p.workload)MigrationReport"
+        $exportArgs = @{ Project = $p.project; OutFolder = $out; FileType = 'CSV'; Include = $cfg.Include }
+        if ($cfg.TzOffset) { $exportArgs.TimeZoneOffset = [int]$cfg.TzOffset }
+        Write-Host "[$($p.project)] exporting $($p.workload) report through the API..."
+        Invoke-WithRetry { & $cmd @exportArgs } "$($p.project) report export" | Out-Null
+        if (Get-ChildItem $out -Recurse -Filter '*Mappings.csv') { $row.source = 'FLY report (API)' }
+        else { Write-Warning "[$($p.project)] FLY returned no report file (reportUrl = null, Fly.Client issue #16)" }
+      }
       Get-ChildItem $out -Filter *.zip -Recurse | ForEach-Object {
         Expand-Archive $_.FullName -DestinationPath (Join-Path $_.DirectoryName $_.BaseName) -Force
       }
+      # 3. Live project data straight from the FLY API - always available, mapping-level figures only
+      if (-not $row.source) {
+        if (-not $p.id) { throw "Project id not found for '$($p.project)'" }
+        Write-Host "[$($p.project)] reading live migration status from FLY..."
+        Get-FlyLiveSummary -ProjectId $p.id -Workload $p.workload | ConvertTo-Json -Depth 6 |
+          Set-Content (Join-Path $out 'fly-live-summary.json') -Encoding UTF8
+        $row.source = 'FLY live data'
+      }
     }
     $row.folder = $out
-    if (-not (Get-ChildItem $out -Recurse -Filter '*Mappings.csv')) {
-      throw "FLY finished the export but returned no report file (its API gave reportUrl = null - Fly.Client issue #16), or the project has no migrated mappings yet. Download the report from the FLY portal's Download Center and use the Export Folder option instead."
-    }
-    Write-Host "[$($p.project)] building brief..."
-    $nodeArgs = @($briefJs, '--in', $out, '--client', $client, '--workload', $p.workload, '--out', $out)
+    $hasReport = [bool](Get-ChildItem $out -Recurse -Filter '*Mappings.csv')
+    $liveJson = Join-Path $out 'fly-live-summary.json'
+    if (-not $hasReport -and -not (Test-Path $liveJson)) { throw "No report or live summary in $out" }
+    if (-not $row.source) { $row.source = if ($hasReport) { 'FLY report' } else { 'FLY live data' } }
+    Write-Host "[$($p.project)] building brief from $($row.source)..."
+    $nodeArgs = @($briefJs) + $(if ($hasReport) { @('--in', $out) } else { @('--summary', $liveJson) }) + @('--client', $client, '--workload', $p.workload, '--out', $out)
     $internal = if ($InternalDomains) { $InternalDomains } elseif ($p.internalDomains -and $p.internalDomains.Count) { $p.internalDomains -join ',' }
     if ($internal) { $nodeArgs += @('--internal', $internal) }
     if ($NoPdf) { $nodeArgs += '--no-pdf' }

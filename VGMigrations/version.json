@@ -1,7 +1,19 @@
 {
-  "version": "2.9.243",
+  "version": "2.9.244",
   "releaseDate": "2026-11-28",
   "changelog": [
+    {
+      "version": "2.9.244",
+      "date": "2026-11-28",
+      "changes": [
+        "FLY Executive Brief now pulls its data directly from FLY. FLY's report download is broken on AvePoint's side (Fly.Client issue #16, open since 11 Oct 2026 and also on Fly.Client 4.6.23: finished jobs return reportUrl = null), so each brief is built from FLY's live project and mapping API instead. Figures were checked against the 20 Nov AEP OneDrive report: mappings completed / with exceptions / failed (7/121/10), failed-with-data (3), migrated GB (2,924) and job dates all match. Item counts, permissions and sharing links are not in the API; those briefs say so and flag an access review",
+        "All six AEP workloads build in about 40 seconds (previously each workload waited several minutes for a report file that never came). Verified by driving the real app: Reports > FLY Executive Brief > AEP > Generate gave 6 briefs and no page errors",
+        "Brief screen back to the 27 Nov layout: Customer + optional Output Folder only. Name on Brief, Internal Email Domains and Export Folder are removed. The brief is titled with the customer prefix, and internal domains are detected from the data (Settings > Customers AccountName is the admin sign-in and Domain a tenant prefix, so neither fits)",
+        "Invoke-FlyBriefs.ps1: per-project source order is FLY portal report (hook for fly-portal-report.js, not yet built), then Fly.Client report export (only with -UseApiReport while issue #16 is open), then live API. Each result records its source, which the preview shows. -NoPortal and -UseApiReport switches added. Output is plain text (no ANSI codes in the log panel)",
+        "fly-brief.js: --summary <json> renders a brief from a pre-built summary. FLY_Executive_Brief.html: new live-data mode (mapping-level headline, wording and source footnote)"
+      ],
+      "breaking": false
+    },
     {
       "version": "2.9.243",
       "date": "2026-11-28",
