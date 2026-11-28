@@ -108,7 +108,9 @@ async function login() {
   await page.goto(FLY_URL);
 
   try {
-    await page.waitForURL(/fly\.avepointonlineservices\.com\/#\//, { timeout: 5 * 60 * 1000 });
+    // FLY_LOGIN_TIMEOUT_MIN lets callers wait longer for an interactive sign-in (default 5 minutes)
+    const loginMinutes = Math.max(1, parseInt(process.env.FLY_LOGIN_TIMEOUT_MIN, 10) || 5);
+    await page.waitForURL(/fly\.avepointonlineservices\.com\/#\//, { timeout: loginMinutes * 60 * 1000 });
     await page.waitForLoadState('load', { timeout: 15_000 }).catch(() => {});
   } catch (err) {
     logError(`Login timeout: ${err.message}`);
